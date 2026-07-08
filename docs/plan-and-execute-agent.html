@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Plan-and-Execute Agent — Project Document</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,600&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #1a1917; --ink-2: #4a4843; --ink-3: #8a8880; --rule: #e2e0d8;
+    --surface: #f8f6f0; --surface-2: #f0ede4;
+    --accent: #2b5f8a; --accent-light: #e8f1f9;
+    --accent-2: #c84b2f; --accent-2-light: #f9ece8;
+    --green: #2a6b45; --green-light: #e8f5ee;
+    --amber: #9a5c0a; --amber-light: #fdf3e3;
+    --purple: #5c3b8a; --purple-light: #f1ecfa;
+    --mono: 'DM Mono', monospace; --serif: 'Fraunces', serif; --sans: 'DM Sans', sans-serif;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: var(--surface); color: var(--ink); font-family: var(--sans); font-size: 15px; line-height: 1.7; padding: 0 0 80px; }
+  .hero { background: var(--ink); color: #f8f6f0; padding: 72px 64px 56px; position: relative; overflow: hidden; }
+  .hero::before { content:''; position:absolute; top:-40px; right:-40px; width:320px; height:320px; border:1px solid rgba(248,246,240,0.06); border-radius:50%; }
+  .hero::after { content:''; position:absolute; bottom:-80px; right:80px; width:200px; height:200px; border:1px solid rgba(248,246,240,0.04); border-radius:50%; }
+  .hero-tag { font-family: var(--mono); font-size:11px; letter-spacing:0.12em; text-transform:uppercase; color: var(--accent); background: rgba(43,95,138,0.18); border:1px solid rgba(43,95,138,0.35); padding:4px 12px; border-radius:2px; display:inline-block; margin-bottom:28px; }
+  .hero h1 { font-family: var(--serif); font-size:52px; font-weight:300; line-height:1.08; letter-spacing:-0.02em; max-width:680px; margin-bottom:20px; }
+  .hero h1 em { font-style:italic; color:#c6dced; }
+  .hero-sub { font-size:16px; color: rgba(248,246,240,0.6); max-width:560px; line-height:1.6; margin-bottom:40px; }
+  .hero-pills { display:flex; flex-wrap:wrap; gap:8px; }
+  .pill { font-family: var(--mono); font-size:11px; padding:5px 12px; border-radius:2px; border:1px solid rgba(248,246,240,0.15); color: rgba(248,246,240,0.7); }
+  .container { max-width:900px; margin:0 auto; padding:0 48px; }
+  .section { margin-top:72px; }
+  .section-label { font-family: var(--mono); font-size:11px; letter-spacing:0.12em; text-transform:uppercase; color: var(--ink-3); display:flex; align-items:center; gap:12px; margin-bottom:28px; }
+  .section-label::after { content:''; flex:1; height:1px; background: var(--rule); }
+  h2 { font-family: var(--serif); font-size:34px; font-weight:300; letter-spacing:-0.02em; line-height:1.15; margin-bottom:16px; color: var(--ink); }
+  h3 { font-family: var(--sans); font-size:13px; font-weight:500; letter-spacing:0.06em; text-transform:uppercase; color: var(--ink-3); margin-bottom:12px; margin-top:28px; }
+  p { color: var(--ink-2); margin-bottom:14px; }
+  .callout { border-left:3px solid var(--accent); background: var(--accent-light); padding:20px 24px; border-radius:0 6px 6px 0; margin:24px 0; }
+  .callout.orange { border-color: var(--accent-2); background: var(--accent-2-light); }
+  .callout.green { border-color: var(--green); background: var(--green-light); }
+  .callout.amber { border-color: var(--amber); background: var(--amber-light); }
+  .callout p { margin:0; color: var(--ink); font-size:14px; }
+  .callout strong { font-weight:500; }
+  .problem-grid { display:grid; grid-template-columns:1fr 1fr; gap:1px; background: var(--rule); border:1px solid var(--rule); border-radius:8px; overflow:hidden; margin:24px 0; }
+  .problem-cell { background: var(--surface); padding:24px; }
+  .problem-cell .label { font-family: var(--mono); font-size:10px; text-transform:uppercase; letter-spacing:0.1em; color: var(--ink-3); margin-bottom:8px; }
+  .problem-cell p { font-size:14px; color: var(--ink); margin:0; }
+  .feature-list { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin:24px 0; }
+  .feature-card { background:white; border:1px solid var(--rule); border-radius:8px; padding:20px; }
+  .feature-num { font-family: var(--mono); font-size:10px; color: var(--ink-3); margin-bottom:6px; }
+  .feature-card h4 { font-family: var(--sans); font-size:14px; font-weight:500; color: var(--ink); margin-bottom:6px; }
+  .feature-card p { font-size:13px; color: var(--ink-2); margin:0; }
+  .diagram-box { background:white; border:1px solid var(--rule); border-radius:10px; padding:28px; margin:24px 0; }
+  .loop-steps { display:flex; flex-direction:column; gap:0; margin:24px 0; position:relative; }
+  .loop-steps::before { content:''; position:absolute; left:23px; top:40px; bottom:40px; width:1px; background: var(--rule); }
+  .loop-step { display:flex; gap:20px; align-items:flex-start; padding:16px 0; }
+  .loop-num { width:46px; height:46px; border-radius:50%; background: var(--ink); color: var(--surface); font-family: var(--mono); font-size:13px; font-weight:500; display:flex; align-items:center; justify-content:center; flex-shrink:0; position:relative; z-index:1; }
+  .loop-num.accent { background: var(--accent-2); }
+  .loop-num.blue { background: var(--accent); }
+  .loop-num.green { background: var(--green); }
+  .loop-num.amber { background: var(--amber); }
+  .loop-num.purple { background: var(--purple); }
+  .loop-content h4 { font-family: var(--sans); font-size:15px; font-weight:500; color: var(--ink); margin-bottom:4px; padding-top:10px; }
+  .loop-content p { font-size:13px; color: var(--ink-2); margin:0; }
+  .stack-table { width:100%; border-collapse:collapse; margin:24px 0; font-size:14px; }
+  .stack-table th { text-align:left; font-family: var(--mono); font-size:10px; letter-spacing:0.1em; text-transform:uppercase; color: var(--ink-3); padding:8px 16px; border-bottom:1px solid var(--rule); }
+  .stack-table td { padding:12px 16px; border-bottom:1px solid var(--rule); vertical-align:top; color: var(--ink-2); }
+  .stack-table tr:last-child td { border-bottom:none; }
+  .stack-table td:first-child { font-family: var(--mono); font-size:12px; color: var(--accent); font-weight:500; white-space:nowrap; width:180px; }
+  .stack-table td:nth-child(2) { font-weight:500; color: var(--ink); width:200px; }
+  .timeline { margin:24px 0; }
+  .timeline-row { display:grid; grid-template-columns:100px 1fr; gap:0; margin-bottom:0; }
+  .timeline-week { font-family: var(--mono); font-size:11px; color: var(--ink-3); padding:16px 20px 16px 0; border-right:1px solid var(--rule); text-align:right; line-height:1.4; }
+  .timeline-content { padding:16px 0 16px 24px; border-bottom:1px solid var(--rule); }
+  .timeline-row:last-child .timeline-content { border-bottom:none; }
+  .timeline-content h4 { font-size:14px; font-weight:500; color: var(--ink); margin-bottom:4px; }
+  .timeline-content p { font-size:13px; color: var(--ink-2); margin:0; }
+  .risk-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; margin:24px 0; }
+  .risk-card { border:1px solid var(--rule); border-radius:8px; padding:16px; background:white; }
+  .risk-level { font-family: var(--mono); font-size:10px; text-transform:uppercase; letter-spacing:0.1em; padding:3px 8px; border-radius:2px; margin-bottom:10px; display:inline-block; }
+  .risk-level.high { background:#fde8e8; color:#9a2323; }
+  .risk-level.med { background: var(--amber-light); color: var(--amber); }
+  .risk-level.low { background: var(--green-light); color: var(--green); }
+  .risk-card h4 { font-size:13px; font-weight:500; color: var(--ink); margin-bottom:6px; }
+  .risk-card p { font-size:12px; color: var(--ink-2); margin:0; }
+  .eval-metrics { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin:24px 0; }
+  .eval-card { background:white; border:1px solid var(--rule); border-radius:8px; padding:20px; text-align:center; }
+  .eval-card .metric { font-family: var(--serif); font-size:32px; font-weight:300; color: var(--accent); line-height:1; margin-bottom:4px; }
+  .eval-card .metric-name { font-size:12px; color: var(--ink-3); font-family: var(--mono); text-transform:uppercase; letter-spacing:0.08em; }
+  .resume-badge { background: var(--ink); color:#f8f6f0; border-radius:8px; padding:28px 32px; margin:24px 0; }
+  .resume-badge .label { font-family: var(--mono); font-size:10px; text-transform:uppercase; letter-spacing:0.12em; color: var(--accent); margin-bottom:12px; }
+  .resume-badge p { font-size:14px; color: rgba(248,246,240,0.75); line-height:1.6; margin:0; }
+  .resume-badge p strong { color:#f8f6f0; font-weight:500; }
+  .footer { border-top:1px solid var(--rule); padding:40px 48px; max-width:900px; margin:72px auto 0; display:flex; justify-content:space-between; align-items:center; }
+  .footer p { font-family: var(--mono); font-size:11px; color: var(--ink-3); margin:0; }
+  @media (max-width:700px) { .hero{padding:48px 24px 40px;} .hero h1{font-size:36px;} .container{padding:0 24px;} .feature-list,.risk-grid,.eval-metrics{grid-template-columns:1fr;} .problem-grid{grid-template-columns:1fr;} }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="hero-tag">Project Specification · v1.0</div>
+  <h1>Plan-and-Execute<br><em>Agent</em></h1>
+  <p class="hero-sub">An agent that separates thinking from doing: a planner decomposes a goal into an ordered step sequence, an executor carries out each step with tools, and a replanner revises the remaining plan based on what actually happened.</p>
+  <div class="hero-pills">
+    <span class="pill">Multi-Step Planning</span>
+    <span class="pill">Tool Orchestration</span>
+    <span class="pill">Adaptive Replanning</span>
+    <span class="pill">Dynamic Tool Synthesis</span>
+    <span class="pill">Sandboxed Code Execution</span>
+    <span class="pill">Stateful Graph Execution</span>
+    <span class="pill">Production Eval Layer</span>
+    <span class="pill">FastAPI · React · LangGraph</span>
+  </div>
+</div>
+
+<div class="container">
+
+  <div class="section">
+    <div class="section-label">01 · Problem Definition</div>
+    <h2>What problem does this solve?</h2>
+    <p>A single ReAct-style agent interleaves reasoning and action one step at a time, re-deciding the whole approach after every tool call. That's expensive, hard to inspect, and prone to losing the thread on multi-step goals. It also can't be audited &mdash; there's no artifact showing what the agent intended to do before it did it.</p>
+
+    <div class="problem-grid">
+      <div class="problem-cell">
+        <div class="label">Problem</div>
+        <p>Complex goals need an upfront plan, not just reactive step-by-step reasoning &mdash; otherwise the agent wastes calls rediscovering structure it already knew.</p>
+      </div>
+      <div class="problem-cell">
+        <div class="label">Who has it</div>
+        <p>Anyone building agents for multi-step tasks: research pipelines, data workflows, ops automation &mdash; anywhere a goal decomposes into ordered, partly-dependent subtasks.</p>
+      </div>
+      <div class="problem-cell">
+        <div class="label">Why it matters</div>
+        <p>Plans go stale the moment reality diverges from expectation. An agent that can't revise its plan after a failed or unexpected step either stalls or barrels ahead on a broken assumption.</p>
+      </div>
+      <div class="problem-cell">
+        <div class="label">Expected outcome</div>
+        <p>A visible, inspectable plan; a step-by-step execution trace; and a replanner that adapts the remaining steps when execution results change what's needed.</p>
+      </div>
+    </div>
+
+    <div class="callout">
+      <p><strong>Success definition:</strong> Given a multi-step goal (e.g., "research three competing approaches to X and produce a comparison table"), the agent produces an explicit plan, executes it with tool calls, replans when a step fails or returns unexpected results, and completes with a lower average LLM-call count than an equivalent ReAct baseline on the same task set.</p>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-label">02 · Goal &amp; Scope</div>
+    <h2>What are we building?</h2>
+
+    <h3>MVP (Build First)</h3>
+    <div class="feature-list">
+      <div class="feature-card">
+        <div class="feature-num">01</div>
+        <h4>Planner</h4>
+        <p>LLM decomposes the input goal into an ordered list of discrete, tool-executable steps.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-num">02</div>
+        <h4>Executor</h4>
+        <p>Runs one step at a time using available tools (search, code exec, file I/O), returns structured results.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-num">03</div>
+        <h4>Replanner</h4>
+        <p>After each step, decides: continue with the existing plan, revise remaining steps, or declare the goal complete.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-num">04</div>
+        <h4>Step-level state tracking</h4>
+        <p>Every step has a status &mdash; PENDING / RUNNING / DONE / FAILED &mdash; persisted so a run can be inspected or resumed.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-num">05</div>
+        <h4>Failure handling</h4>
+        <p>A failed step triggers replanning, not silent retry &mdash; the replanner sees the failure and decides what changes.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-num">06</div>
+        <h4>Final answer synthesis</h4>
+        <p>Once the plan is exhausted or the replanner marks the goal complete, results are synthesised into a final response.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-num">07</div>
+        <h4>Dynamic tool synthesis <span style="color:var(--accent-2); font-weight:500;">— in core v1</span></h4>
+        <p>When executor hits a step with no matching registered tool, an LLM writes a function to solve it, runs it in the sandbox, validates output against a schema, and registers it as a reusable tool on success.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-num">08</div>
+        <h4>Hardened execution sandbox</h4>
+        <p>Subprocess isolation, scratch-dir-only filesystem writes, outbound-request allowlisting, resource + time caps — load-bearing for synthesized code, not just a nice-to-have.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-num">09</div>
+        <h4>Human-in-the-loop approval gates <span style="color:var(--accent-2); font-weight:500;">— in core v1</span></h4>
+        <p>Before executing a step flagged as sensitive (synthesized-tool execution, or any step touching irreversible actions like bookings/payments/sends), the graph pauses and waits for explicit approve/reject from the user before continuing.</p>
+      </div>
+    </div>
+
+    <h3>Out of scope (v1)</h3>
+    <p style="font-size:14px; color: var(--ink-2);">User authentication · Multi-user workspaces · Parallel step execution · Fine-tuned planner model · Long-term memory across sessions</p>
+    <div class="callout orange">
+      <p><strong>Scope decision (updated):</strong> tool synthesis was originally scoped as a v2 stretch feature. Moved into core v1 &mdash; this is the flagship project, no time constraint, no corner-cutting. The tradeoff is absorbed elsewhere in the master roadmap, not here.</p>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-label">03 · Agent Architecture</div>
+    <h2>The plan &rarr; execute &rarr; replan loop</h2>
+    <p>The core design choice is separating planning from execution into distinct graph nodes with their own state, rather than one node doing both &mdash; this is what makes the plan inspectable and the replanning explicit rather than implicit.</p>
+
+    <div class="loop-steps">
+      <div class="loop-step">
+        <div class="loop-num blue">01</div>
+        <div class="loop-content">
+          <h4>Receive goal &amp; plan</h4>
+          <p>User submits a goal. Planner LLM produces an ordered list of steps with a structured output schema. Steps are stored with status PENDING.</p>
+        </div>
+      </div>
+      <div class="loop-step">
+        <div class="loop-num blue">02</div>
+        <div class="loop-content">
+          <h4>Execute next step</h4>
+          <p>Executor takes the first PENDING step, selects and calls the appropriate tool, and captures the result (success payload or error).</p>
+        </div>
+      </div>
+      <div class="loop-step">
+        <div class="loop-num accent">03</div>
+        <div class="loop-content">
+          <h4>Replan &larr; the adaptive step</h4>
+          <p>LLM reviews the step result against the remaining plan: does the plan still make sense? If a step failed or surfaced new information, the remaining steps are rewritten.</p>
+        </div>
+      </div>
+      <div class="loop-step">
+        <div class="loop-num amber">04</div>
+        <div class="loop-content">
+          <h4>No tool available? Synthesize one</h4>
+          <p>Executor checks the tool registry before failing a step. No match &rarr; a synthesis prompt writes a function against a declared input/output schema, runs it in the hardened sandbox, and on a valid result registers it as a callable tool for the rest of the run.</p>
+        </div>
+      </div>
+      <div class="loop-step">
+        <div class="loop-num accent">05</div>
+        <div class="loop-content">
+          <h4>Approval gate on sensitive steps</h4>
+          <p>Before executing a step marked sensitive &mdash; any synthesized-tool call, or any step touching an irreversible action (booking, payment, send) &mdash; the graph pauses and surfaces the step for explicit human approve/reject. Rejection triggers a replan, not a hard stop.</p>
+        </div>
+      </div>
+      <div class="loop-step">
+        <div class="loop-num accent">06</div>
+        <div class="loop-content">
+          <h4>Continue or terminate</h4>
+          <p>If steps remain, loop back to execution. If the replanner determines the goal is satisfied, or a hard step-count cap is hit, the loop ends.</p>
+        </div>
+      </div>
+      <div class="loop-step">
+        <div class="loop-num green">07</div>
+        <div class="loop-content">
+          <h4>Synthesise final answer</h4>
+          <p>All step results are combined into a coherent final response, with a trace of the plan actually executed (including any revisions, synthesized tools, and approval decisions).</p>
+        </div>
+      </div>
+      <div class="loop-step">
+        <div class="loop-num purple">08</div>
+        <div class="loop-content">
+          <h4>Evaluate output</h4>
+          <p>LLM-as-judge scores the final answer against the original goal for completeness and correctness; step-count, replan-count, synthesis-count, and approval-gate events are logged for the ablation study.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="callout orange">
+      <p><strong>Why this beats a plain ReAct loop:</strong> ReAct re-derives structure on every turn. Plan-and-Execute derives structure once, executes cheaply against it, and only pays the expensive replanning cost when reality actually diverges &mdash; fewer LLM calls for the same task, and a plan artifact you can show in an interview.</p>
+    </div>
+    <div class="callout">
+      <p><strong>Why tool synthesis, not just a fixed tool list:</strong> a fixed tool registry is brittle &mdash; the moment the goal needs something not pre-built (e.g. "find the cheapest flight" with no flight API wired in), a ReAct or fixed-tool Plan-and-Execute agent just fails the step. Synthesizing a tool on demand, then caching it, means the agent's capability set grows with the goals it's given instead of being capped at build time.</p>
+    </div>
+    <div class="callout green">
+      <p><strong>Why an approval gate, not full autonomy:</strong> a flagship agent that can write and run its own code is exactly the kind of system an interviewer will probe on safety. Pausing for human approval before synthesized code runs or an irreversible action fires isn't a limitation &mdash; it's the correct design for a system with this much autonomy, and it's a stronger answer than "we just trusted the sandbox."</p>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-label">04 · Technology Stack</div>
+    <h2>What it's built with</h2>
+    <table class="stack-table">
+      <thead><tr><th>Layer</th><th>Technology</th><th>Justification</th></tr></thead>
+      <tbody>
+        <tr><td>Agent orchestration</td><td>LangGraph</td><td>Explicit graph nodes for planner / executor / replanner with conditional edges &mdash; build the loop yourself, don't use a pre-built agent executor.</td></tr>
+        <tr><td>LLM backbone</td><td>Anthropic Claude / Ollama</td><td>Claude API for production quality; Ollama (qwen2.5:14b) for local dev without API costs. Swap via env variable.</td></tr>
+        <tr><td>Tool layer</td><td>LangChain tool interface</td><td>Standardised tool-calling schema (search, code exec sandbox, file I/O) reused across planner and executor.</td></tr>
+        <tr><td>Tool synthesis</td><td>LLM codegen + dynamic registry</td><td>On missing-tool detection, generates a function against a declared schema; validated output gets registered as a callable tool, keyed by task signature.</td></tr>
+        <tr><td>Approval gates</td><td>LangGraph interrupt + resume</td><td>Graph pauses execution on sensitive steps (synthesized-tool calls, irreversible actions) via a checkpointed interrupt, resumes on human approve/reject.</td></tr>
+        <tr><td>Execution sandbox</td><td>Hardened subprocess isolation</td><td>Scratch-dir-only filesystem, outbound-request allowlisting, resource/time caps. Load-bearing now that arbitrary generated code runs through it, not optional hardening.</td></tr>
+        <tr><td>Structured output</td><td>Pydantic</td><td>Enforces the plan/step schema and tool input/output schemas so the replanner and synthesis node can validate reliably.</td></tr>
+        <tr><td>Backend API</td><td>FastAPI + async</td><td>SSE endpoint streams plan + step-execution + tool-synthesis updates to the frontend as they happen.</td></tr>
+        <tr><td>Frontend</td><td>React + TypeScript</td><td>Visualise the plan as a step list with live status badges, replan diffs, and synthesized-tool events.</td></tr>
+        <tr><td>State persistence</td><td>SQLite + SQLAlchemy</td><td>Store goals, plan versions (original + revisions), step results, synthesized tool registry, and final answers. Resume interrupted runs.</td></tr>
+        <tr><td>Eval framework</td><td>Custom LLM-judge + step-count metric</td><td>Judge scores completeness/correctness; step-count, replan-count, and synthesis-count are the metrics across all three ablation arms.</td></tr>
+        <tr><td>Containerisation</td><td>Docker Compose</td><td>Single command setup, one service for API.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="section">
+    <div class="section-label">05 · System Design</div>
+    <h2>Architecture overview</h2>
+    <div class="diagram-box">
+      <svg width="100%" viewBox="0 0 800 420" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="#8a8880" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker>
+          <marker id="arr-accent" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="#c84b2f" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker>
+        </defs>
+        <rect x="20" y="170" width="100" height="44" rx="8" fill="#f0ede4" stroke="#c8c4b8" stroke-width="0.5"/>
+        <text font-family="'DM Sans', sans-serif" font-size="12" font-weight="500" fill="#1a1917" x="70" y="196" text-anchor="middle" dominant-baseline="central">User Goal</text>
+
+        <rect x="160" y="150" width="110" height="84" rx="8" fill="#e8f1f9" stroke="#2b5f8a" stroke-width="0.5"/>
+        <text font-family="'DM Mono', monospace" font-size="10" fill="#2b5f8a" x="215" y="172" text-anchor="middle">Frontend</text>
+        <text font-family="'DM Sans', sans-serif" font-size="11" fill="#1a1917" x="215" y="192" text-anchor="middle">React + TS</text>
+        <text font-family="'DM Sans', sans-serif" font-size="10" fill="#4a4843" x="215" y="210" text-anchor="middle">SSE streaming</text>
+
+        <rect x="320" y="150" width="110" height="84" rx="8" fill="#f9ece8" stroke="#c84b2f" stroke-width="0.5"/>
+        <text font-family="'DM Mono', monospace" font-size="10" fill="#c84b2f" x="375" y="172" text-anchor="middle">API Layer</text>
+        <text font-family="'DM Sans', sans-serif" font-size="11" fill="#1a1917" x="375" y="192" text-anchor="middle">FastAPI</text>
+        <text font-family="'DM Sans', sans-serif" font-size="10" fill="#4a4843" x="375" y="210" text-anchor="middle">Async + Rate limit</text>
+
+        <rect x="480" y="110" width="140" height="160" rx="10" fill="#fdf3e3" stroke="#9a5c0a" stroke-width="1"/>
+        <text font-family="'DM Mono', monospace" font-size="10" fill="#9a5c0a" x="550" y="132" text-anchor="middle">Agent Core</text>
+        <text font-family="'DM Sans', sans-serif" font-size="11" fill="#1a1917" x="550" y="152" text-anchor="middle" font-weight="500">LangGraph</text>
+        <text font-family="'DM Sans', sans-serif" font-size="10" fill="#4a4843" x="550" y="172" text-anchor="middle">Plan</text>
+        <text font-family="'DM Sans', sans-serif" font-size="10" fill="#4a4843" x="550" y="188" text-anchor="middle">Execute</text>
+        <text font-family="'DM Sans', sans-serif" font-size="10" fill="#c84b2f" x="550" y="204" text-anchor="middle" font-weight="500">&#8635; Replan</text>
+        <text font-family="'DM Sans', sans-serif" font-size="10" fill="#4a4843" x="550" y="222" text-anchor="middle">Terminate check</text>
+        <text font-family="'DM Sans', sans-serif" font-size="10" fill="#4a4843" x="550" y="240" text-anchor="middle">Synthesise</text>
+
+        <rect x="480" y="310" width="60" height="40" rx="6" fill="#e8f5ee" stroke="#2a6b45" stroke-width="0.5"/>
+        <text font-family="'DM Sans', sans-serif" font-size="10" fill="#2a6b45" x="510" y="334" text-anchor="middle" dominant-baseline="central">Search</text>
+
+        <rect x="556" y="310" width="60" height="40" rx="6" fill="#e8f5ee" stroke="#2a6b45" stroke-width="0.5"/>
+        <text font-family="'DM Sans', sans-serif" font-size="10" fill="#2a6b45" x="586" y="334" text-anchor="middle" dominant-baseline="central">Code Exec</text>
+
+        <rect x="670" y="150" width="100" height="84" rx="8" fill="#f1ecfa" stroke="#5c3b8a" stroke-width="0.5"/>
+        <text font-family="'DM Mono', monospace" font-size="10" fill="#5c3b8a" x="720" y="172" text-anchor="middle">Storage</text>
+        <text font-family="'DM Sans', sans-serif" font-size="11" fill="#1a1917" x="720" y="192" text-anchor="middle">SQLite</text>
+        <text font-family="'DM Sans', sans-serif" font-size="10" fill="#4a4843" x="720" y="210" text-anchor="middle">Plans + History</text>
+
+        <line x1="120" y1="192" x2="158" y2="192" stroke="#8a8880" stroke-width="0.5" marker-end="url(#arr)"/>
+        <line x1="270" y1="192" x2="318" y2="192" stroke="#8a8880" stroke-width="0.5" marker-end="url(#arr)"/>
+        <line x1="430" y1="192" x2="478" y2="192" stroke="#c84b2f" stroke-width="0.5" marker-end="url(#arr-accent)"/>
+        <line x1="620" y1="192" x2="668" y2="192" stroke="#8a8880" stroke-width="0.5" marker-end="url(#arr)"/>
+        <line x1="510" y1="270" x2="510" y2="308" stroke="#2a6b45" stroke-width="0.5" marker-end="url(#arr)"/>
+        <line x1="590" y1="270" x2="590" y2="308" stroke="#2a6b45" stroke-width="0.5" marker-end="url(#arr)"/>
+
+        <path d="M550 270 Q550 295 530 295 Q450 295 450 192 Q450 135 478 135" fill="none" stroke="#c84b2f" stroke-width="0.75" stroke-dasharray="4 3" marker-end="url(#arr-accent)"/>
+        <text font-family="'DM Mono', monospace" font-size="9" fill="#c84b2f" x="450" y="326" text-anchor="middle">replan loop</text>
+      </svg>
+    </div>
+
+    <h3>Data models (key)</h3>
+    <div class="code-block" style="background:var(--ink); border-radius:8px; padding:20px 24px; margin:20px 0; overflow-x:auto;">
+      <pre style="font-family:var(--mono); font-size:12px; line-height:1.6; color:#c8c2b8; white-space:pre;"><span style="color:#6a6860"># goal_run</span>
+id, goal_text, status, created_at, completed_at, final_answer
+
+<span style="color:#6a6860"># plan_version</span>
+id, goal_run_id, version_num, created_at
+steps  <span style="color:#6a6860"># ordered JSON list, replaces prior version on replan</span>
+
+<span style="color:#6a6860"># step</span>
+id, plan_version_id, order, description, status  <span style="color:#6a6860"># PENDING|RUNNING|DONE|FAILED</span>
+tool_name, tool_input, tool_output, error
+
+<span style="color:#6a6860"># eval_result</span>
+id, goal_run_id, completeness_score, correctness_score
+step_count, replan_count, judge_reasoning</pre>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-label">06 · Timeline</div>
+    <h2>Build plan</h2>
+    <p>Extended: Jul 7 &ndash; Aug 6 (31 days total, 24-day build after prereq). Flagship project, no time constraint &mdash; tool synthesis and human-in-the-loop approval gates both kept in core rather than deferred. The added days versus the original 14-day build are absorbed later in the master roadmap (Agent Engineering phase compresses further), not here.</p>
+    <div class="timeline">
+      <div class="timeline-row"><div class="timeline-week">Jul 7&ndash;13</div><div class="timeline-content"><h4>LangGraph &amp; tool-calling prereq</h4><p>State graphs, conditional edges, checkpointing, LangChain tool interface. Minimum viable &mdash; not a full course.</p></div></div>
+      <div class="timeline-row"><div class="timeline-week">Jul 14&ndash;17</div><div class="timeline-content"><h4>Planner + step schema</h4><p>Pydantic step/plan schema. Planner prompt producing ordered, tool-executable steps. CLI test harness, no frontend yet.</p></div></div>
+      <div class="timeline-row"><div class="timeline-week">Jul 18&ndash;21</div><div class="timeline-content"><h4>Executor + fixed tool layer</h4><p>Wire up search, code-exec sandbox, file I/O tools. Executor runs one step, captures structured success/error results.</p></div></div>
+      <div class="timeline-row"><div class="timeline-week">Jul 22&ndash;24</div><div class="timeline-content"><h4>Replanner + termination logic</h4><p>Replan prompt that reviews step result vs. remaining plan. Hard step-count cap. Test on 10 hand-crafted multi-step goals.</p></div></div>
+      <div class="timeline-row"><div class="timeline-week">Jul 25&ndash;27</div><div class="timeline-content"><h4>Dynamic tool synthesis</h4><p>Missing-tool detection in executor. Codegen prompt against declared I/O schema. Sandbox execution + output validation. Successful synthesis registers a reusable tool keyed by task signature.</p></div></div>
+      <div class="timeline-row"><div class="timeline-week">Jul 28&ndash;29</div><div class="timeline-content"><h4>Sandbox hardening</h4><p>Scratch-dir-only filesystem writes, outbound-request allowlisting, resource/time caps. Load-bearing now &mdash; arbitrary LLM-generated code runs through this path.</p></div></div>
+      <div class="timeline-row"><div class="timeline-week">Jul 30&ndash;31</div><div class="timeline-content"><h4>Human-in-the-loop approval gates</h4><p>Sensitivity classification for steps (synthesized-tool calls, irreversible actions). LangGraph interrupt/resume wiring. Approve/reject UI hook, rejection routes back into the replanner rather than hard-stopping.</p></div></div>
+      <div class="timeline-row"><div class="timeline-week">Aug 1&ndash;3</div><div class="timeline-content"><h4>Eval harness + golden dataset</h4><p>20-goal golden dataset, including cases requiring synthesis and cases that trigger an approval gate. LLM-as-judge for completeness/correctness. Log step-count, replan-count, synthesis-count, and approval events per run.</p></div></div>
+      <div class="timeline-row"><div class="timeline-week">Aug 4&ndash;6</div><div class="timeline-content"><h4>FastAPI wrap + deploy</h4><p>SSE endpoint streaming plan/step/synthesis/approval updates. Minimal text-first frontend with an approve/reject control. Deploy to Render/Fly.io. Three-arm ablation: ReAct vs. fixed-tool Plan-and-Execute vs. full system with synthesis (approval gates active throughout, not a fourth arm &mdash; they affect safety, not the efficiency comparison).</p></div></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-label">07 · Evaluation Strategy</div>
+    <h2>How you'll prove it works</h2>
+    <p>Now a three-arm ablation, since tool synthesis is core: quantify the step-count/call-count savings from planning, <em>and</em> the goal-coverage gain from synthesis, separately.</p>
+    <div class="eval-metrics">
+      <div class="eval-card"><div class="metric">&ge;85%</div><div class="metric-name">Goal completion<br>(LLM-as-judge)</div></div>
+      <div class="eval-card"><div class="metric">&darr; calls</div><div class="metric-name">LLM calls vs.<br>ReAct baseline</div></div>
+      <div class="eval-card"><div class="metric">&uarr; coverage</div><div class="metric-name">Goals solvable only<br>via synthesis</div></div>
+    </div>
+    <h3>Golden dataset (build this)</h3>
+    <p style="font-size:14px; color: var(--ink-2);">20 multi-step goals across 4 categories: (a) goals where a step fails and forces a replan, (b) goals where a step surfaces new information that changes the remaining plan, (c) straightforward goals with no replanning needed, (d) goals that require a tool not in the fixed registry &mdash; these only succeed if synthesis works. Human-annotate expected step count, expected final answer, and whether synthesis is required.</p>
+    <h3>Ablation study (for the blog post) &mdash; three arms</h3>
+    <p style="font-size:14px; color: var(--ink-2);">Run the same 20 goals with: (1) a plain ReAct loop with the fixed tool set, (2) Plan-and-Execute with replanning but no tool synthesis, (3) full system with synthesis. Arms 1&ndash;2 isolate the planning/replanning win (calls, wall-clock, accuracy on solvable goals). Arm 2 vs. 3 isolates the synthesis win specifically &mdash; category (d) goals should fail on arm 2 and succeed on arm 3, which is the cleanest, most defensible number in the whole study.</p>
+    <div class="callout green">
+      <p><strong>Hiring signal:</strong> A quantified comparison against the "obvious" baseline (ReAct), <em>plus</em> an isolated measurement of what the synthesis feature specifically buys you, is a stronger story than either alone &mdash; it shows you can attribute a result to a specific design decision, not just report an aggregate number.</p>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-label">08 · Risk Analysis</div>
+    <h2>What could go wrong</h2>
+    <div class="risk-grid">
+      <div class="risk-card"><div class="risk-level high">High Risk</div><h4>Replanner thrashing</h4><p>Replanner rewrites the plan on every step even when unnecessary, erasing the efficiency win over ReAct. Mitigation: replan only triggers on FAILED status or explicit "plan invalid" signal from the LLM, not by default.</p></div>
+      <div class="risk-card"><div class="risk-level high">High Risk</div><h4>Runaway step count</h4><p>Bad plan or repeated replanning loops indefinitely. Mitigation: hard cap on total steps executed per goal, terminate with partial-answer note if hit.</p></div>
+      <div class="risk-card"><div class="risk-level med">Med Risk</div><h4>Tool call failures</h4><p>Search or code-exec tool is flaky. Mitigation: structured error capture passed to replanner as real signal, not swallowed.</p></div>
+      <div class="risk-card"><div class="risk-level med">Med Risk</div><h4>Plan schema drift</h4><p>LLM output doesn't conform to the Pydantic step schema. Mitigation: structured output mode + schema validation with one retry on parse failure.</p></div>
+      <div class="risk-card"><div class="risk-level med">Med Risk</div><h4>Weak baseline comparison</h4><p>ReAct baseline built too quickly to be a fair comparison, undermining the ablation. Mitigation: use the same tools and same LLM for both, only the orchestration differs.</p></div>
+      <div class="risk-card"><div class="risk-level low">Low Risk</div><h4>Frontend scope creep</h4><p>UI keeps expanding. Mitigation: MVP frontend is a step list with status badges only. Plan-diff visualisation is v2.</p></div>
+      <div class="risk-card"><div class="risk-level high">High Risk</div><h4>Synthesized code is a real security surface</h4><p>LLM-generated code with network access is materially different from math-only sandboxing. Mitigation: scratch-dir-only filesystem, outbound-request allowlisting, hard timeout + memory caps, no arbitrary `eval`/`exec` on unvalidated output &mdash; treat this as the project's primary security review, not a footnote.</p></div>
+      <div class="risk-card"><div class="risk-level med">Med Risk</div><h4>Synthesis reliability</h4><p>Generated tools fail in new ways &mdash; wrong auth, brittle scraping, silently wrong output that still parses. Mitigation: strict output schema validation, a synthesis-specific eval slice (category (d) goals) to catch silent failures the judge alone might miss.</p></div>
+      <div class="risk-card"><div class="risk-level med">Med Risk</div><h4>Muddied ablation</h4><p>Adding synthesis on top of replanning changes two variables at once if not isolated. Mitigation: three-arm ablation design (see Evaluation Strategy) keeps the two contributions separable.</p></div>
+      <div class="risk-card"><div class="risk-level low">Low Risk</div><h4>Approval-gate over-triggering</h4><p>Sensitivity classifier flags too many steps, making the agent feel constantly blocked on human input. Mitigation: narrow the sensitive set deliberately &mdash; synthesized-tool execution and irreversible actions only, not every tool call.</p></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-label">09 · Security &amp; Data</div>
+    <h2>Non-functional requirements</h2>
+    <h3>Security &mdash; the primary review, not a footnote</h3>
+    <p style="font-size:14px; color: var(--ink-2);">All code &mdash; fixed-tool and synthesized &mdash; runs in a sandboxed subprocess with resource/time limits, never `eval`/`exec` on raw model output directly. Synthesized code specifically: scratch-dir-only filesystem writes, outbound-request allowlisting (no arbitrary domains), and output validated against a declared schema before a tool is registered for reuse. All external URLs validated against a whitelist. API keys in environment variables only.</p>
+    <h3>Data requirements</h3>
+    <div class="callout amber">
+      <p><strong>No training data needed.</strong> Pre-trained LLMs + live tools. The only data you build is the 20-question golden dataset, created manually over ~1 day.</p>
+    </div>
+    <h3>Legal / privacy</h3>
+    <p style="font-size:14px; color: var(--ink-2);">No PII collected. Search results summarised, not stored verbatim. Third-party APIs used within terms of service.</p>
+  </div>
+
+  <div class="section">
+    <div class="section-label">10 · Resume Framing</div>
+    <h2>How this reads on paper</h2>
+    <div class="resume-badge">
+      <div class="label">Resume bullet &middot; draft</div>
+      <p>
+        Built a <strong>Plan-and-Execute agent</strong> using LangGraph that decomposes multi-step goals into an explicit, inspectable plan, executes steps via a tool layer, and adaptively replans remaining steps on failure or new information &mdash; rather than re-deriving structure on every turn. Extended the executor with <strong>dynamic tool synthesis</strong> (generates, sandboxes, validates, and registers new callable tools at runtime) and <strong>human-in-the-loop approval gates</strong> that pause execution before synthesized-tool calls or irreversible actions, resuming on explicit approval.<br><br>
+        Ran a controlled three-arm ablation (ReAct / fixed-tool Plan-and-Execute / +synthesis) on a 20-goal dataset; Plan-and-Execute reduced total LLM calls by <strong>[fill in from ablation]%</strong> vs. ReAct, and synthesis extended solvable goal coverage by <strong>[fill in from ablation]%</strong> on tasks with no pre-built tool. Implemented an LLM-as-judge eval pipeline and a hardened execution sandbox for LLM-generated code.
+      </p>
+    </div>
+    <div class="callout orange">
+      <p><strong>Why this hits the hiring checklist:</strong> Multi-step planning &check; &nbsp;Tool use &check; &nbsp;Stateful agent loop &check; &nbsp;Adaptive replanning &check; &nbsp;Controlled baseline comparison &check; &nbsp;Quantitative results &check; &nbsp;Open source with clean commit history &check;</p>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-label">11 · Documentation Plan</div>
+    <h2>What to ship with it</h2>
+    <div class="feature-list">
+      <div class="feature-card"><div class="feature-num">README</div><h4>Project overview + demo GIF</h4><p>What it is, architecture diagram, setup in 3 commands, example plan + execution trace.</p></div>
+      <div class="feature-card"><div class="feature-num">BLOG</div><h4>Technical writeup</h4><p>How the replan loop works, the ablation vs. ReAct, design tradeoffs. Target: dev.to or personal site.</p></div>
+      <div class="feature-card"><div class="feature-num">EVALS</div><h4>Eval results README</h4><p>The 20-goal golden dataset, methodology, call-count and completion scores across all three ablation conditions.</p></div>
+      <div class="feature-card"><div class="feature-num">ARCH</div><h4>Architecture notes</h4><p>Graph diagram, data model, sequence diagram for a replan event. Interviewers love this.</p></div>
+    </div>
+  </div>
+
+</div>
+
+<div class="footer">
+  <p>Plan-and-Execute Agent &middot; Project Spec v1.0</p>
+  <p>For: Akshat &middot; Target: Summer 2027 Internship</p>
+</div>
+
+</body>
+</html>
