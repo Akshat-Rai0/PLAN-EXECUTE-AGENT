@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+.env.local
+node_modules/
+frontend/dist/
+frontend/build/
+*.log
+.DS_Store
+.pytest_cache/
+eval/results/*.json
+!eval/results/.gitkeep
+sandbox_runs/
