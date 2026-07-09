@@ -195,12 +195,17 @@
         <h4>Human-in-the-loop approval gates <span style="color:var(--accent-2); font-weight:500;">— in core v1</span></h4>
         <p>Before executing a step flagged as sensitive (synthesized-tool execution, or any step touching irreversible actions like bookings/payments/sends), the graph pauses and waits for explicit approve/reject from the user before continuing.</p>
       </div>
+      <div class="feature-card">
+        <div class="feature-num">10</div>
+        <h4>Browser automation <span style="color:var(--accent-2); font-weight:500;">— in core v1</span></h4>
+        <p>A stateful browser tool (navigate, click, fill, screenshot) for goals that require interacting with sites with no API &mdash; booking flows, dashboards, anything Tavily search can't reach. Separate from the synthesized-code sandbox; holds session state across multiple steps of one goal.</p>
+      </div>
     </div>
 
     <h3>Out of scope (v1)</h3>
     <p style="font-size:14px; color: var(--ink-2);">User authentication · Multi-user workspaces · Parallel step execution · Fine-tuned planner model · Long-term memory across sessions</p>
     <div class="callout orange">
-      <p><strong>Scope decision (updated):</strong> tool synthesis was originally scoped as a v2 stretch feature. Moved into core v1 &mdash; this is the flagship project, no time constraint, no corner-cutting. The tradeoff is absorbed elsewhere in the master roadmap, not here.</p>
+      <p><strong>Scope decision (updated):</strong> tool synthesis, HITL approval gates, and browser automation were all originally scoped as v2 stretch features. Moved into core v1 &mdash; this is the flagship project, no time constraint, no corner-cutting. The tradeoff is absorbed elsewhere in the master roadmap, not here.</p>
     </div>
   </div>
 
@@ -277,6 +282,9 @@
     <div class="callout green">
       <p><strong>Why an approval gate, not full autonomy:</strong> a flagship agent that can write and run its own code is exactly the kind of system an interviewer will probe on safety. Pausing for human approval before synthesized code runs or an irreversible action fires isn't a limitation &mdash; it's the correct design for a system with this much autonomy, and it's a stronger answer than "we just trusted the sandbox."</p>
     </div>
+    <div class="callout">
+      <p><strong>Why browser automation, not just search:</strong> Tavily-style search returns information, not interaction &mdash; it can't select flight dates or submit a form. Any goal that requires acting on a site with no API (booking, dashboards behind a login) is unsolvable without a real browser tool. The executor treats it as a stateful tool: session persists across the multiple steps one goal needs on the same site, distinct from the disposable per-call synthesized-code sandbox.</p>
+    </div>
   </div>
 
   <div class="section">
@@ -290,6 +298,7 @@
         <tr><td>Tool layer</td><td>LangChain tool interface</td><td>Standardised tool-calling schema (search, code exec sandbox, file I/O) reused across planner and executor.</td></tr>
         <tr><td>Tool synthesis</td><td>LLM codegen + dynamic registry</td><td>On missing-tool detection, generates a function against a declared schema; validated output gets registered as a callable tool, keyed by task signature.</td></tr>
         <tr><td>Approval gates</td><td>LangGraph interrupt + resume</td><td>Graph pauses execution on sensitive steps (synthesized-tool calls, irreversible actions) via a checkpointed interrupt, resumes on human approve/reject.</td></tr>
+        <tr><td>Browser automation</td><td>agent-infra/sandbox (browser container only)</td><td>Playwright/CDP-backed navigate/click/fill/screenshot. Run with seccomp enabled and network restricted to an allowlist &mdash; not the project's quickstart defaults. VSCode/Jupyter components excluded, not needed.</td></tr>
         <tr><td>Execution sandbox</td><td>Hardened subprocess isolation</td><td>Scratch-dir-only filesystem, outbound-request allowlisting, resource/time caps. Load-bearing now that arbitrary generated code runs through it, not optional hardening.</td></tr>
         <tr><td>Structured output</td><td>Pydantic</td><td>Enforces the plan/step schema and tool input/output schemas so the replanner and synthesis node can validate reliably.</td></tr>
         <tr><td>Backend API</td><td>FastAPI + async</td><td>SSE endpoint streams plan + step-execution + tool-synthesis updates to the frontend as they happen.</td></tr>
@@ -377,17 +386,18 @@ step_count, replan_count, judge_reasoning</pre>
   <div class="section">
     <div class="section-label">06 · Timeline</div>
     <h2>Build plan</h2>
-    <p>Extended: Jul 7 &ndash; Aug 6 (31 days total, 24-day build after prereq). Flagship project, no time constraint &mdash; tool synthesis and human-in-the-loop approval gates both kept in core rather than deferred. The added days versus the original 14-day build are absorbed later in the master roadmap (Agent Engineering phase compresses further), not here.</p>
+    <p>Extended: Jul 7 &ndash; Aug 10 (35 days total, 28-day build after prereq). Flagship project, no time constraint &mdash; tool synthesis, HITL approval gates, and browser automation all kept in core rather than deferred. This is the fourth scope addition; further additions should be weighed explicitly, not folded in by default.</p>
     <div class="timeline">
       <div class="timeline-row"><div class="timeline-week">Jul 7&ndash;13</div><div class="timeline-content"><h4>LangGraph &amp; tool-calling prereq</h4><p>State graphs, conditional edges, checkpointing, LangChain tool interface. Minimum viable &mdash; not a full course.</p></div></div>
       <div class="timeline-row"><div class="timeline-week">Jul 14&ndash;17</div><div class="timeline-content"><h4>Planner + step schema</h4><p>Pydantic step/plan schema. Planner prompt producing ordered, tool-executable steps. CLI test harness, no frontend yet.</p></div></div>
-      <div class="timeline-row"><div class="timeline-week">Jul 18&ndash;21</div><div class="timeline-content"><h4>Executor + fixed tool layer</h4><p>Wire up search, code-exec sandbox, file I/O tools. Executor runs one step, captures structured success/error results.</p></div></div>
+      <div class="timeline-row"><div class="timeline-week">Jul 18&ndash;21</div><div class="timeline-content"><h4>Executor + fixed tool layer</h4><p>Wire up search (Tavily), code-exec sandbox, file I/O tools. Executor runs one step, captures structured success/error results.</p></div></div>
       <div class="timeline-row"><div class="timeline-week">Jul 22&ndash;24</div><div class="timeline-content"><h4>Replanner + termination logic</h4><p>Replan prompt that reviews step result vs. remaining plan. Hard step-count cap. Test on 10 hand-crafted multi-step goals.</p></div></div>
       <div class="timeline-row"><div class="timeline-week">Jul 25&ndash;27</div><div class="timeline-content"><h4>Dynamic tool synthesis</h4><p>Missing-tool detection in executor. Codegen prompt against declared I/O schema. Sandbox execution + output validation. Successful synthesis registers a reusable tool keyed by task signature.</p></div></div>
       <div class="timeline-row"><div class="timeline-week">Jul 28&ndash;29</div><div class="timeline-content"><h4>Sandbox hardening</h4><p>Scratch-dir-only filesystem writes, outbound-request allowlisting, resource/time caps. Load-bearing now &mdash; arbitrary LLM-generated code runs through this path.</p></div></div>
       <div class="timeline-row"><div class="timeline-week">Jul 30&ndash;31</div><div class="timeline-content"><h4>Human-in-the-loop approval gates</h4><p>Sensitivity classification for steps (synthesized-tool calls, irreversible actions). LangGraph interrupt/resume wiring. Approve/reject UI hook, rejection routes back into the replanner rather than hard-stopping.</p></div></div>
-      <div class="timeline-row"><div class="timeline-week">Aug 1&ndash;3</div><div class="timeline-content"><h4>Eval harness + golden dataset</h4><p>20-goal golden dataset, including cases requiring synthesis and cases that trigger an approval gate. LLM-as-judge for completeness/correctness. Log step-count, replan-count, synthesis-count, and approval events per run.</p></div></div>
-      <div class="timeline-row"><div class="timeline-week">Aug 4&ndash;6</div><div class="timeline-content"><h4>FastAPI wrap + deploy</h4><p>SSE endpoint streaming plan/step/synthesis/approval updates. Minimal text-first frontend with an approve/reject control. Deploy to Render/Fly.io. Three-arm ablation: ReAct vs. fixed-tool Plan-and-Execute vs. full system with synthesis (approval gates active throughout, not a fourth arm &mdash; they affect safety, not the efficiency comparison).</p></div></div>
+      <div class="timeline-row"><div class="timeline-week">Aug 1&ndash;4</div><div class="timeline-content"><h4>Browser automation</h4><p>agent-infra/sandbox browser container, seccomp enabled, network allowlisted. Navigate/click/fill/screenshot tool wired into the registry. Session persistence across steps for one goal. Treated as an irreversible-action-adjacent tool for the HITL gate where relevant (e.g. before a final submit).</p></div></div>
+      <div class="timeline-row"><div class="timeline-week">Aug 5&ndash;7</div><div class="timeline-content"><h4>Eval harness + golden dataset</h4><p>20-goal golden dataset, including cases requiring synthesis, cases that trigger an approval gate, and at least one goal solvable only via browser interaction. LLM-as-judge for completeness/correctness. Log step-count, replan-count, synthesis-count, approval events, and browser-tool usage per run.</p></div></div>
+      <div class="timeline-row"><div class="timeline-week">Aug 8&ndash;10</div><div class="timeline-content"><h4>FastAPI wrap + deploy</h4><p>SSE endpoint streaming plan/step/synthesis/approval/browser updates. Minimal text-first frontend with an approve/reject control. Deploy to Render/Fly.io. Three-arm ablation: ReAct vs. fixed-tool Plan-and-Execute vs. full system with synthesis + browser (approval gates active throughout, not a separate arm &mdash; they affect safety, not the efficiency comparison).</p></div></div>
     </div>
   </div>
 
@@ -401,7 +411,7 @@ step_count, replan_count, judge_reasoning</pre>
       <div class="eval-card"><div class="metric">&uarr; coverage</div><div class="metric-name">Goals solvable only<br>via synthesis</div></div>
     </div>
     <h3>Golden dataset (build this)</h3>
-    <p style="font-size:14px; color: var(--ink-2);">20 multi-step goals across 4 categories: (a) goals where a step fails and forces a replan, (b) goals where a step surfaces new information that changes the remaining plan, (c) straightforward goals with no replanning needed, (d) goals that require a tool not in the fixed registry &mdash; these only succeed if synthesis works. Human-annotate expected step count, expected final answer, and whether synthesis is required.</p>
+    <p style="font-size:14px; color: var(--ink-2);">20 multi-step goals across 5 categories: (a) goals where a step fails and forces a replan, (b) goals where a step surfaces new information that changes the remaining plan, (c) straightforward goals with no replanning needed, (d) goals that require a tool not in the fixed registry &mdash; these only succeed if synthesis works, (e) goals solvable only via real browser interaction (e.g. a booking flow with no API). Human-annotate expected step count, expected final answer, and which capability (synthesis / browser / neither) is required.</p>
     <h3>Ablation study (for the blog post) &mdash; three arms</h3>
     <p style="font-size:14px; color: var(--ink-2);">Run the same 20 goals with: (1) a plain ReAct loop with the fixed tool set, (2) Plan-and-Execute with replanning but no tool synthesis, (3) full system with synthesis. Arms 1&ndash;2 isolate the planning/replanning win (calls, wall-clock, accuracy on solvable goals). Arm 2 vs. 3 isolates the synthesis win specifically &mdash; category (d) goals should fail on arm 2 and succeed on arm 3, which is the cleanest, most defensible number in the whole study.</p>
     <div class="callout green">
@@ -423,6 +433,9 @@ step_count, replan_count, judge_reasoning</pre>
       <div class="risk-card"><div class="risk-level med">Med Risk</div><h4>Synthesis reliability</h4><p>Generated tools fail in new ways &mdash; wrong auth, brittle scraping, silently wrong output that still parses. Mitigation: strict output schema validation, a synthesis-specific eval slice (category (d) goals) to catch silent failures the judge alone might miss.</p></div>
       <div class="risk-card"><div class="risk-level med">Med Risk</div><h4>Muddied ablation</h4><p>Adding synthesis on top of replanning changes two variables at once if not isolated. Mitigation: three-arm ablation design (see Evaluation Strategy) keeps the two contributions separable.</p></div>
       <div class="risk-card"><div class="risk-level low">Low Risk</div><h4>Approval-gate over-triggering</h4><p>Sensitivity classifier flags too many steps, making the agent feel constantly blocked on human input. Mitigation: narrow the sensitive set deliberately &mdash; synthesized-tool execution and irreversible actions only, not every tool call.</p></div>
+      <div class="risk-card"><div class="risk-level high">High Risk</div><h4>Browser sandbox misconfiguration</h4><p>agent-infra/sandbox's own quickstart runs with seccomp disabled. Mitigation: seccomp stays enabled, network restricted to an allowlist, VSCode/Jupyter components not deployed at all &mdash; only the browser piece, hardened.</p></div>
+      <div class="risk-card"><div class="risk-level med">Med Risk</div><h4>Browser automation flakiness</h4><p>Sites change layout, elements shift, timing issues. Mitigation: DOM-based selectors over brittle coordinates where possible, explicit wait conditions, treat a stuck browser step as a FAILED step the replanner can react to &mdash; not a special case.</p></div>
+      <div class="risk-card"><div class="risk-level med">Med Risk</div><h4>Scope creep pattern</h4><p>Fourth core-scope addition after synthesis, hardening, and HITL. Mitigation: any further addition gets weighed explicitly against the deadline before folding in, not added by default because the project is flagship.</p></div>
     </div>
   </div>
 
@@ -430,7 +443,7 @@ step_count, replan_count, judge_reasoning</pre>
     <div class="section-label">09 · Security &amp; Data</div>
     <h2>Non-functional requirements</h2>
     <h3>Security &mdash; the primary review, not a footnote</h3>
-    <p style="font-size:14px; color: var(--ink-2);">All code &mdash; fixed-tool and synthesized &mdash; runs in a sandboxed subprocess with resource/time limits, never `eval`/`exec` on raw model output directly. Synthesized code specifically: scratch-dir-only filesystem writes, outbound-request allowlisting (no arbitrary domains), and output validated against a declared schema before a tool is registered for reuse. All external URLs validated against a whitelist. API keys in environment variables only.</p>
+    <p style="font-size:14px; color: var(--ink-2);">All code &mdash; fixed-tool and synthesized &mdash; runs in a sandboxed subprocess with resource/time limits, never `eval`/`exec` on raw model output directly. Synthesized code specifically: scratch-dir-only filesystem writes, outbound-request allowlisting (no arbitrary domains), and output validated against a declared schema before a tool is registered for reuse. Browser automation runs in the agent-infra/sandbox browser container with seccomp enabled and network restricted to an allowlist &mdash; explicitly not the project's own quickstart defaults, which ship with seccomp disabled. All external URLs validated against a whitelist. API keys in environment variables only.</p>
     <h3>Data requirements</h3>
     <div class="callout amber">
       <p><strong>No training data needed.</strong> Pre-trained LLMs + live tools. The only data you build is the 20-question golden dataset, created manually over ~1 day.</p>
@@ -445,8 +458,8 @@ step_count, replan_count, judge_reasoning</pre>
     <div class="resume-badge">
       <div class="label">Resume bullet &middot; draft</div>
       <p>
-        Built a <strong>Plan-and-Execute agent</strong> using LangGraph that decomposes multi-step goals into an explicit, inspectable plan, executes steps via a tool layer, and adaptively replans remaining steps on failure or new information &mdash; rather than re-deriving structure on every turn. Extended the executor with <strong>dynamic tool synthesis</strong> (generates, sandboxes, validates, and registers new callable tools at runtime) and <strong>human-in-the-loop approval gates</strong> that pause execution before synthesized-tool calls or irreversible actions, resuming on explicit approval.<br><br>
-        Ran a controlled three-arm ablation (ReAct / fixed-tool Plan-and-Execute / +synthesis) on a 20-goal dataset; Plan-and-Execute reduced total LLM calls by <strong>[fill in from ablation]%</strong> vs. ReAct, and synthesis extended solvable goal coverage by <strong>[fill in from ablation]%</strong> on tasks with no pre-built tool. Implemented an LLM-as-judge eval pipeline and a hardened execution sandbox for LLM-generated code.
+        Built a <strong>Plan-and-Execute agent</strong> using LangGraph that decomposes multi-step goals into an explicit, inspectable plan, executes steps via a tool layer, and adaptively replans remaining steps on failure or new information &mdash; rather than re-deriving structure on every turn. Extended the executor with <strong>dynamic tool synthesis</strong> (generates, sandboxes, validates, and registers new callable tools at runtime), <strong>human-in-the-loop approval gates</strong> that pause execution before synthesized-tool calls or irreversible actions, and a <strong>stateful browser automation tool</strong> for goals requiring interaction with sites with no API.<br><br>
+        Ran a controlled three-arm ablation (ReAct / fixed-tool Plan-and-Execute / +synthesis+browser) on a 20-goal dataset; Plan-and-Execute reduced total LLM calls by <strong>[fill in from ablation]%</strong> vs. ReAct, and synthesis + browser automation together extended solvable goal coverage by <strong>[fill in from ablation]%</strong> on tasks unreachable by search alone. Implemented an LLM-as-judge eval pipeline and a hardened, network-allowlisted execution sandbox for both LLM-generated code and browser sessions.
       </p>
     </div>
     <div class="callout orange">
