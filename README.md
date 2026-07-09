@@ -14,7 +14,8 @@ ReAct baseline via a controlled three-arm ablation.
 6. Three-arm ablation + FastAPI/React frontend — not started
 
 ## Architecture
-See `docs/` (to be filled in as stages land).
+- [Project spec](docs/plan-and-execute-agent.html) — problem definition, scope, stack, timeline, risks
+- [System wiring](docs/system-wiring.html) — step-by-step flows and wire diagrams for every subsystem
 
 ## Setup
 ```bash
