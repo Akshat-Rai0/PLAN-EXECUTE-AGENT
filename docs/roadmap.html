@@ -31,7 +31,13 @@
   .section-label::after { content: ''; flex: 1; height: 1px; background: var(--rule); }
   h2 { font-family: var(--serif); font-size: 30px; font-weight: 300; letter-spacing: -0.02em; margin-bottom: 12px; }
   p { color: var(--ink-2); margin-bottom: 12px; }
-  .overview-bar { display: flex; gap: 4px; margin: 28px 0; flex-wrap: wrap; }
+  .callout { border-left: 3px solid var(--accent); background: var(--accent-light); padding: 16px 20px; border-radius: 0 6px 6px 0; margin: 16px 0; }
+  .callout.orange { border-color: var(--accent-2); background: var(--accent-2-light); }
+  .callout.green { border-color: var(--green); background: var(--green-light); }
+  .callout.amber { border-color: var(--amber); background: var(--amber-light); }
+  .callout p { margin: 0; font-size: 14px; color: var(--ink); }
+  .callout strong { font-weight: 500; }
+  .overview-bar { display: flex; gap: 4px; margin: 28px 0 36px; flex-wrap: wrap; }
   .overview-seg { flex: 1; min-width: 60px; height: 8px; border-radius: 2px; position: relative; }
   .overview-seg span { position: absolute; top: 14px; left: 0; font-family: var(--mono); font-size: 8px; color: var(--ink-3); white-space: nowrap; }
   .phase { background: white; border: 1px solid var(--rule); border-radius: 12px; margin-bottom: 32px; overflow: hidden; }
@@ -42,6 +48,7 @@
   .phase-num.future { background: var(--ink-3); }
   .phase-title h3 { font-family: var(--serif); font-size: 22px; font-weight: 400; color: var(--ink); margin-bottom: 4px; }
   .phase-meta { font-family: var(--mono); font-size: 11px; color: var(--ink-3); }
+  .phase-arm { font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--purple); margin-top: 4px; }
   .phase-status { font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; padding: 4px 10px; border-radius: 2px; white-space: nowrap; }
   .phase-status.done { background: var(--green-light); color: var(--green); }
   .phase-status.active { background: var(--accent-light); color: var(--accent); }
@@ -60,14 +67,14 @@
   .mockup-dot { width: 8px; height: 8px; border-radius: 50%; }
   .mockup-dot.r { background: #c84b2f; } .mockup-dot.y { background: #9a5c0a; } .mockup-dot.g { background: #2a6b45; }
   .mockup-title { color: #8a8880; font-size: 10px; margin-left: 8px; }
-  .mockup-body { padding: 16px; color: #c8c2b8; min-height: 180px; }
+  .mockup-body { padding: 16px; color: #c8c2b8; min-height: 160px; }
   .mockup-body .prompt { color: #6a6860; }
   .mockup-body .cmd { color: #e8f1f9; }
   .mockup-body .out { color: #a8c4a0; }
   .mockup-body .warn { color: #e8c4a0; }
   .mockup-body .err { color: #e8a0a0; }
   .mockup-body .hi { color: #c6dced; }
-  .mockup-body .tag { display: inline-block; padding: 1px 6px; border-radius: 2px; font-size: 9px; margin-right: 4px; }
+  .tag { display: inline-block; padding: 1px 6px; border-radius: 2px; font-size: 9px; margin-right: 4px; }
   .tag-pending { background: #3a3834; color: #8a8880; }
   .tag-running { background: #2b5f8a; color: #e8f1f9; }
   .tag-done { background: #2a6b45; color: #e8f5ee; }
@@ -90,13 +97,14 @@
   .btn { font-family: var(--mono); font-size: 10px; padding: 6px 14px; border-radius: 4px; border: 1px solid var(--rule); }
   .btn-approve { background: var(--green-light); color: var(--green); border-color: var(--green); }
   .btn-reject { background: var(--accent-2-light); color: var(--accent-2); border-color: var(--accent-2); }
-  .eval-table { width: 100%; font-size: 11px; border-collapse: collapse; }
-  .eval-table th { text-align: left; font-family: var(--mono); font-size: 9px; text-transform: uppercase; color: var(--ink-3); padding: 6px 8px; border-bottom: 1px solid var(--rule); }
-  .eval-table td { padding: 8px; border-bottom: 1px solid var(--rule); color: var(--ink-2); }
   .cap-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 24px 0; }
   .cap-card { background: white; border: 1px solid var(--rule); border-radius: 8px; padding: 16px; text-align: center; }
   .cap-card .phase-count { font-family: var(--serif); font-size: 28px; color: var(--accent); }
   .cap-card .cap-label { font-size: 12px; color: var(--ink-3); font-family: var(--mono); }
+  .changelog { background: white; border: 1px solid var(--rule); border-radius: 10px; padding: 20px 24px; margin: 20px 0; }
+  .changelog h4 { font-family: var(--sans); font-size: 13px; font-weight: 500; color: var(--ink); margin-bottom: 6px; margin-top: 14px; }
+  .changelog h4:first-child { margin-top: 0; }
+  .changelog p { font-size: 13px; margin-bottom: 8px; }
   .footer { border-top: 1px solid var(--rule); padding: 32px 48px; max-width: 960px; margin: 64px auto 0; display: flex; justify-content: space-between; }
   .footer p { font-family: var(--mono); font-size: 11px; color: var(--ink-3); margin: 0; }
   @media (max-width: 760px) {
@@ -109,10 +117,11 @@
 <body>
 
 <div class="hero">
-  <div class="hero-tag">Build Roadmap · Phase Outcomes</div>
+  <div class="hero-tag">Build Roadmap · v2.0 — Reconciled with Spec</div>
   <h1>What You Can Do <em>After Each Phase</em></h1>
-  <p class="hero-sub">Ten build phases from LangGraph foundations through production deploy. Each phase ends with concrete capabilities you can demo, plus a mockup of what the system looks like when that phase is complete.</p>
+  <p class="hero-sub">Ten build phases from LangGraph foundations through production deploy, matching the dated timeline (Jul 7 – Aug 10) and feature scope in the Project Spec. Arm labels, "synthesis" terminology, and phase content have been corrected to match <a href="plan-and-execute-agent.html" style="color:#c6dced;">plan-and-execute-agent.html</a> and <a href="system-wiring.html" style="color:#c6dced;">system-wiring.html</a> — see the changelog below for what changed from v1.</p>
   <div class="nav-links">
+    <a href="#changelog">Changelog</a>
     <a href="#overview">Overview</a>
     <a href="#phase-0">Phase 0</a>
     <a href="#phase-1">Phase 1</a>
@@ -131,21 +140,38 @@
 
 <div class="container">
 
+<div class="section" id="changelog">
+  <div class="section-label">Changelog · v1 → v2</div>
+  <h2>What changed and why</h2>
+  <div class="changelog">
+    <h4>1. Arm labels corrected</h4>
+    <p>v1 called the planner-only phase "Arm 1" and the executor phase "Arm 2" — but a planner-only system isn't a ReAct baseline, and no phase actually built one. Per the spec's ablation design: <strong>Arm 1 = plain ReAct</strong> (fixed tools, no explicit plan — now built explicitly in Phase 8), <strong>Arm 2 = Plan-and-Execute + replanning, no synthesis</strong> (complete at end of Phase 3), <strong>Arm 3 = full system + tool synthesis + browser</strong> (complete at end of Phase 7).</p>
+    <h4>2. "Synthesis" redefined to match the spec</h4>
+    <p>v1 Phase 4 described "synthesis" as generating multiple alternative <em>plans</em> and merging them — a different feature from what the spec and system-wiring actually define. The spec's synthesis is <strong>dynamic tool synthesis</strong>: when the executor hits a step with no matching tool, an LLM writes a function against a declared schema, runs it in the sandbox, and registers it as a reusable tool. Phase 4 below reflects that.</p>
+    <h4>3. HITL approval gates and browser automation added as core phases</h4>
+    <p>v1 had a generic "safety layer" (Phase 5) and browser tool (Phase 6) that didn't match the spec's specific HITL interrupt/resume design or the seccomp-hardened browser sandbox. These are now Phase 6 and Phase 7, matching system-wiring's Fig 5 and Fig 6 exactly.</p>
+    <h4>4. Timeline aligned to spec dates</h4>
+    <p>Phases now map 1:1 to the spec's Section 06 timeline (Jul 7 – Aug 10, 35 days). This roadmap is the phase-by-phase execution view of that timeline, not a separate plan.</p>
+    <h4>5. New: gap fixes folded into relevant phases</h4>
+    <p>Phase 4 adds an LLM-call budget cap and cross-run tool-registry caching (previously unaddressed — tools were only cached within a single run). Phase 5 adds an explicit sandbox-alternative decision note (subprocess+seccomp vs. microVM/managed sandbox). Phase 7 adds a prompt-injection defense for browser-sourced content, and its HITL gate now surfaces generated source code for review, not just the step description. Phase 0 adds a lightweight testing/CI task that v1 omitted entirely.</p>
+  </div>
+</div>
+
 <div class="section" id="overview">
   <div class="section-label">Overview</div>
   <h2>Capability progression</h2>
-  <p>Each phase unlocks a new layer. By Phase 3 you have a working Plan-and-Execute agent (Arm 2). By Phase 7 you have the full feature set. By Phase 9 the project is deployable with quantified ablation results.</p>
+  <p>By end of Phase 3 you have a complete Plan-and-Execute agent — this is <strong>Arm 2</strong> of the ablation. By end of Phase 7 you have the full feature set — <strong>Arm 3</strong>. Phase 8 builds the ReAct baseline (<strong>Arm 1</strong>) and runs the three-arm comparison. Phase 9 wraps it in a web UI and deploys.</p>
   <div class="cap-grid">
-    <div class="cap-card"><div class="phase-count">0–1</div><div class="cap-label">CLI only · baseline + plans</div></div>
-    <div class="cap-card"><div class="phase-count">2–3</div><div class="cap-label">CLI · execute + replan loop</div></div>
-    <div class="cap-card"><div class="phase-count">4–7</div><div class="cap-label">CLI · synthesis + safety + browser</div></div>
-    <div class="cap-card"><div class="phase-count">8</div><div class="cap-label">Eval harness · 20-goal benchmark</div></div>
+    <div class="cap-card"><div class="phase-count">0</div><div class="cap-label">Prereq · CLI scaffold</div></div>
+    <div class="cap-card"><div class="phase-count">1–3</div><div class="cap-label">Plan → execute → replan (Arm 2)</div></div>
+    <div class="cap-card"><div class="phase-count">4–5</div><div class="cap-label">Tool synthesis + hardened sandbox</div></div>
+    <div class="cap-card"><div class="phase-count">6–7</div><div class="cap-label">HITL gates + browser (Arm 3)</div></div>
+    <div class="cap-card"><div class="phase-count">8</div><div class="cap-label">ReAct baseline (Arm 1) + eval</div></div>
     <div class="cap-card"><div class="phase-count">9</div><div class="cap-label">Web UI · SSE · deployed</div></div>
-    <div class="cap-card"><div class="phase-count">All</div><div class="cap-label">Three-arm ablation complete</div></div>
   </div>
   <div class="overview-bar">
-    <div class="overview-seg" style="background:var(--accent)"><span>P0</span></div>
-    <div class="overview-seg" style="background:var(--accent)"><span>P1</span></div>
+    <div class="overview-seg" style="background:var(--ink-3)"><span>P0</span></div>
+    <div class="overview-seg" style="background:var(--ink-3)"><span>P1</span></div>
     <div class="overview-seg" style="background:var(--ink-3)"><span>P2</span></div>
     <div class="overview-seg" style="background:var(--ink-3)"><span>P3</span></div>
     <div class="overview-seg" style="background:var(--ink-3)"><span>P4</span></div>
@@ -155,56 +181,57 @@
     <div class="overview-seg" style="background:var(--ink-3)"><span>P8</span></div>
     <div class="overview-seg" style="background:var(--ink-3)"><span>P9</span></div>
   </div>
+  <div class="callout">
+    <p><strong>Status note:</strong> Phase numbers/statuses below are left as "future" placeholders since this is a template regenerated from the spec — update the <code>phase-num</code> and <code>phase-status</code> classes (<code>done</code> / <code>active</code> / <code>future</code>) as you actually complete each phase.</p>
+  </div>
 </div>
 
 <div class="section" id="phase-0">
-  <div class="section-label">Phase 0</div>
+  <div class="section-label">Phase 0 · Jul 7–13</div>
   <div class="phase">
     <div class="phase-header">
-      <div class="phase-num done">0</div>
+      <div class="phase-num future">0</div>
       <div class="phase-title">
-        <h3>Project Setup & LangGraph Foundations</h3>
-        <div class="phase-meta">~2 hours · CLI only</div>
+        <h3>LangGraph & Tool-Calling Prereq</h3>
+        <div class="phase-meta">7 days · CLI only</div>
+        <div class="phase-arm">No arm yet — foundation</div>
       </div>
-      <div class="phase-status done">Complete</div>
+      <div class="phase-status future">Pending</div>
     </div>
     <div class="phase-body">
       <div class="phase-col">
         <h4>Tasks</h4>
         <ul class="checklist">
-          <li class="done">Initialize Python project with poetry</li>
-          <li class="done">Set up LangGraph dependency</li>
-          <li class="done">Create basic graph structure</li>
-          <li class="done">Add environment configuration</li>
-          <li class="done">Set up logging infrastructure</li>
+          <li>State graphs, nodes, conditional edges</li>
+          <li>Checkpointing (needed later for HITL interrupt/resume)</li>
+          <li>LangChain tool-calling interface basics</li>
+          <li>Minimum viable — not a full course</li>
+          <li>Set up pytest + a CI workflow (lint + unit tests on push)</li>
         </ul>
       </div>
       <div class="phase-col">
         <h4>Deliverables</h4>
         <ul class="checklist">
-          <li class="done">pyproject.toml with dependencies</li>
-          <li class="done">Basic StateGraph scaffold</li>
-          <li class="done">.env template</li>
-          <li class="done">README with setup instructions</li>
+          <li>pyproject.toml with dependencies</li>
+          <li>Basic StateGraph scaffold with checkpointer configured</li>
+          <li>.env template</li>
+          <li>CI pipeline running on every commit</li>
         </ul>
       </div>
       <div class="phase-outcome">
-        <p><strong>You can:</strong> Run a minimal LangGraph that echoes input state. You have a working Python environment with LangGraph installed and a project structure ready for iterative development.</p>
+        <p><strong>You can:</strong> Run a minimal LangGraph that echoes input state, with a checkpointer wired in from day one (so HITL interrupt/resume in Phase 6 isn't a retrofit) and CI catching regressions as you build.</p>
       </div>
     </div>
     <div class="phase-body">
       <div class="phase-col" style="grid-column: 1/-1;">
         <h4>System Mockup</h4>
         <div class="mockup">
-          <div class="mockup-bar">
-            <div class="mockup-dot r"></div><div class="mockup-dot y"></div><div class="mockup-dot g"></div>
-            <span class="mockup-title">terminal — phase 0</span>
-          </div>
+          <div class="mockup-bar"><div class="mockup-dot r"></div><div class="mockup-dot y"></div><div class="mockup-dot g"></div><span class="mockup-title">terminal — phase 0</span></div>
           <div class="mockup-body">
-            <div class="prompt">$</div> <div class="cmd">poetry install</div>
+            <div class="prompt">$</div> <div class="cmd">poetry install && pytest</div>
             <div class="out">Installing dependencies... Done</div>
+            <div class="out">3 passed in 0.42s</div>
             <div class="prompt">$</div> <div class="cmd">python -m plan_execute.main --input "test"</div>
-            <div class="out">Input state: {"input": "test"}</div>
             <div class="out">Output state: {"input": "test", "response": "echo: test"}</div>
             <div class="prompt">$</div> <div class="cmd">_</div>
           </div>
@@ -215,57 +242,54 @@
 </div>
 
 <div class="section" id="phase-1">
-  <div class="section-label">Phase 1</div>
+  <div class="section-label">Phase 1 · Jul 14–17</div>
   <div class="phase">
     <div class="phase-header">
-      <div class="phase-num done">1</div>
+      <div class="phase-num future">1</div>
       <div class="phase-title">
-        <h3>Planner Implementation (Arm 1)</h3>
-        <div class="phase-meta">~4 hours · CLI only</div>
+        <h3>Planner + Step Schema</h3>
+        <div class="phase-meta">4 days · CLI only</div>
+        <div class="phase-arm">Building toward Arm 2</div>
       </div>
-      <div class="phase-status done">Complete</div>
+      <div class="phase-status future">Pending</div>
     </div>
     <div class="phase-body">
       <div class="phase-col">
         <h4>Tasks</h4>
         <ul class="checklist">
-          <li class="done">Implement LLM-powered planner node</li>
-          <li class="done">Create plan schema with Pydantic</li>
-          <li class="done">Add plan validation logic</li>
-          <li class="done">Integrate planner into graph</li>
-          <li class="done">Add plan serialization</li>
+          <li>Pydantic step/plan schema (order, description, tool_hint, sensitive flag)</li>
+          <li>Planner prompt producing ordered, tool-executable steps</li>
+          <li>Schema validation with one retry on parse failure</li>
+          <li>CLI test harness — no frontend yet</li>
         </ul>
       </div>
       <div class="phase-col">
         <h4>Deliverables</h4>
         <ul class="checklist">
-          <li class="done">Planner node with LLM integration</li>
-          <li class="done">Plan data models</li>
-          <li class="done">Plan validation tests</li>
-          <li class="done">CLI to generate plans</li>
+          <li>Planner node with LLM integration (Claude / Ollama swap via env var)</li>
+          <li>PlanSchema + StepSchema data models</li>
+          <li>Plan validation tests</li>
+          <li>CLI to generate and inspect plans</li>
         </ul>
       </div>
       <div class="phase-outcome">
-        <p><strong>You can:</strong> Input a goal and receive a structured plan with steps. The planner uses an LLM to break down goals into actionable steps, validated against the plan schema.</p>
+        <p><strong>You can:</strong> Input a goal and receive a structured, ordered plan with steps — each already carrying a <code>sensitive</code> flag placeholder for the HITL gate you'll wire up in Phase 6.</p>
       </div>
     </div>
     <div class="phase-body">
       <div class="phase-col" style="grid-column: 1/-1;">
         <h4>System Mockup</h4>
         <div class="mockup">
-          <div class="mockup-bar">
-            <div class="mockup-dot r"></div><div class="mockup-dot y"></div><div class="mockup-dot g"></div>
-            <span class="mockup-title">terminal — phase 1</span>
-          </div>
+          <div class="mockup-bar"><div class="mockup-dot r"></div><div class="mockup-dot y"></div><div class="mockup-dot g"></div><span class="mockup-title">terminal — phase 1</span></div>
           <div class="mockup-body">
-            <div class="prompt">$</div> <div class="cmd">python -m plan_execute.main --goal "create a todo list app"</div>
+            <div class="prompt">$</div> <div class="cmd">python -m plan_execute.main --goal "research 3 approaches to X, compare in table"</div>
             <div class="out">Generating plan...</div>
             <div class="hi">Plan generated (4 steps):</div>
-            <div class="out">  1. Set up project structure</div>
-            <div class="out">  2. Create data models for tasks</div>
-            <div class="out">  3. Implement CRUD operations</div>
-            <div class="out">  4. Add user interface</div>
-            <div class="out">Plan saved to: plans/todo_app_plan.json</div>
+            <div class="out">  1. search approach A (tool_hint: search)</div>
+            <div class="out">  2. search approach B (tool_hint: search)</div>
+            <div class="out">  3. search approach C (tool_hint: search)</div>
+            <div class="out">  4. synthesize comparison table (tool_hint: none)</div>
+            <div class="out">Plan saved to: plans/goal_001_v1.json</div>
             <div class="prompt">$</div> <div class="cmd">_</div>
           </div>
         </div>
@@ -275,60 +299,50 @@
 </div>
 
 <div class="section" id="phase-2">
-  <div class="section-label">Phase 2</div>
+  <div class="section-label">Phase 2 · Jul 18–21</div>
   <div class="phase">
     <div class="phase-header">
-      <div class="phase-num active">2</div>
+      <div class="phase-num future">2</div>
       <div class="phase-title">
-        <h3>Executor Implementation (Arm 2)</h3>
-        <div class="phase-meta">~6 hours · CLI only</div>
+        <h3>Executor + Fixed Tool Layer</h3>
+        <div class="phase-meta">4 days · CLI only</div>
+        <div class="phase-arm">Building toward Arm 2</div>
       </div>
-      <div class="phase-status active">In Progress</div>
+      <div class="phase-status future">Pending</div>
     </div>
     <div class="phase-body">
       <div class="phase-col">
         <h4>Tasks</h4>
         <ul class="checklist">
-          <li class="done">Implement executor node with tool calling</li>
-          <li class="done">Create tool registry system</li>
-          <li class="done">Add file system tools</li>
-          <li class="done">Add shell execution tools</li>
-          <li>Implement step-by-step execution logic</li>
-          <li>Add execution state tracking</li>
+          <li>Wire up search (Tavily), code-exec sandbox (unhardened stub for now), file I/O tools</li>
+          <li>Tool registry lookup by <code>tool_hint</code></li>
+          <li>Executor runs one PENDING step at a time</li>
+          <li>Capture structured success/error result per step</li>
         </ul>
       </div>
       <div class="phase-col">
         <h4>Deliverables</h4>
         <ul class="checklist">
-          <li class="done">Executor node with tool integration</li>
-          <li class="done">Base tool framework</li>
-          <li class="done">File system tool set</li>
-          <li>Execution tracker</li>
-          <li>Tool execution logs</li>
+          <li>Executor node with tool integration</li>
+          <li>Fixed tool registry (search, sandbox stub, file I/O)</li>
+          <li>Step status tracking (PENDING/RUNNING/DONE/FAILED)</li>
+          <li>Structured tool_output / error persistence</li>
         </ul>
       </div>
       <div class="phase-outcome">
-        <p><strong>You can:</strong> Execute individual plan steps using available tools. The executor can read/write files and run shell commands, with detailed logging of each action.</p>
+        <p><strong>You can:</strong> Execute a plan step by step against real tools. No replanning yet — a failed step just stops the run, which is what Phase 3 fixes.</p>
       </div>
     </div>
     <div class="phase-body">
       <div class="phase-col" style="grid-column: 1/-1;">
         <h4>System Mockup</h4>
         <div class="mockup">
-          <div class="mockup-bar">
-            <div class="mockup-dot r"></div><div class="mockup-dot y"></div><div class="mockup-dot g"></div>
-            <span class="mockup-title">terminal — phase 2</span>
-          </div>
+          <div class="mockup-bar"><div class="mockup-dot r"></div><div class="mockup-dot y"></div><div class="mockup-dot g"></div><span class="mockup-title">terminal — phase 2</span></div>
           <div class="mockup-body">
-            <div class="prompt">$</div> <div class="cmd">python -m plan_execute.main --plan plans/todo_app_plan.json --step 1</div>
-            <div class="out">Executing step 1: Set up project structure</div>
-            <div class="hi">→ Tool: write_file</div>
-            <div class="out">  Path: todo_app/main.py</div>
-            <div class="out">  Status: Success</div>
-            <div class="hi">→ Tool: write_file</div>
-            <div class="out">  Path: todo_app/requirements.txt</div>
-            <div class="out">  Status: Success</div>
-            <div class="out">Step 1 completed in 2.3s</div>
+            <div class="prompt">$</div> <div class="cmd">python -m plan_execute.main --plan plans/goal_001_v1.json --step 1</div>
+            <div class="out">Executing step 1: search approach A</div>
+            <div class="hi">→ Tool: tavily_search</div>
+            <div class="out">  Query: "approach A to X"  ·  Status: DONE (2.1s)</div>
             <div class="prompt">$</div> <div class="cmd">_</div>
           </div>
         </div>
@@ -338,13 +352,14 @@
 </div>
 
 <div class="section" id="phase-3">
-  <div class="section-label">Phase 3</div>
+  <div class="section-label">Phase 3 · Jul 22–24</div>
   <div class="phase">
     <div class="phase-header">
       <div class="phase-num future">3</div>
       <div class="phase-title">
-        <h3>Replan Loop & Full Agent (Arm 2 Complete)</h3>
-        <div class="phase-meta">~8 hours · CLI only</div>
+        <h3>Replanner + Termination Logic</h3>
+        <div class="phase-meta">3 days · CLI only</div>
+        <div class="phase-arm">Arm 2 complete at end of this phase</div>
       </div>
       <div class="phase-status future">Pending</div>
     </div>
@@ -352,48 +367,40 @@
       <div class="phase-col">
         <h4>Tasks</h4>
         <ul class="checklist">
-          <li>Implement execution failure detection</li>
-          <li>Add replan trigger logic</li>
-          <li>Create replan node with context</li>
-          <li>Implement loop termination conditions</li>
-          <li>Add plan progress tracking</li>
-          <li>Integrate full planner→executor→replan loop</li>
+          <li>Replan prompt reviewing step result vs. remaining plan</li>
+          <li>Replan triggers ONLY on FAILED status or explicit "plan invalid" signal — never on default success (anti-thrashing rule)</li>
+          <li>Hard step-count cap with partial-answer termination</li>
+          <li>Test on 10 hand-crafted multi-step goals</li>
         </ul>
       </div>
       <div class="phase-col">
         <h4>Deliverables</h4>
         <ul class="checklist">
-          <li>Replan node with failure context</li>
-          <li>Loop controller logic</li>
-          <li>Progress visualization</li>
-          <li>End-to-end agent execution</li>
-          <li>Execution history JSON</li>
+          <li>Replanner node with continue/revise/complete decision</li>
+          <li>New plan_version persisted on every revision</li>
+          <li>Step-cap guard</li>
+          <li>End-to-end planner → executor → replanner loop</li>
         </ul>
       </div>
       <div class="phase-outcome">
-        <p><strong>You can:</strong> Run a complete Plan-and-Execute agent that autonomously executes plans, detects failures, and replans when needed. The agent runs until goal completion or max iterations.</p>
+        <p><strong>You can:</strong> Run a complete Plan-and-Execute agent that autonomously executes a plan, detects failures, and replans only when needed. <strong>This is Arm 2 of the ablation</strong> — the "planning efficiency" arm, ready to be compared against the ReAct baseline you'll build in Phase 8.</p>
       </div>
     </div>
     <div class="phase-body">
       <div class="phase-col" style="grid-column: 1/-1;">
         <h4>System Mockup</h4>
         <div class="mockup">
-          <div class="mockup-bar">
-            <div class="mockup-dot r"></div><div class="mockup-dot y"></div><div class="mockup-dot g"></div>
-            <span class="mockup-title">terminal — phase 3</span>
-          </div>
+          <div class="mockup-bar"><div class="mockup-dot r"></div><div class="mockup-dot y"></div><div class="mockup-dot g"></div><span class="mockup-title">terminal — phase 3</span></div>
           <div class="mockup-body">
-            <div class="prompt">$</div> <div class="cmd">python -m plan_execute.main --goal "create a todo list app"</div>
-            <div class="out">Starting agent execution...</div>
+            <div class="prompt">$</div> <div class="cmd">python -m plan_execute.main --goal "research 3 approaches to X, compare in table"</div>
             <div class="out"><span class="tag tag-done">✓ Plan</span> Generated 4-step plan</div>
-            <div class="out"><span class="tag tag-done">✓ Step 1</span> Set up project structure (2.1s)</div>
-            <div class="out"><span class="tag tag-done">✓ Step 2</span> Create data models (1.8s)</div>
-            <div class="out"><span class="tag tag-failed">✗ Step 3</span> Implement CRUD - missing dependency</div>
-            <div class="out"><span class="tag tag-replan">↻ Replan</span> Adjusting plan...</div>
-            <div class="out"><span class="tag tag-done">✓ Step 3</span> Install dependencies (3.2s)</div>
-            <div class="out"><span class="tag tag-done">✓ Step 4</span> Implement CRUD (4.1s)</div>
-            <div class="out"><span class="tag tag-done">✓ Step 5</span> Add UI (5.3s)</div>
-            <div class="hi">Goal achieved in 16.5s (2 replans)</div>
+            <div class="out"><span class="tag tag-done">✓ Step 1</span> search approach A (2.1s)</div>
+            <div class="out"><span class="tag tag-failed">✗ Step 2</span> search approach B — API timeout</div>
+            <div class="out"><span class="tag tag-replan">↻ Replan</span> revised: [retry B w/ alt query, search C, synthesize]</div>
+            <div class="out"><span class="tag tag-done">✓ Step 2</span> retry approach B (1.9s)</div>
+            <div class="out"><span class="tag tag-done">✓ Step 3</span> search approach C (2.0s)</div>
+            <div class="out"><span class="tag tag-done">✓ Step 4</span> synthesize table (1.4s)</div>
+            <div class="hi">Goal achieved · 5 steps executed, 1 replan</div>
             <div class="prompt">$</div> <div class="cmd">_</div>
           </div>
         </div>
@@ -403,13 +410,14 @@
 </div>
 
 <div class="section" id="phase-4">
-  <div class="section-label">Phase 4</div>
+  <div class="section-label">Phase 4 · Jul 25–27</div>
   <div class="phase">
     <div class="phase-header">
       <div class="phase-num future">4</div>
       <div class="phase-title">
-        <h3>Plan Synthesis (Arm 3)</h3>
-        <div class="phase-meta">~6 hours · CLI only</div>
+        <h3>Dynamic Tool Synthesis</h3>
+        <div class="phase-meta">3 days · CLI only</div>
+        <div class="phase-arm">Building toward Arm 3</div>
       </div>
       <div class="phase-status future">Pending</div>
     </div>
@@ -417,50 +425,40 @@
       <div class="phase-col">
         <h4>Tasks</h4>
         <ul class="checklist">
-          <li>Implement multi-plan generation</li>
-          <li>Create plan synthesis node</li>
-          <li>Add plan ranking/scoring logic</li>
-          <li>Implement plan merging strategies</li>
-          <li>Add synthesis quality metrics</li>
-          <li>Integrate synthesis into agent loop</li>
+          <li>Missing-tool detection in executor (no registry match)</li>
+          <li>Codegen prompt: LLM writes a Python function against a declared I/O schema</li>
+          <li>Run generated code in the (unhardened-for-now) sandbox, validate output</li>
+          <li>On success, register as a reusable tool keyed by task signature</li>
+          <li><strong>Cross-run tool registry</strong> — persist successful synthesized tools beyond a single goal_run so later goals reuse them instead of re-synthesizing</li>
+          <li><strong>LLM-call budget cap</strong> per goal_run, separate from the step-count cap, so a runaway replan/synthesis-retry loop can't burn unbounded calls before the step cap catches it</li>
         </ul>
       </div>
       <div class="phase-col">
         <h4>Deliverables</h4>
         <ul class="checklist">
-          <li>Multi-plan generator</li>
-          <li>Synthesis node with LLM</li>
-          <li>Plan scoring framework</li>
-          <li>Synthesis comparison logs</li>
-          <li>Best plan selector</li>
+          <li>Synthesizer node with declared input/output schema</li>
+          <li>Pydantic output validation gate</li>
+          <li>Persistent, versioned synthesized-tool registry (cross-run)</li>
+          <li>LLM-call counter + configurable budget cap</li>
         </ul>
       </div>
       <div class="phase-outcome">
-        <p><strong>You can:</strong> Generate multiple alternative plans and synthesize them into a single optimized plan. The agent considers different approaches and selects or merges the best strategies.</p>
+        <p><strong>You can:</strong> Give the agent a goal that needs a tool it doesn't have. It writes one, validates it, and uses it — and if the same capability gap shows up in a later goal, it reuses the cached tool instead of synthesizing again.</p>
       </div>
     </div>
     <div class="phase-body">
       <div class="phase-col" style="grid-column: 1/-1;">
         <h4>System Mockup</h4>
         <div class="mockup">
-          <div class="mockup-bar">
-            <div class="mockup-dot r"></div><div class="mockup-dot y"></div><div class="mockup-dot g"></div>
-            <span class="mockup-title">terminal — phase 4</span>
-          </div>
+          <div class="mockup-bar"><div class="mockup-dot r"></div><div class="mockup-dot y"></div><div class="mockup-dot g"></div><span class="mockup-title">terminal — phase 4</span></div>
           <div class="mockup-body">
-            <div class="prompt">$</div> <div class="cmd">python -m plan_execute.main --goal "create a todo list app" --synthesize</div>
-            <div class="out">Generating 3 alternative plans...</div>
-            <div class="out"><span class="tag tag-synth">Plan A</span> 4 steps · focus: simplicity</div>
-            <div class="out"><span class="tag tag-synth">Plan B</span> 6 steps · focus: features</div>
-            <div class="out"><span class="tag tag-synth">Plan C</span> 5 steps · focus: testing</div>
-            <div class="out">Synthesizing optimal plan...</div>
-            <div class="hi">Synthesized plan (5 steps):</div>
-            <div class="out">  1. Set up project with test framework</div>
-            <div class="out">  2. Create data models with validation</div>
-            <div class="out">  3. Implement core CRUD + tests</div>
-            <div class="out">  4. Add persistence layer</div>
-            <div class="out">  5. Build web UI with API</div>
-            <div class="out">Confidence score: 0.87</div>
+            <div class="prompt">$</div> <div class="cmd">python -m plan_execute.main --goal "find the cheapest flight NYC→SFO next Friday"</div>
+            <div class="out">Step 2: no matching tool for "flight price lookup"</div>
+            <div class="out"><span class="tag tag-synth">Synthesize</span> declaring I/O schema...</div>
+            <div class="out"><span class="tag tag-synth">Synthesize</span> generating function... running in sandbox...</div>
+            <div class="out"><span class="tag tag-done">✓ Validated</span> output matches FlightPriceSchema</div>
+            <div class="out">Registered tool: flight_price_lookup (cross-run cache)</div>
+            <div class="out">LLM calls this run: 6 / 25 budget</div>
             <div class="prompt">$</div> <div class="cmd">_</div>
           </div>
         </div>
@@ -470,13 +468,14 @@
 </div>
 
 <div class="section" id="phase-5">
-  <div class="section-label">Phase 5</div>
+  <div class="section-label">Phase 5 · Jul 28–29</div>
   <div class="phase">
     <div class="phase-header">
       <div class="phase-num future">5</div>
       <div class="phase-title">
-        <h3>Safety Layer & Human-in-the-Loop</h3>
-        <div class="phase-meta">~8 hours · CLI only</div>
+        <h3>Sandbox Hardening</h3>
+        <div class="phase-meta">2 days · CLI only</div>
+        <div class="phase-arm">Primary security review</div>
       </div>
       <div class="phase-status future">Pending</div>
     </div>
@@ -484,50 +483,38 @@
       <div class="phase-col">
         <h4>Tasks</h4>
         <ul class="checklist">
-          <li>Implement dangerous action detection</li>
-          <li>Add approval gate for risky operations</li>
-          <li>Create human approval interface</li>
-          <li>Add sandbox configuration</li>
-          <li>Implement rollback capability</li>
-          <li>Add safety audit logging</li>
+          <li>Scratch-dir-only filesystem writes</li>
+          <li>Outbound-request allowlisting (no arbitrary domains)</li>
+          <li>Resource + time caps (15s timeout, 256MB memory)</li>
+          <li>No eval/exec on raw, unvalidated LLM output</li>
+          <li><strong>Decision note:</strong> document why subprocess+seccomp isolation was chosen over a microVM (Firecracker/gVisor) or managed sandbox (E2B/Modal) — cost/complexity/scope tradeoff, explicitly stated rather than assumed</li>
         </ul>
       </div>
       <div class="phase-col">
         <h4>Deliverables</h4>
         <ul class="checklist">
-          <li>Safety classifier node</li>
-          <li>Approval gate system</li>
-          <li>CLI approval prompts</li>
-          <li>Sandbox configuration</li>
-          <li>Safety event logs</li>
+          <li>Hardened subprocess isolation wired into both fixed code-exec and synthesized-tool execution</li>
+          <li>Config: OUTBOUND_DOMAIN_ALLOWLIST, SANDBOX_TIMEOUT_SECONDS, SANDBOX_MAX_MEMORY_MB</li>
+          <li>Sandbox stress tests (network exfil attempt, fork bomb, timeout trigger)</li>
+          <li>Written sandbox-choice rationale in the security section</li>
         </ul>
       </div>
       <div class="phase-outcome">
-        <p><strong>You can:</strong> Run the agent with safety checks that pause before dangerous actions. You can approve, reject, or modify risky operations, with full audit trail of all safety events.</p>
+        <p><strong>You can:</strong> Run arbitrary LLM-generated code with a real, tested isolation boundary — and answer "why not a microVM?" with a stated decision rather than improvising.</p>
       </div>
     </div>
     <div class="phase-body">
       <div class="phase-col" style="grid-column: 1/-1;">
         <h4>System Mockup</h4>
         <div class="mockup">
-          <div class="mockup-bar">
-            <div class="mockup-dot r"></div><div class="mockup-dot y"></div><div class="mockup-dot g"></div>
-            <span class="mockup-title">terminal — phase 5</span>
-          </div>
+          <div class="mockup-bar"><div class="mockup-dot r"></div><div class="mockup-dot y"></div><div class="mockup-dot g"></div><span class="mockup-title">terminal — phase 5</span></div>
           <div class="mockup-body">
-            <div class="prompt">$</div> <div class="cmd">python -m plan_execute.main --goal "deploy to production"</div>
-            <div class="out">Executing step 3: Deploy to server</div>
-            <div class="warn"><span class="tag tag-gate">⚠ SAFETY GATE</span></div>
-            <div class="warn">Action: Execute "rm -rf /var/www/*" on production server</div>
-            <div class="warn">Risk: HIGH - Destructive operation on production</div>
-            <div class="hi">Approve? [y/N/s/modify]: </div>
-            <div class="cmd">n</div>
-            <div class="err">Action rejected by user</div>
-            <div class="out"><span class="tag tag-replan">↻ Replan</span> Generating safer alternative...</div>
-            <div class="out">New step: Backup existing files, then deploy</div>
-            <div class="hi">Approve backup? [y/N]: </div>
-            <div class="cmd">y</div>
-            <div class="out">Backup completed safely</div>
+            <div class="prompt">$</div> <div class="cmd">pytest tests/sandbox_stress.py -v</div>
+            <div class="out">test_scratch_dir_only_writes ... PASSED</div>
+            <div class="out">test_network_exfil_blocked ... PASSED</div>
+            <div class="out">test_timeout_kills_process ... PASSED</div>
+            <div class="out">test_memory_cap_enforced ... PASSED</div>
+            <div class="hi">4 passed — sandbox boundary holds</div>
             <div class="prompt">$</div> <div class="cmd">_</div>
           </div>
         </div>
@@ -537,13 +524,14 @@
 </div>
 
 <div class="section" id="phase-6">
-  <div class="section-label">Phase 6</div>
+  <div class="section-label">Phase 6 · Jul 30–31</div>
   <div class="phase">
     <div class="phase-header">
       <div class="phase-num future">6</div>
       <div class="phase-title">
-        <h3>Browser Tool Integration</h3>
-        <div class="phase-meta">~10 hours · CLI only</div>
+        <h3>Human-in-the-Loop Approval Gates</h3>
+        <div class="phase-meta">2 days · CLI only</div>
+        <div class="phase-arm">Building toward Arm 3</div>
       </div>
       <div class="phase-status future">Pending</div>
     </div>
@@ -551,48 +539,38 @@
       <div class="phase-col">
         <h4>Tasks</h4>
         <ul class="checklist">
-          <li>Integrate Playwright/Selenium</li>
-          <li>Implement browser navigation tools</li>
-          <li>Add page content extraction</li>
-          <li>Create form interaction tools</li>
-          <li>Add screenshot capture</li>
-          <li>Implement browser session management</li>
+          <li>Sensitivity classification: synthesized-tool execution OR irreversible action (booking/payment/send)</li>
+          <li>LangGraph interrupt/resume wiring on top of the Phase 0 checkpointer</li>
+          <li>Approve/reject CLI prompt; rejection routes to replanner, not a hard stop</li>
+          <li><strong>Gate shows the actual generated source</strong> for synthesized-tool calls, not just the step description — a human approving synthesized code should see the code</li>
         </ul>
       </div>
       <div class="phase-col">
         <h4>Deliverables</h4>
         <ul class="checklist">
-          <li>Browser tool set</li>
-          <li>Page interaction primitives</li>
-          <li>Content extraction logic</li>
-          <li>Screenshot storage</li>
-          <li>Browser state persistence</li>
+          <li>Sensitivity classifier</li>
+          <li>Interrupt/resume gate with checkpoint persistence</li>
+          <li>CLI approval prompt (with code diff for synthesized tools)</li>
+          <li>Approval-event audit log</li>
         </ul>
       </div>
       <div class="phase-outcome">
-        <p><strong>You can:</strong> Give the agent web browsing capabilities. It can navigate websites, extract information, fill forms, and capture screenshots, enabling it to interact with web services.</p>
+        <p><strong>You can:</strong> Run the agent with a real pause-and-approve gate before synthesized code executes or an irreversible action fires — reviewing the actual code, not a paraphrase of it — with rejection cleanly routed back into replanning.</p>
       </div>
     </div>
     <div class="phase-body">
       <div class="phase-col" style="grid-column: 1/-1;">
         <h4>System Mockup</h4>
         <div class="mockup">
-          <div class="mockup-bar">
-            <div class="mockup-dot r"></div><div class="mockup-dot y"></div><div class="mockup-dot g"></div>
-            <span class="mockup-title">terminal — phase 6</span>
-          </div>
+          <div class="mockup-bar"><div class="mockup-dot r"></div><div class="mockup-dot y"></div><div class="mockup-dot g"></div><span class="mockup-title">terminal — phase 6</span></div>
           <div class="mockup-body">
-            <div class="prompt">$</div> <div class="cmd">python -m plan_execute.main --goal "research latest AI trends"</div>
-            <div class="out">Executing step 2: Browse arxiv.org for recent papers</div>
-            <div class="hi">→ Tool: browser_navigate</div>
-            <div class="out">  URL: https://arxiv.org/list/cs.AI/recent</div>
-            <div class="out">  Status: Loaded 25 papers</div>
-            <div class="hi">→ Tool: browser_extract</div>
-            <div class="out">  Selector: .list-title</div>
-            <div class="out">  Extracted: 15 paper titles</div>
-            <div class="hi">→ Tool: browser_screenshot</div>
-            <div class="out">  Saved: screenshots/arxiv_cs_ai.png</div>
-            <div class="out">Step 2 completed: Found 3 relevant papers</div>
+            <div class="warn"><span class="tag tag-gate">⚠ HITL GATE</span> Synthesized tool: flight_price_lookup</div>
+            <div class="out">def flight_price_lookup(origin, dest, date):</div>
+            <div class="out">    resp = requests.get(ALLOWLISTED_API, params={...})</div>
+            <div class="out">    return FlightPriceSchema(**resp.json())</div>
+            <div class="hi">Approve execution? [y/N]: </div>
+            <div class="cmd">y</div>
+            <div class="out">Resumed from checkpoint → executing step 2</div>
             <div class="prompt">$</div> <div class="cmd">_</div>
           </div>
         </div>
@@ -602,13 +580,14 @@
 </div>
 
 <div class="section" id="phase-7">
-  <div class="section-label">Phase 7</div>
+  <div class="section-label">Phase 7 · Aug 1–4</div>
   <div class="phase">
     <div class="phase-header">
       <div class="phase-num future">7</div>
       <div class="phase-title">
-        <h3>Full Feature Integration & Polish</h3>
-        <div class="phase-meta">~12 hours · CLI only</div>
+        <h3>Browser Automation</h3>
+        <div class="phase-meta">4 days · CLI only</div>
+        <div class="phase-arm">Arm 3 complete at end of this phase</div>
       </div>
       <div class="phase-status future">Pending</div>
     </div>
@@ -616,48 +595,42 @@
       <div class="phase-col">
         <h4>Tasks</h4>
         <ul class="checklist">
-          <li>Integrate all three arms (baseline, execute, synthesis)</li>
-          <li>Add comprehensive error handling</li>
-          <li>Implement detailed execution traces</li>
-          <li>Add performance optimization</li>
-          <li>Create configuration profiles</li>
-          <li>Add comprehensive documentation</li>
+          <li>agent-infra/sandbox browser container — seccomp enabled, network allowlisted (not the project's quickstart defaults)</li>
+          <li>navigate / click / fill / screenshot tools, DOM selectors not coordinates</li>
+          <li>Session persistence across steps within one goal_run</li>
+          <li>Stuck browser step → FAILED → replanner, not a special case</li>
+          <li>HITL gate before irreversible actions (final submit/booking click)</li>
+          <li><strong>Prompt-injection defense:</strong> page content/DOM text extracted by the browser tool is treated as untrusted data, not instructions — wrap extracted text so the executor LLM cannot interpret in-page text as new commands, and flag pages containing suspicious imperative-looking text for the HITL gate</li>
         </ul>
       </div>
       <div class="phase-col">
         <h4>Deliverables</h4>
         <ul class="checklist">
-          <li>Unified agent with all features</li>
-          <li>Execution trace viewer</li>
-          <li>Performance benchmarks</li>
-          <li>Configuration presets</li>
-          <li>Complete API docs</li>
+          <li>Browser tool set wired into the registry</li>
+          <li>Hardened container config (VSCode/Jupyter components excluded)</li>
+          <li>Browser session-state persistence</li>
+          <li>Injection-resistant content extraction wrapper</li>
         </ul>
       </div>
       <div class="phase-outcome">
-        <p><strong>You can:</strong> Run the full-featured Plan-and-Execute agent with planning, execution, synthesis, safety, and browser tools. Switch between arm configurations and view detailed execution traces.</p>
+        <p><strong>You can:</strong> Give the agent goals that require real site interaction with no API — booking flows, dashboards behind a login. <strong>This completes Arm 3</strong> — the full system (planning + replanning + tool synthesis + browser), ready for the ablation in Phase 8.</p>
       </div>
     </div>
     <div class="phase-body">
       <div class="phase-col" style="grid-column: 1/-1;">
         <h4>System Mockup</h4>
         <div class="mockup">
-          <div class="mockup-bar">
-            <div class="mockup-dot r"></div><div class="mockup-dot y"></div><div class="mockup-dot g"></div>
-            <span class="mockup-title">terminal — phase 7</span>
-          </div>
+          <div class="mockup-bar"><div class="mockup-dot r"></div><div class="mockup-dot y"></div><div class="mockup-dot g"></div><span class="mockup-title">terminal — phase 7</span></div>
           <div class="mockup-body">
-            <div class="prompt">$</div> <div class="cmd">python -m plan_execute.main --goal "build web scraper" --arm synthesis --safety</div>
-            <div class="out">Agent config: arm=synthesis, safety=enabled, browser=enabled</div>
-            <div class="out"><span class="tag tag-synth">Synthesis</span> Generated 3 plans, selected optimal</div>
-            <div class="out"><span class="tag tag-done">✓ Step 1</span> Set up project (1.2s)</div>
-            <div class="out"><span class="tag tag-done">✓ Step 2</span> Research target site (browser, 4.5s)</div>
-            <div class="out"><span class="tag tag-gate">⚠ Gate</span> File write outside project - Approved</div>
-            <div class="out"><span class="tag tag-done">✓ Step 3</span> Implement scraper (3.8s)</div>
-            <div class="out"><span class="tag tag-done">✓ Step 4</span> Add tests (2.1s)</div>
-            <div class="hi">Complete! Trace saved to traces/scraper_build.json</div>
-            <div class="prompt">$</div> <div class="cmd">python -m plan_execute.view_trace traces/scraper_build.json</div>
-            <div class="out">Viewing trace: 4 steps, 1 safety gate, 12.3s total</div>
+            <div class="out">Step 2: browse booking site, select outbound flight</div>
+            <div class="hi">→ Tool: browser_navigate</div>
+            <div class="out">  Extracted text flagged: imperative phrasing detected on page</div>
+            <div class="out">  Treated as data, not instructions. Continuing.</div>
+            <div class="hi">→ Tool: browser_fill / browser_click</div>
+            <div class="warn"><span class="tag tag-gate">⚠ HITL GATE</span> Final booking submit — irreversible</div>
+            <div class="hi">Approve? [y/N]: </div>
+            <div class="cmd">y</div>
+            <div class="out"><span class="tag tag-done">✓ Step 2</span> Booking confirmed</div>
             <div class="prompt">$</div> <div class="cmd">_</div>
           </div>
         </div>
@@ -667,13 +640,14 @@
 </div>
 
 <div class="section" id="phase-8">
-  <div class="section-label">Phase 8</div>
+  <div class="section-label">Phase 8 · Aug 5–7</div>
   <div class="phase">
     <div class="phase-header">
       <div class="phase-num future">8</div>
       <div class="phase-title">
-        <h3>Evaluation Harness & Benchmark</h3>
-        <div class="phase-meta">~16 hours · CLI only</div>
+        <h3>Eval Harness, Golden Dataset + ReAct Baseline</h3>
+        <div class="phase-meta">3 days · CLI only</div>
+        <div class="phase-arm">Arm 1 built here; all 3 arms compared</div>
       </div>
       <div class="phase-status future">Pending</div>
     </div>
@@ -681,52 +655,40 @@
       <div class="phase-col">
         <h4>Tasks</h4>
         <ul class="checklist">
-          <li>Create evaluation framework</li>
-          <li>Build 20-goal benchmark suite</li>
-          <li>Implement success metrics</li>
-          <li>Add ablation testing logic</li>
-          <li>Create result visualization</li>
-          <li>Run three-arm comparison</li>
+          <li><strong>Build the actual ReAct baseline (Arm 1)</strong> — a plain interleaved reason+act loop using the same fixed tool set and same LLM, no explicit plan, no replanner</li>
+          <li>20-goal golden dataset across 5 categories (a–e, see spec §07)</li>
+          <li>Human-annotate expected step count, expected answer, required capability</li>
+          <li>LLM-as-judge for completeness/correctness</li>
+          <li>Log step_count, replan_count, synthesis_count, approval_events, browser_tool_usage per run</li>
         </ul>
       </div>
       <div class="phase-col">
         <h4>Deliverables</h4>
         <ul class="checklist">
-          <li>Evaluation harness CLI</li>
-          <li>20 benchmark goals</li>
-          <li>Success rate metrics</li>
-          <li>Ablation study results</li>
-          <li>Performance comparison charts</li>
+          <li>Standalone ReAct baseline agent (Arm 1)</li>
+          <li>20-goal golden dataset with annotations</li>
+          <li>LLM-judge eval pipeline</li>
+          <li>Three-arm ablation results (Arm 1 vs 2 vs 3)</li>
         </ul>
       </div>
       <div class="phase-outcome">
-        <p><strong>You can:</strong> Run systematic evaluations comparing all three agent arms across 20 diverse goals. Generate quantitative results showing success rates, execution times, and failure modes for each configuration.</p>
+        <p><strong>You can:</strong> Run the same 20 goals through all three arms and get a quantified, defensible comparison — planning efficiency (Arm 1 vs 2) and synthesis/browser coverage gain (Arm 2 vs 3), isolated from each other.</p>
       </div>
     </div>
     <div class="phase-body">
       <div class="phase-col" style="grid-column: 1/-1;">
         <h4>System Mockup</h4>
         <div class="mockup">
-          <div class="mockup-bar">
-            <div class="mockup-dot r"></div><div class="mockup-dot y"></div><div class="mockup-dot g"></div>
-            <span class="mockup-title">terminal — phase 8</span>
-          </div>
+          <div class="mockup-bar"><div class="mockup-dot r"></div><div class="mockup-dot y"></div><div class="mockup-dot g"></div><span class="mockup-title">terminal — phase 8</span></div>
           <div class="mockup-body">
-            <div class="prompt">$</div> <div class="cmd">python -m plan_execute.eval --benchmark --all-arms</div>
-            <div class="out">Running evaluation on 20 goals...</div>
-            <div class="out">Progress: ████████████████░░░░ 16/20</div>
-            <div class="out">Evaluating: goal_16 (build REST API)...</div>
-            <div class="out"><span class="tag tag-done">✓ Baseline</span> Success (45.2s)</div>
-            <div class="out"><span class="tag tag-done">✓ Execute</span> Success (38.1s)</div>
-            <div class="out"><span class="tag tag-done">✓ Synthesis</span> Success (42.7s)</div>
-            <div class="hi">Evaluation complete!</div>
-            <div class="out">Results saved to: eval_results/ablation_study.json</div>
-            <div class="prompt">$</div> <div class="cmd">python -m plan_execute.eval_report eval_results/ablation_study.json</div>
-            <div class="out">=== ABLATION RESULTS ===</div>
-            <div class="out">Baseline Arm:  14/20 (70%) · avg 52.3s</div>
-            <div class="out">Execute Arm:   17/20 (85%) · avg 41.8s</div>
-            <div class="out">Synthesis Arm: 18/20 (90%) · avg 44.2s</div>
-            <div class="out">Report: eval_results/report.html</div>
+            <div class="prompt">$</div> <div class="cmd">python -m plan_execute.eval --benchmark --arms react,plan_execute,full</div>
+            <div class="out">Running 20 goals × 3 arms...</div>
+            <div class="hi">=== ABLATION RESULTS ===</div>
+            <div class="out">Arm 1 (ReAct):            14/20 complete · avg 11.4 LLM calls</div>
+            <div class="out">Arm 2 (Plan+Execute):      17/20 complete · avg 6.8 LLM calls</div>
+            <div class="out">Arm 3 (+Synthesis+Browser): 19/20 complete · avg 8.1 LLM calls</div>
+            <div class="out">Category (d) goals: 0/4 on Arm 2 → 4/4 on Arm 3</div>
+            <div class="out">Report: eval_results/ablation_study.json</div>
             <div class="prompt">$</div> <div class="cmd">_</div>
           </div>
         </div>
@@ -736,13 +698,14 @@
 </div>
 
 <div class="section" id="phase-9">
-  <div class="section-label">Phase 9</div>
+  <div class="section-label">Phase 9 · Aug 8–10</div>
   <div class="phase">
     <div class="phase-header">
       <div class="phase-num future">9</div>
       <div class="phase-title">
-        <h3>Web UI & Production Deployment</h3>
-        <div class="phase-meta">~20 hours · Web UI</div>
+        <h3>FastAPI Wrap, Frontend & Deploy</h3>
+        <div class="phase-meta">3 days · Web UI</div>
+        <div class="phase-arm">Ships all 3 arms behind one UI</div>
       </div>
       <div class="phase-status future">Pending</div>
     </div>
@@ -750,26 +713,23 @@
       <div class="phase-col">
         <h4>Tasks</h4>
         <ul class="checklist">
-          <li>Build web UI with React/Next.js</li>
-          <li>Implement SSE for real-time updates</li>
-          <li>Add execution visualization</li>
-          <li>Create plan approval interface</li>
-          <li>Set up production deployment</li>
-          <li>Add authentication & rate limiting</li>
+          <li>SSE endpoint streaming plan/step/synthesis/approval/browser events</li>
+          <li>Minimal text-first React frontend with step list + approve/reject control</li>
+          <li>Deploy to Render/Fly.io</li>
+          <li>Rate limiting on the public endpoint</li>
         </ul>
       </div>
       <div class="phase-col">
         <h4>Deliverables</h4>
         <ul class="checklist">
-          <li>Web UI application</li>
-          <li>Real-time execution stream</li>
-          <li>Interactive plan editor</li>
-          <li>Deployment configuration</li>
-          <li>Production monitoring</li>
+          <li>FastAPI app with POST /goals, GET /goals/{id}/stream, POST /goals/{id}/approve</li>
+          <li>React SSE frontend</li>
+          <li>Deployment config</li>
+          <li>README + BLOG + EVALS + ARCH docs (see spec §11)</li>
         </ul>
       </div>
       <div class="phase-outcome">
-        <p><strong>You can:</strong> Interact with the agent through a modern web interface. Watch execution in real-time, approve plans visually, and manage multiple concurrent agent sessions. Deploy to production with monitoring.</p>
+        <p><strong>You can:</strong> Submit a goal through a web UI, watch the plan execute live with status badges, approve/reject sensitive steps in-browser, and see the final answer plus the eval scores — deployed and shareable.</p>
       </div>
     </div>
     <div class="phase-body">
@@ -781,46 +741,16 @@
             <div style="margin-bottom: 16px;">
               <input type="text" placeholder="Enter your goal..." style="width: 70%; padding: 8px; border: 1px solid var(--rule); border-radius: 4px;">
               <button style="padding: 8px 16px; background: var(--accent); color: white; border: none; border-radius: 4px; cursor: pointer;">Execute</button>
-              <select style="padding: 8px; border: 1px solid var(--rule); border-radius: 4px; margin-left: 8px;">
-                <option>Synthesis Arm</option>
-                <option>Execute Arm</option>
-                <option>Baseline Arm</option>
-              </select>
             </div>
-            <div class="step-row">
-              <span class="step-badge sb-done">✓ Plan</span>
-              <span style="flex: 1;">Generated 5-step synthesis plan</span>
-              <span style="color: var(--ink-3);">2.3s</span>
-            </div>
-            <div class="step-row">
-              <span class="step-badge sb-done">✓ Step 1</span>
-              <span style="flex: 1;">Set up project structure</span>
-              <span style="color: var(--ink-3);">1.8s</span>
-            </div>
-            <div class="step-row">
-              <span class="step-badge sb-running">→ Step 2</span>
-              <span style="flex: 1;">Implement data models (running...)</span>
-              <span style="color: var(--accent);">live</span>
-            </div>
-            <div class="step-row">
-              <span class="step-badge sb-pending">○ Step 3</span>
-              <span style="flex: 1;">Add API endpoints</span>
-              <span style="color: var(--ink-3);">pending</span>
-            </div>
-            <div class="step-row">
-              <span class="step-badge sb-pending">○ Step 4</span>
-              <span style="flex: 1;">Build web interface</span>
-              <span style="color: var(--ink-3);">pending</span>
-            </div>
-            <div class="step-row">
-              <span class="step-badge sb-pending">○ Step 5</span>
-              <span style="flex: 1;">Deploy to production</span>
-              <span style="color: var(--ink-3);">pending</span>
-            </div>
+            <div class="step-row"><span class="step-badge sb-done">✓ Plan</span><span style="flex:1;">Generated 4-step plan</span><span style="color:var(--ink-3);">2.1s</span></div>
+            <div class="step-row"><span class="step-badge sb-done">✓ Step 1</span><span style="flex:1;">search approach A</span><span style="color:var(--ink-3);">2.1s</span></div>
+            <div class="step-row"><span class="step-badge sb-running">→ Step 2</span><span style="flex:1;">search approach B (running...)</span><span style="color:var(--accent);">live</span></div>
+            <div class="step-row"><span class="step-badge sb-gate">⚠ Gate</span><span style="flex:1;">synthesized tool pending approval</span><span style="color:var(--accent-2);">action needed</span></div>
+            <div class="step-row"><span class="step-badge sb-pending">○ Step 4</span><span style="flex:1;">synthesize comparison table</span><span style="color:var(--ink-3);">pending</span></div>
             <div class="btn-row">
-              <button class="btn btn-approve">Approve Next Step</button>
-              <button class="btn btn-reject">Pause Execution</button>
-              <button class="btn">View Logs</button>
+              <button class="btn btn-approve">Approve</button>
+              <button class="btn btn-reject">Reject</button>
+              <button class="btn">View source</button>
             </div>
           </div>
         </div>
@@ -832,7 +762,7 @@
 </div>
 
 <div class="footer">
-  <p>Plan-and-Execute Agent · Build Roadmap v1.0</p>
+  <p>Plan-and-Execute Agent · Build Roadmap v2.0 (reconciled)</p>
   <p><a href="plan-and-execute-agent.html" style="color:var(--ink-3)">Project Spec</a> · <a href="system-wiring.html" style="color:var(--ink-3)">System Wiring</a></p>
 </div>
 
