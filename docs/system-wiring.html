@@ -44,6 +44,7 @@
   .flow-num.green { background: var(--green); }
   .flow-num.amber { background: var(--amber); }
   .flow-num.purple { background: var(--purple); }
+  .flow-num.red { background: #9a2323; }
   .flow-body h4 { font-size: 14px; font-weight: 500; color: var(--ink); margin-bottom: 3px; padding-top: 8px; }
   .flow-body p { font-size: 13px; margin: 0; }
   .flow-body code { font-family: var(--mono); font-size: 11px; background: var(--surface-2); padding: 1px 5px; border-radius: 2px; }
@@ -53,24 +54,40 @@
   .component-card h4 { font-size: 14px; font-weight: 500; margin-bottom: 6px; }
   .component-card p { font-size: 13px; margin: 0; }
   .callout { border-left: 3px solid var(--accent); background: var(--accent-light); padding: 16px 20px; border-radius: 0 6px 6px 0; margin: 16px 0; }
+  .callout.orange { border-color: var(--accent-2); background: var(--accent-2-light); }
+  .callout.green { border-color: var(--green); background: var(--green-light); }
+  .callout.red { border-color: #9a2323; background: #fde8e8; }
   .callout p { margin: 0; font-size: 14px; color: var(--ink); }
+  .callout strong { font-weight: 500; }
   .legend { display: flex; flex-wrap: wrap; gap: 16px; margin: 12px 0 0; font-size: 12px; color: var(--ink-2); }
   .legend-item { display: flex; align-items: center; gap: 6px; }
   .legend-dot { width: 10px; height: 10px; border-radius: 50%; }
+  .stack-table { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 13px; }
+  .stack-table th { text-align: left; font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3); padding: 8px 14px; border-bottom: 1px solid var(--rule); }
+  .stack-table td { padding: 10px 14px; border-bottom: 1px solid var(--rule); vertical-align: top; color: var(--ink-2); }
+  .stack-table tr:last-child td { border-bottom: none; }
+  .stack-table td:first-child { font-family: var(--mono); font-size: 12px; color: var(--accent); font-weight: 500; white-space: nowrap; }
+  .stack-table td:nth-child(2) { font-weight: 500; color: var(--ink); white-space: nowrap; }
+  .api-table { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 13px; }
+  .api-table th { text-align: left; font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3); padding: 8px 14px; border-bottom: 1px solid var(--rule); }
+  .api-table td { padding: 10px 14px; border-bottom: 1px solid var(--rule); vertical-align: top; color: var(--ink-2); }
+  .api-table tr:last-child td { border-bottom: none; }
+  .api-table td:first-child { font-family: var(--mono); font-size: 12px; color: var(--accent-2); font-weight: 500; white-space: nowrap; }
   .footer { border-top: 1px solid var(--rule); padding: 32px 48px; max-width: 960px; margin: 64px auto 0; display: flex; justify-content: space-between; }
   .footer p { font-family: var(--mono); font-size: 11px; color: var(--ink-3); margin: 0; }
   @media (max-width: 700px) {
     .hero { padding: 40px 24px; } .hero h1 { font-size: 32px; }
     .container { padding: 0 24px; } .component-grid { grid-template-columns: 1fr; }
+    .stack-table, .api-table { font-size: 12px; }
   }
 </style>
 </head>
 <body>
 
 <div class="hero">
-  <div class="hero-tag">Architecture · Wiring Diagrams</div>
+  <div class="hero-tag">Architecture · Wiring Diagrams · v1.1</div>
   <h1>How Each Part <em>Connects</em></h1>
-  <p class="hero-sub">Step-by-step execution plans and wire diagrams for every subsystem in the Plan-and-Execute agent — from user goal submission through planning, execution, replanning, tool synthesis, approval gates, and final evaluation.</p>
+  <p class="hero-sub">Step-by-step execution plans and wire diagrams for every subsystem in the Plan-and-Execute agent — from user goal submission through planning, execution, replanning, tool synthesis, approval gates, and final evaluation. v1.1 adds prompt-injection defense, observability (LangSmith), and a full API/library reference.</p>
   <div class="nav-links">
     <a href="#master-loop">Master Loop</a>
     <a href="#planner">Planner</a>
@@ -79,10 +96,14 @@
     <a href="#synthesis">Tool Synthesis</a>
     <a href="#hitl">Approval Gate</a>
     <a href="#browser">Browser</a>
+    <a href="#injection">Prompt Injection Defense</a>
     <a href="#sandbox">Sandbox</a>
+    <a href="#observability">Observability</a>
     <a href="#api">API + Frontend</a>
     <a href="#persistence">Persistence</a>
     <a href="#eval">Eval</a>
+    <a href="#stack">Libraries & Tools</a>
+    <a href="#apis">External APIs</a>
     <a href="plan-and-execute-agent.html">← Project Spec</a>
   </div>
 </div>
@@ -93,7 +114,7 @@
 <div class="section" id="master-loop">
   <div class="section-label">00 · End-to-End</div>
   <h2>Master execution loop</h2>
-  <p>Every goal run follows the same high-level cycle. The LangGraph state machine owns transitions between nodes; SQLite persists state at each checkpoint so runs can be inspected or resumed.</p>
+  <p>Every goal run follows the same high-level cycle. The LangGraph state machine owns transitions between nodes; SQLite persists state at each checkpoint so runs can be inspected or resumed. Every node emits a LangSmith trace span (see §10 Observability) in addition to the SSE events below.</p>
 
   <div class="diagram-box">
     <svg width="100%" viewBox="0 0 880 520" xmlns="http://www.w3.org/2000/svg">
@@ -102,23 +123,18 @@
         <marker id="a2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M2 1L8 5L2 9" fill="none" stroke="#c84b2f" stroke-width="1.2"/></marker>
         <marker id="a3" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M2 1L8 5L2 9" fill="none" stroke="#2a6b45" stroke-width="1.2"/></marker>
       </defs>
-      <!-- User -->
       <rect x="20" y="220" width="90" height="40" rx="6" fill="#f0ede4" stroke="#c8c4b8"/>
       <text x="65" y="244" text-anchor="middle" font-family="DM Sans" font-size="11" fill="#1a1917">User Goal</text>
-      <!-- Frontend -->
       <rect x="140" y="200" width="100" height="80" rx="8" fill="#e8f1f9" stroke="#2b5f8a"/>
       <text x="190" y="228" text-anchor="middle" font-family="DM Mono" font-size="9" fill="#2b5f8a">Frontend</text>
       <text x="190" y="248" text-anchor="middle" font-family="DM Sans" font-size="10" fill="#1a1917">React + SSE</text>
       <text x="190" y="264" text-anchor="middle" font-family="DM Sans" font-size="9" fill="#4a4843">live step feed</text>
-      <!-- API -->
       <rect x="280" y="200" width="100" height="80" rx="8" fill="#f9ece8" stroke="#c84b2f"/>
       <text x="330" y="228" text-anchor="middle" font-family="DM Mono" font-size="9" fill="#c84b2f">FastAPI</text>
       <text x="330" y="248" text-anchor="middle" font-family="DM Sans" font-size="10" fill="#1a1917">POST /goals</text>
       <text x="330" y="264" text-anchor="middle" font-family="DM Sans" font-size="9" fill="#4a4843">SSE /stream</text>
-      <!-- LangGraph box -->
       <rect x="420" y="30" width="420" height="460" rx="12" fill="#fdf3e3" stroke="#9a5c0a" stroke-width="1.5"/>
       <text x="630" y="58" text-anchor="middle" font-family="DM Mono" font-size="10" fill="#9a5c0a">LANGGRAPH AGENT CORE</text>
-      <!-- Nodes -->
       <rect x="450" y="80" width="120" height="44" rx="8" fill="#e8f1f9" stroke="#2b5f8a"/>
       <text x="510" y="106" text-anchor="middle" font-family="DM Sans" font-size="11" font-weight="500" fill="#2b5f8a">① Planner</text>
       <rect x="620" y="80" width="120" height="44" rx="8" fill="#e8f5ee" stroke="#2a6b45"/>
@@ -133,7 +149,6 @@
       <text x="595" y="376" text-anchor="middle" font-family="DM Sans" font-size="11" font-weight="500" fill="#2a6b45">⑥ Synthesise</text>
       <rect x="535" y="430" width="120" height="44" rx="8" fill="#f1ecfa" stroke="#5c3b8a"/>
       <text x="595" y="456" text-anchor="middle" font-family="DM Sans" font-size="11" font-weight="500" fill="#5c3b8a">⑦ Eval</text>
-      <!-- Tool layer -->
       <rect x="450" y="340" width="70" height="36" rx="6" fill="white" stroke="#2a6b45"/>
       <text x="485" y="362" text-anchor="middle" font-family="DM Sans" font-size="9" fill="#2a6b45">Search</text>
       <rect x="450" y="390" width="70" height="36" rx="6" fill="white" stroke="#2a6b45"/>
@@ -142,30 +157,24 @@
       <text x="735" y="362" text-anchor="middle" font-family="DM Sans" font-size="9" fill="#2a6b45">Browser</text>
       <rect x="700" y="390" width="70" height="36" rx="6" fill="white" stroke="#2a6b45"/>
       <text x="735" y="412" text-anchor="middle" font-family="DM Sans" font-size="9" fill="#2a6b45">File I/O</text>
-      <!-- SQLite -->
       <rect x="280" y="380" width="100" height="60" rx="8" fill="#f1ecfa" stroke="#5c3b8a"/>
       <text x="330" y="406" text-anchor="middle" font-family="DM Mono" font-size="9" fill="#5c3b8a">SQLite</text>
       <text x="330" y="424" text-anchor="middle" font-family="DM Sans" font-size="9" fill="#4a4843">plans + steps</text>
-      <!-- Arrows external -->
       <line x1="110" y1="240" x2="138" y2="240" stroke="#8a8880" marker-end="url(#a1)"/>
       <line x1="240" y1="240" x2="278" y2="240" stroke="#8a8880" marker-end="url(#a1)"/>
       <line x1="380" y1="240" x2="418" y2="102" stroke="#c84b2f" marker-end="url(#a2)"/>
       <line x1="330" y1="380" x2="330" y2="280" stroke="#5c3b8a" stroke-dasharray="3 2" marker-end="url(#a1)"/>
       <text x="340" y="330" font-family="DM Mono" font-size="8" fill="#5c3b8a">checkpoint</text>
-      <!-- Internal arrows -->
       <line x1="570" y1="102" x2="618" y2="102" stroke="#2b5f8a" marker-end="url(#a1)"/>
       <line x1="680" y1="124" x2="680" y2="168" stroke="#2a6b45" marker-end="url(#a3)"/>
       <line x1="620" y1="192" x2="572" y2="192" stroke="#c84b2f" marker-end="url(#a2)"/>
       <line x1="510" y1="214" x2="510" y2="258" stroke="#9a2323" marker-end="url(#a2)"/>
       <line x1="595" y1="304" x2="595" y2="348" stroke="#2a6b45" marker-end="url(#a3)"/>
       <line x1="595" y1="394" x2="595" y2="428" stroke="#5c3b8a" marker-end="url(#a1)"/>
-      <!-- Replan loop -->
       <path d="M450 192 Q400 192 400 102 Q400 70 448 70" fill="none" stroke="#c84b2f" stroke-width="1" stroke-dasharray="4 3" marker-end="url(#a2)"/>
       <text x="388" y="140" font-family="DM Mono" font-size="8" fill="#c84b2f">replan</text>
-      <!-- Continue loop -->
       <path d="M510 214 Q510 240 680 240 Q760 240 760 124" fill="none" stroke="#2a6b45" stroke-dasharray="4 3" marker-end="url(#a3)"/>
       <text x="770" y="200" font-family="DM Mono" font-size="8" fill="#2a6b45">more steps</text>
-      <!-- Synthesis branch -->
       <line x1="680" y1="214" x2="680" y2="258" stroke="#5c3b8a" stroke-dasharray="3 2" marker-end="url(#a1)"/>
       <text x="692" y="240" font-family="DM Mono" font-size="8" fill="#5c3b8a">no tool</text>
     </svg>
@@ -173,12 +182,12 @@
   </div>
 
   <div class="flow-steps">
-    <div class="flow-step"><div class="flow-num blue">1</div><div class="flow-body"><h4>User submits goal</h4><p>Frontend POSTs goal text to <code>POST /goals</code>. API creates a <code>goal_run</code> row (status: RUNNING) and starts the LangGraph graph.</p></div></div>
+    <div class="flow-step"><div class="flow-num blue">1</div><div class="flow-body"><h4>User submits goal</h4><p>Frontend POSTs goal text to <code>POST /goals</code>. API creates a <code>goal_run</code> row (status: RUNNING), starts a LangSmith trace for the run, and starts the LangGraph graph.</p></div></div>
     <div class="flow-step"><div class="flow-num blue">2</div><div class="flow-body"><h4>Planner decomposes goal</h4><p>Planner LLM returns an ordered list of steps (Pydantic schema). Stored as <code>plan_version</code> v1. SSE emits <code>plan.created</code> event to frontend.</p></div></div>
     <div class="flow-step"><div class="flow-num green">3</div><div class="flow-body"><h4>Executor runs next PENDING step</h4><p>Picks first PENDING step, resolves tool from registry (or routes to synthesizer). Marks step RUNNING → DONE or FAILED. SSE emits <code>step.updated</code>.</p></div></div>
     <div class="flow-step"><div class="flow-num orange">4</div><div class="flow-body"><h4>Replanner reviews result</h4><p>Only triggers on FAILED status or explicit "plan invalid" signal. Rewrites remaining steps → new <code>plan_version</code>. SSE emits <code>plan.revised</code>.</p></div></div>
     <div class="flow-step"><div class="flow-num orange">5</div><div class="flow-body"><h4>Loop or terminate</h4><p>If steps remain and cap not hit → back to Executor. If replanner marks goal complete or step cap reached → Synthesise node.</p></div></div>
-    <div class="flow-step"><div class="flow-num purple">6</div><div class="flow-body"><h4>Final answer + eval</h4><p>Combine all step results into final response. LLM-as-judge scores completeness/correctness. Persist <code>eval_result</code>. SSE emits <code>run.completed</code>.</p></div></div>
+    <div class="flow-step"><div class="flow-num purple">6</div><div class="flow-body"><h4>Final answer + eval</h4><p>Combine all step results into final response. LLM-as-judge scores completeness/correctness. Persist <code>eval_result</code>. SSE emits <code>run.completed</code>. LangSmith trace closed and tagged with final metrics.</p></div></div>
   </div>
 </div>
 
@@ -246,10 +255,10 @@
   </div>
   <div class="flow-steps">
     <div class="flow-step"><div class="flow-num green">1</div><div class="flow-body"><h4>Select next PENDING step</h4><p>Lowest <code>order</code> index in current <code>plan_version</code>. Set status → RUNNING.</p></div></div>
-    <div class="flow-step"><div class="flow-num green">2</div><div class="flow-body"><h4>Resolve tool</h4><p>Match <code>tool_hint</code> against fixed registry + dynamically synthesized tools from this run.</p></div></div>
+    <div class="flow-step"><div class="flow-num green">2</div><div class="flow-body"><h4>Resolve tool</h4><p>Match <code>tool_hint</code> against fixed registry + dynamically synthesized tools (both this-run and cross-run cached tools — see §04).</p></div></div>
     <div class="flow-step"><div class="flow-num green">3</div><div class="flow-body"><h4>No tool found → route to Synthesizer</h4><p>Conditional edge to synthesis node. On success, tool registered and step retried.</p></div></div>
     <div class="flow-step"><div class="flow-num orange">4</div><div class="flow-body"><h4>Sensitive step → HITL gate</h4><p>If <code>sensitive=true</code> or synthesized-tool call: graph interrupts, waits for approve/reject.</p></div></div>
-    <div class="flow-step"><div class="flow-num green">5</div><div class="flow-body"><h4>Invoke tool, capture result</h4><p>Structured JSON output or error object. Set step → DONE or FAILED. Persist <code>tool_output</code> / <code>error</code>.</p></div></div>
+    <div class="flow-step"><div class="flow-num green">5</div><div class="flow-body"><h4>Invoke tool, capture result</h4><p>Structured JSON output or error object. Set step → DONE or FAILED. Persist <code>tool_output</code> / <code>error</code>. Any content returned by a search or browser tool passes through the untrusted-content wrapper before it re-enters the LLM context (see §07 Prompt Injection Defense).</p></div></div>
     <div class="flow-step"><div class="flow-num green">6</div><div class="flow-body"><h4>Hand off to Replanner</h4><p>Always routes to replanner after every step execution (replanner decides whether to actually replan).</p></div></div>
   </div>
 </div>
@@ -279,17 +288,17 @@
       <line x1="545" y1="170" x2="545" y2="200" stroke="#8a8880" marker-end="url(#r1)"/>
       <line x1="420" y1="80" x2="618" y2="80" stroke="#2a6b45" marker-end="url(#r3)"/>
       <line x1="420" y1="200" x2="618" y2="200" stroke="#2b5f8a" marker-end="url(#r1)"/>
-      <text x="100" y="155" font-family="DM Mono" font-size="8" fill="#c84b2f">triggers: FAILED | plan_invalid | HITL reject</text>
+      <text x="100" y="155" font-family="DM Mono" font-size="8" fill="#c84b2f">triggers: FAILED | plan_invalid | HITL reject | injection flagged</text>
     </svg>
     <div class="diagram-caption">Fig 3 — Replanner decision diamond: continue, revise, or terminate</div>
   </div>
   <div class="flow-steps">
     <div class="flow-step"><div class="flow-num orange">1</div><div class="flow-body"><h4>Receive context</h4><p>Last step result (success/error), original goal, completed steps, remaining PENDING steps.</p></div></div>
-    <div class="flow-step"><div class="flow-num orange">2</div><div class="flow-body"><h4>Check replan triggers</h4><p>Replan only if: step status is FAILED, LLM signals "plan invalid", or user rejected at HITL gate.</p></div></div>
+    <div class="flow-step"><div class="flow-num orange">2</div><div class="flow-body"><h4>Check replan triggers</h4><p>Replan only if: step status is FAILED, LLM signals "plan invalid", user rejected at HITL gate, or a fetched/browsed content block was flagged as a possible injection attempt (see §07).</p></div></div>
     <div class="flow-step"><div class="flow-num orange">3</div><div class="flow-body"><h4>Continue (no replan)</h4><p>Step succeeded and plan still valid → route back to Executor for next PENDING step.</p></div></div>
     <div class="flow-step"><div class="flow-num orange">4</div><div class="flow-body"><h4>Revise plan</h4><p>LLM rewrites remaining steps only. Persist as new <code>plan_version</code>. Emit SSE <code>plan.revised</code> with diff.</p></div></div>
     <div class="flow-step"><div class="flow-num orange">5</div><div class="flow-body"><h4>Goal complete</h4><p>Replanner determines goal satisfied → route to Synthesise node for final answer.</p></div></div>
-    <div class="flow-step"><div class="flow-num orange">6</div><div class="flow-body"><h4>Step cap guard</h4><p>If total executed steps ≥ cap → force terminate with partial-answer note regardless of replanner opinion.</p></div></div>
+    <div class="flow-step"><div class="flow-num orange">6</div><div class="flow-body"><h4>Step cap + LLM-call budget guard</h4><p>If total executed steps ≥ cap, OR total LLM calls this run ≥ budget → force terminate with partial-answer note regardless of replanner opinion. The two caps are tracked separately: step cap bounds plan length, call budget bounds retries/replans/synthesis attempts within those steps.</p></div></div>
   </div>
   <div class="callout"><p><strong>Anti-thrashing rule:</strong> Successful steps with no new information never trigger a replan. This preserves the efficiency win over ReAct.</p></div>
 </div>
@@ -298,16 +307,16 @@
 <div class="section" id="synthesis">
   <div class="section-label">04 · Tool Synthesis</div>
   <h2>How dynamic tool creation works</h2>
-  <p>When the executor can't find a matching tool, the synthesizer generates one on demand, validates it in the sandbox, and registers it for reuse within the run.</p>
+  <p>When the executor can't find a matching tool, the synthesizer generates one on demand, validates it in the sandbox, and registers it for reuse — both within the current run and across future runs.</p>
   <div class="diagram-box">
     <svg width="100%" viewBox="0 0 720 260" xmlns="http://www.w3.org/2000/svg">
       <defs><marker id="s1" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M2 1L8 5L2 9" fill="none" stroke="#8a8880" stroke-width="1.2"/></marker><marker id="s2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M2 1L8 5L2 9" fill="none" stroke="#2a6b45" stroke-width="1.2"/></marker><marker id="s3" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M2 1L8 5L2 9" fill="none" stroke="#c84b2f" stroke-width="1.2"/></marker></defs>
       <rect x="10" y="100" width="110" height="44" rx="6" fill="#e8f5ee" stroke="#2a6b45"/><text x="65" y="126" text-anchor="middle" font-family="DM Sans" font-size="10">No tool match</text>
-      <rect x="150" y="90" width="120" height="64" rx="8" fill="#f1ecfa" stroke="#5c3b8a"/><text x="210" y="118" text-anchor="middle" font-family="DM Mono" font-size="9" fill="#5c3b8a">Declare I/O schema</text><text x="210" y="136" text-anchor="middle" font-family="DM Sans" font-size="9" fill="#4a4843">input + output types</text>
-      <rect x="300" y="90" width="120" height="64" rx="8" fill="#fdf3e3" stroke="#9a5c0a"/><text x="360" y="118" text-anchor="middle" font-family="DM Mono" font-size="9" fill="#9a5c0a">LLM codegen</text><text x="360" y="136" text-anchor="middle" font-family="DM Sans" font-size="9" fill="#4a4843">Python function</text>
+      <rect x="150" y="90" width="120" height="64" rx="8" fill="#f1ecfa" stroke="#5c3b8a"/><text x="210" y="118" text-anchor="middle" font-family="DM Mono" font-size="9" fill="#5c3b8a">Check cross-run cache</text><text x="210" y="136" text-anchor="middle" font-family="DM Sans" font-size="9" fill="#4a4843">by task signature</text>
+      <rect x="300" y="90" width="120" height="64" rx="8" fill="#fdf3e3" stroke="#9a5c0a"/><text x="360" y="118" text-anchor="middle" font-family="DM Mono" font-size="9" fill="#9a5c0a">LLM codegen</text><text x="360" y="136" text-anchor="middle" font-family="DM Sans" font-size="9" fill="#4a4843">only if cache miss</text>
       <rect x="450" y="90" width="120" height="64" rx="8" fill="#e8f5ee" stroke="#2a6b45"/><text x="510" y="118" text-anchor="middle" font-family="DM Mono" font-size="9" fill="#2a6b45">Sandbox run</text><text x="510" y="136" text-anchor="middle" font-family="DM Sans" font-size="9" fill="#4a4843">timeout + caps</text>
       <rect x="600" y="90" width="110" height="64" rx="8" fill="#e8f1f9" stroke="#2b5f8a"/><text x="655" y="118" text-anchor="middle" font-family="DM Mono" font-size="9" fill="#2b5f8a">Validate output</text><text x="655" y="136" text-anchor="middle" font-family="DM Sans" font-size="9" fill="#4a4843">Pydantic schema</text>
-      <rect x="200" y="200" width="140" height="44" rx="6" fill="#e8f5ee" stroke="#2a6b45"/><text x="270" y="226" text-anchor="middle" font-family="DM Sans" font-size="10">Register in tool registry</text>
+      <rect x="200" y="200" width="140" height="44" rx="6" fill="#e8f5ee" stroke="#2a6b45"/><text x="270" y="226" text-anchor="middle" font-family="DM Sans" font-size="10">Register (run + cross-run)</text>
       <rect x="400" y="200" width="140" height="44" rx="6" fill="#f9ece8" stroke="#c84b2f"/><text x="470" y="226" text-anchor="middle" font-family="DM Sans" font-size="10">Mark step FAILED → replan</text>
       <line x1="120" y1="122" x2="148" y2="122" stroke="#8a8880" marker-end="url(#s1)"/>
       <line x1="270" y1="122" x2="298" y2="122" stroke="#8a8880" marker-end="url(#s1)"/>
@@ -320,16 +329,16 @@
       <line x1="270" y1="244" x2="270" y2="270" stroke="#8a8880" marker-end="url(#s1)"/>
       <text x="270" y="258" text-anchor="middle" font-family="DM Mono" font-size="9" fill="#5c3b8a">→ back to Executor (retry step)</text>
     </svg>
-    <div class="diagram-caption">Fig 4 — Tool synthesis lifecycle: detect gap → generate → sandbox → validate → register or fail</div>
+    <div class="diagram-caption">Fig 4 — Tool synthesis lifecycle: detect gap → check cache → generate if needed → sandbox → validate → register or fail</div>
   </div>
   <div class="flow-steps">
-    <div class="flow-step"><div class="flow-num purple">1</div><div class="flow-body"><h4>Detect missing tool</h4><p>Executor finds no match in fixed registry or prior synthesized tools for this run.</p></div></div>
-    <div class="flow-step"><div class="flow-num purple">2</div><div class="flow-body"><h4>Declare I/O schema</h4><p>LLM or heuristic defines expected input params and output shape for the needed capability.</p></div></div>
-    <div class="flow-step"><div class="flow-num purple">3</div><div class="flow-body"><h4>Generate Python function</h4><p>Codegen prompt produces a function against the schema. No direct <code>eval</code> on raw output.</p></div></div>
-    <div class="flow-step"><div class="flow-num purple">4</div><div class="flow-body"><h4>Execute in hardened sandbox</h4><p>Subprocess with scratch-dir writes, network allowlist, time/memory caps.</p></div></div>
+    <div class="flow-step"><div class="flow-num purple">1</div><div class="flow-body"><h4>Detect missing tool</h4><p>Executor finds no match in fixed registry or prior synthesized tools.</p></div></div>
+    <div class="flow-step"><div class="flow-num purple">2</div><div class="flow-body"><h4>Check the cross-run tool cache</h4><p>Tools are keyed by a normalized task signature (goal capability + I/O shape). If a prior <em>successful</em> synthesis already solved this signature in any earlier <code>goal_run</code>, reuse it directly — skip codegen and go straight to sandbox execution against the fresh step input. This is what makes the agent's capability set grow across runs, not just within one.</p></div></div>
+    <div class="flow-step"><div class="flow-num purple">3</div><div class="flow-body"><h4>Cache miss → declare I/O schema, generate function</h4><p>LLM defines expected input/output shape, then writes a Python function against it. No direct <code>eval</code> on raw output.</p></div></div>
+    <div class="flow-step"><div class="flow-num purple">4</div><div class="flow-body"><h4>Execute in hardened sandbox</h4><p>Same sandbox boundary regardless of cache hit or miss — even cached tools re-run inside the sandbox every time, since trusting a cached tool to run outside isolation defeats the purpose.</p></div></div>
     <div class="flow-step"><div class="flow-num purple">5</div><div class="flow-body"><h4>Validate output</h4><p>Result must conform to declared Pydantic schema. Silent wrong output that parses is caught by category (d) eval goals.</p></div></div>
-    <div class="flow-step"><div class="flow-num purple">6</div><div class="flow-body"><h4>Register or fail</h4><p>Success → tool keyed by task signature, added to dynamic registry. Failure → step FAILED, replanner decides next move.</p></div></div>
-    <div class="flow-step"><div class="flow-num orange">7</div><div class="flow-body"><h4>HITL before first use</h4><p>Synthesized tool execution always passes through approval gate before running on real step input.</p></div></div>
+    <div class="flow-step"><div class="flow-num purple">6</div><div class="flow-body"><h4>Register or fail</h4><p>Success → tool persisted in <code>synthesized_tool</code> table (durable, cross-run) and added to this run's active registry. Failure → step FAILED, replanner decides next move.</p></div></div>
+    <div class="flow-step"><div class="flow-num orange">7</div><div class="flow-body"><h4>HITL before first use</h4><p>Newly generated code always passes through the approval gate before running on real step input. A cache hit on a tool <em>already approved in a prior run</em> may skip re-approval — configurable, off by default for the eval build so approval events stay comparable across runs.</p></div></div>
   </div>
 </div>
 
@@ -343,7 +352,7 @@
       <defs><marker id="h1" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M2 1L8 5L2 9" fill="none" stroke="#8a8880" stroke-width="1.2"/></marker><marker id="h2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M2 1L8 5L2 9" fill="none" stroke="#2a6b45" stroke-width="1.2"/></marker><marker id="h3" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M2 1L8 5L2 9" fill="none" stroke="#c84b2f" stroke-width="1.2"/></marker></defs>
       <rect x="20" y="80" width="120" height="50" rx="6" fill="#e8f5ee" stroke="#2a6b45"/><text x="80" y="110" text-anchor="middle" font-family="DM Sans" font-size="10">Sensitive step detected</text>
       <rect x="170" y="80" width="120" height="50" rx="6" fill="#fde8e8" stroke="#9a2323"/><text x="230" y="110" text-anchor="middle" font-family="DM Sans" font-size="10">Graph INTERRUPT</text>
-      <rect x="320" y="60" width="100" height="90" rx="8" fill="#e8f1f9" stroke="#2b5f8a"/><text x="370" y="88" text-anchor="middle" font-family="DM Mono" font-size="9" fill="#2b5f8a">Frontend</text><text x="370" y="108" text-anchor="middle" font-family="DM Sans" font-size="9">Approve / Reject</text><text x="370" y="128" text-anchor="middle" font-family="DM Sans" font-size="9">SSE: gate.pending</text>
+      <rect x="320" y="60" width="100" height="90" rx="8" fill="#e8f1f9" stroke="#2b5f8a"/><text x="370" y="88" text-anchor="middle" font-family="DM Mono" font-size="9" fill="#2b5f8a">Frontend</text><text x="370" y="108" text-anchor="middle" font-family="DM Sans" font-size="9">Shows step + source code diff</text><text x="370" y="128" text-anchor="middle" font-family="DM Sans" font-size="9">SSE: gate.pending</text>
       <rect x="450" y="60" width="100" height="40" rx="6" fill="#e8f5ee" stroke="#2a6b45"/><text x="500" y="85" text-anchor="middle" font-family="DM Sans" font-size="9">RESUME → Execute</text>
       <rect x="450" y="110" width="100" height="40" rx="6" fill="#f9ece8" stroke="#c84b2f"/><text x="500" y="135" text-anchor="middle" font-family="DM Sans" font-size="9">RESUME → Replan</text>
       <rect x="580" y="80" width="120" height="50" rx="6" fill="#f1ecfa" stroke="#5c3b8a"/><text x="640" y="110" text-anchor="middle" font-family="DM Sans" font-size="10">Checkpoint saved</text>
@@ -352,14 +361,14 @@
       <line x1="420" y1="85" x2="448" y2="80" stroke="#2a6b45" marker-end="url(#h2)"/>
       <line x1="420" y1="120" x2="448" y2="130" stroke="#c84b2f" marker-end="url(#h3)"/>
       <line x1="290" y1="95" x2="578" y2="95" stroke="#5c3b8a" stroke-dasharray="3 2" marker-end="url(#h1)"/>
-      <text x="80" y="155" font-family="DM Mono" font-size="8" fill="#9a2323">triggers: synthesized tool · booking · payment · send · browser submit</text>
+      <text x="80" y="155" font-family="DM Mono" font-size="8" fill="#9a2323">triggers: synthesized tool · booking · payment · send · browser submit · injection flag</text>
     </svg>
     <div class="diagram-caption">Fig 5 — HITL gate: interrupt → user decision → resume to execute or replan</div>
   </div>
   <div class="flow-steps">
-    <div class="flow-step"><div class="flow-num orange">1</div><div class="flow-body"><h4>Classify step sensitivity</h4><p>Flagged at plan time (<code>sensitive=true</code>) or at runtime (synthesized tool, irreversible browser action).</p></div></div>
+    <div class="flow-step"><div class="flow-num orange">1</div><div class="flow-body"><h4>Classify step sensitivity</h4><p>Flagged at plan time (<code>sensitive=true</code>) or at runtime (synthesized tool, irreversible browser action, or content flagged by the injection heuristic in §07).</p></div></div>
     <div class="flow-step"><div class="flow-num orange">2</div><div class="flow-body"><h4>Graph interrupt + checkpoint</h4><p>LangGraph pauses execution. State persisted to SQLite. SSE emits <code>gate.pending</code> with step details.</p></div></div>
-    <div class="flow-step"><div class="flow-num orange">3</div><div class="flow-body"><h4>User reviews in frontend</h4><p>Step description, tool name, inputs shown. User clicks Approve or Reject via <code>POST /goals/{id}/approve</code>.</p></div></div>
+    <div class="flow-step"><div class="flow-num orange">3</div><div class="flow-body"><h4>User reviews in frontend</h4><p>Step description, tool name, inputs shown. <strong>For synthesized-tool steps, the actual generated source code is rendered in full</strong> — not summarized — so the human is reviewing real code, not a paraphrase of it. User clicks Approve or Reject via <code>POST /goals/{id}/approve</code>.</p></div></div>
     <div class="flow-step"><div class="flow-num green">4</div><div class="flow-body"><h4>Approve → resume execution</h4><p>Graph resumes from checkpoint. Executor proceeds with tool invocation.</p></div></div>
     <div class="flow-step"><div class="flow-num orange">5</div><div class="flow-body"><h4>Reject → replanner</h4><p>Step marked FAILED with reason "user rejected". Replanner rewrites remaining plan.</p></div></div>
   </div>
@@ -369,7 +378,7 @@
 <div class="section" id="browser">
   <div class="section-label">06 · Browser Automation</div>
   <h2>How browser interaction works</h2>
-  <p>Stateful browser tool for sites with no API. Session persists across steps within one goal run — distinct from the disposable code sandbox.</p>
+  <p>Stateful browser tool for sites with no API. Session persists across steps within one goal run — distinct from the disposable code sandbox. All content it returns is treated as untrusted (see §07).</p>
   <div class="diagram-box">
     <svg width="100%" viewBox="0 0 720 200" xmlns="http://www.w3.org/2000/svg">
       <defs><marker id="b1" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M2 1L8 5L2 9" fill="none" stroke="#8a8880" stroke-width="1.2"/></marker></defs>
@@ -377,7 +386,7 @@
       <rect x="140" y="60" width="120" height="70" rx="8" fill="#e8f1f9" stroke="#2b5f8a"/><text x="200" y="88" text-anchor="middle" font-family="DM Mono" font-size="9" fill="#2b5f8a">Browser Tool</text><text x="200" y="108" text-anchor="middle" font-family="DM Sans" font-size="9" fill="#4a4843">navigate·click·fill</text>
       <rect x="290" y="60" width="130" height="70" rx="8" fill="#fdf3e3" stroke="#9a5c0a"/><text x="355" y="88" text-anchor="middle" font-family="DM Mono" font-size="9" fill="#9a5c0a">agent-infra/sandbox</text><text x="355" y="108" text-anchor="middle" font-family="DM Sans" font-size="9" fill="#4a4843">seccomp + allowlist</text>
       <rect x="450" y="60" width="120" height="70" rx="8" fill="#e8f5ee" stroke="#2a6b45"/><text x="510" y="88" text-anchor="middle" font-family="DM Sans" font-size="10">Playwright/CDP</text><text x="510" y="108" text-anchor="middle" font-family="DM Sans" font-size="9" fill="#4a4843">session state</text>
-      <rect x="600" y="60" width="100" height="70" rx="8" fill="#f1ecfa" stroke="#5c3b8a"/><text x="650" y="92" text-anchor="middle" font-family="DM Sans" font-size="10">Screenshot</text><text x="650" y="112" text-anchor="middle" font-family="DM Sans" font-size="9" fill="#4a4843">+ DOM result</text>
+      <rect x="600" y="60" width="100" height="70" rx="8" fill="#fde8e8" stroke="#9a2323"/><text x="650" y="86" text-anchor="middle" font-family="DM Sans" font-size="9">Untrusted-content</text><text x="650" y="100" text-anchor="middle" font-family="DM Sans" font-size="9">wrapper</text><text x="650" y="114" text-anchor="middle" font-family="DM Sans" font-size="8" fill="#4a4843">(§07)</text>
       <line x1="110" y1="95" x2="138" y2="95" stroke="#8a8880" marker-end="url(#b1)"/>
       <line x1="260" y1="95" x2="288" y2="95" stroke="#8a8880" marker-end="url(#b1)"/>
       <line x1="420" y1="95" x2="448" y2="95" stroke="#8a8880" marker-end="url(#b1)"/>
@@ -385,27 +394,66 @@
       <path d="M200 130 Q200 160 60 160 Q10 160 10 120" fill="none" stroke="#2a6b45" stroke-dasharray="3 2" marker-end="url(#b1)"/>
       <text x="100" y="175" font-family="DM Mono" font-size="8" fill="#2a6b45">same session reused across steps</text>
     </svg>
-    <div class="diagram-caption">Fig 6 — Browser tool: executor → sandboxed container → Playwright session → structured result</div>
+    <div class="diagram-caption">Fig 6 — Browser tool: executor → sandboxed container → Playwright session → untrusted-content wrapper → structured result</div>
   </div>
   <div class="flow-steps">
     <div class="flow-step"><div class="flow-num green">1</div><div class="flow-body"><h4>Executor selects browser tool</h4><p>Step requires site interaction (form fill, booking flow, dashboard behind login).</p></div></div>
-    <div class="flow-step"><div class="flow-num green">2</div><div class="flow-body"><h4>Get or create session</h4><p>One browser session per <code>goal_run</code>. Cookies and navigation state persist across steps.</p></div></div>
+    <div class="flow-step"><div class="flow-num green">2</div><div class="flow-body"><h4>Get or create session</h4><p>One browser session per <code>goal_run</code>. Cookies and navigation state persist across steps, but never leak into the planner/replanner's own context — only extracted, wrapped results cross that boundary.</p></div></div>
     <div class="flow-step"><div class="flow-num green">3</div><div class="flow-body"><h4>Execute action</h4><p><code>navigate(url)</code>, <code>click(selector)</code>, <code>fill(selector, value)</code>, <code>screenshot()</code>. DOM selectors, not coordinates.</p></div></div>
-    <div class="flow-step"><div class="flow-num green">4</div><div class="flow-body"><h4>Return structured result</h4><p>Page title, extracted text, screenshot path, success/error. Stuck step → FAILED → replanner.</p></div></div>
+    <div class="flow-step"><div class="flow-num red">4</div><div class="flow-body"><h4>Extracted text passes through injection wrapper</h4><p>Page title, extracted text, screenshot path, success/error — all page-derived text is wrapped as untrusted before it re-enters any LLM context. Full detail in §07.</p></div></div>
     <div class="flow-step"><div class="flow-num orange">5</div><div class="flow-body"><h4>HITL before irreversible actions</h4><p>Final submit/booking steps trigger approval gate before click executes.</p></div></div>
+  </div>
+</div>
+
+<!-- PROMPT INJECTION DEFENSE -->
+<div class="section" id="injection">
+  <div class="section-label">07 · Prompt Injection Defense</div>
+  <h2>How web-sourced content is kept from hijacking the agent</h2>
+  <p>Anything the agent retrieves from the open web — search snippets, fetched pages, DOM text, OCR'd screenshots — is <strong>data to read, never instructions to follow</strong>. This applies uniformly to the search tool and the browser tool; both are untrusted content sources.</p>
+  <div class="diagram-box">
+    <svg width="100%" viewBox="0 0 720 220" xmlns="http://www.w3.org/2000/svg">
+      <defs><marker id="i1" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M2 1L8 5L2 9" fill="none" stroke="#8a8880" stroke-width="1.2"/></marker><marker id="i2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M2 1L8 5L2 9" fill="none" stroke="#9a2323" stroke-width="1.2"/></marker></defs>
+      <rect x="10" y="80" width="110" height="50" rx="6" fill="#f0ede4" stroke="#c8c4b8"/><text x="65" y="110" text-anchor="middle" font-family="DM Sans" font-size="10">Web page / search result</text>
+      <rect x="150" y="70" width="130" height="70" rx="8" fill="#fde8e8" stroke="#9a2323"/><text x="215" y="98" text-anchor="middle" font-family="DM Mono" font-size="9" fill="#9a2323">Delimiter wrap</text><text x="215" y="116" text-anchor="middle" font-family="DM Sans" font-size="8" fill="#4a4843">untrusted_web_content tag</text>
+      <rect x="310" y="70" width="130" height="70" rx="8" fill="#fdf3e3" stroke="#9a5c0a"/><text x="375" y="98" text-anchor="middle" font-family="DM Mono" font-size="9" fill="#9a5c0a">Heuristic scan</text><text x="375" y="116" text-anchor="middle" font-family="DM Sans" font-size="8" fill="#4a4843">imperative-pattern flags</text>
+      <rect x="470" y="70" width="120" height="70" rx="8" fill="#e8f1f9" stroke="#2b5f8a"/><text x="530" y="98" text-anchor="middle" font-family="DM Mono" font-size="9" fill="#2b5f8a">No tool-call trigger</text><text x="530" y="116" text-anchor="middle" font-family="DM Sans" font-size="8" fill="#4a4843">from page content alone</text>
+      <rect x="620" y="70" width="90" height="70" rx="8" fill="#e8f5ee" stroke="#2a6b45"/><text x="665" y="98" text-anchor="middle" font-family="DM Sans" font-size="9">Executor / Replanner context</text>
+      <line x1="120" y1="105" x2="148" y2="105" stroke="#8a8880" marker-end="url(#i1)"/>
+      <line x1="280" y1="105" x2="308" y2="105" stroke="#8a8880" marker-end="url(#i1)"/>
+      <line x1="440" y1="105" x2="468" y2="105" stroke="#8a8880" marker-end="url(#i1)"/>
+      <line x1="590" y1="105" x2="618" y2="105" stroke="#8a8880" marker-end="url(#i1)"/>
+      <path d="M375 140 Q375 175 230 175" fill="none" stroke="#9a2323" stroke-dasharray="4 3" marker-end="url(#i2)"/>
+      <text x="290" y="192" text-anchor="middle" font-family="DM Mono" font-size="8" fill="#9a2323">flagged → force HITL gate on this step</text>
+    </svg>
+    <div class="diagram-caption">Fig 7 — Injection defense pipeline: wrap → scan → never auto-trigger tools from page text → flagged content forces human review</div>
+  </div>
+  <div class="flow-steps">
+    <div class="flow-step"><div class="flow-num red">1</div><div class="flow-body"><h4>Delimiter + explicit framing</h4><p>All fetched content — search results and browser-extracted text alike — is wrapped in a fixed template: <code>&lt;untrusted_web_content source="{url}"&gt;...&lt;/untrusted_web_content&gt;</code>. A system-level instruction accompanying every executor/replanner prompt states that content inside this tag is data to read or summarize, never a command to act on.</p></div></div>
+    <div class="flow-step"><div class="flow-num red">2</div><div class="flow-body"><h4>No tool calls triggered by page content alone</h4><p>If page text appears to instruct a new action ("call the delete_file tool", "navigate to X and submit"), the executor cannot act on it directly. Any such suggestion must be surfaced as a proposed plan change and routed through the replanner like any other new information — never executed inline.</p></div></div>
+    <div class="flow-step"><div class="flow-num red">3</div><div class="flow-body"><h4>Heuristic flagging</h4><p>Extracted text is scanned for injection red flags: imperative phrasing directed at an AI ("ignore previous instructions", "system:", "you must now..."), credential-looking strings, and urgency/authority language. A hit doesn't block the content from being read — it forces the <em>current step</em> through the HITL gate even if it wasn't originally flagged sensitive.</p></div></div>
+    <div class="flow-step"><div class="flow-num red">4</div><div class="flow-body"><h4>Session isolation from planning context</h4><p>The browser tool's live session state (cookies, full page DOM, navigation history) never enters the planner's or replanner's context directly — only the structured, wrapped, extracted result of a single tool call does. This bounds the blast radius of a compromised page to one step's output, not the whole plan.</p></div></div>
+    <div class="flow-step"><div class="flow-num red">5</div><div class="flow-body"><h4>Domain allowlisting is a separate defense, not a substitute</h4><p>Restricting outbound domains protects the sandbox's network egress. It does not protect against injection from a legitimate, allowlisted site whose content is attacker-controlled (a comment, forum post, or ad). Both defenses run independently — allowlisting doesn't make the content-wrapping step optional.</p></div></div>
+    <div class="flow-step"><div class="flow-num red">6</div><div class="flow-body"><h4>Adversarial eval coverage</h4><p>The 20-goal golden dataset includes at least 1–2 goals where a fetched page contains a deliberate injection attempt, scored on whether the agent ignores it and whether the flag correctly routes to HITL.</p></div></div>
+  </div>
+  <div class="callout red">
+    <p><strong>Design principle:</strong> Trust boundaries follow data provenance, not domain reputation. A page from a trusted domain can still carry attacker-controlled content (user comments, ads, compromised third-party widgets) — so every fetched byte is untrusted by default, regardless of source, until it's been read and summarized by the LLM under the no-tool-call-from-content rule above.</p>
   </div>
 </div>
 
 <!-- SANDBOX -->
 <div class="section" id="sandbox">
-  <div class="section-label">07 · Execution Sandbox</div>
+  <div class="section-label">08 · Execution Sandbox</div>
   <h2>How code sandboxing works</h2>
-  <p>Hardened subprocess isolation for fixed code-exec and synthesized tools. Load-bearing security boundary.</p>
+  <p>Two separate, purpose-specific sandboxes — not one shared boundary. Both are load-bearing security controls, not optional hardening.</p>
+  <div class="component-grid">
+    <div class="component-card"><div class="tag">Code-exec sandbox</div><h4>Disposable, per-call subprocess</h4><p>Used by the fixed code-exec tool and every synthesized-tool call (cache hit or miss — see §04). Torn down after each invocation. No state persists between calls.</p></div>
+    <div class="component-card"><div class="tag">Browser sandbox</div><h4>Stateful, per-goal-run container</h4><p><code>agent-infra/sandbox</code>'s browser container only — VSCode/Jupyter components excluded entirely from deployment. Session persists across steps of one goal, torn down when the run ends.</p></div>
+  </div>
   <div class="diagram-box">
     <svg width="100%" viewBox="0 0 720 220" xmlns="http://www.w3.org/2000/svg">
       <defs><marker id="x1" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M2 1L8 5L2 9" fill="none" stroke="#8a8880" stroke-width="1.2"/></marker></defs>
       <rect x="250" y="10" width="220" height="200" rx="12" fill="#fde8e8" stroke="#9a2323" stroke-width="1.5"/>
-      <text x="360" y="35" text-anchor="middle" font-family="DM Mono" font-size="10" fill="#9a2323">SANDBOX BOUNDARY</text>
+      <text x="360" y="35" text-anchor="middle" font-family="DM Mono" font-size="10" fill="#9a2323">CODE-EXEC SANDBOX BOUNDARY</text>
       <rect x="270" y="50" width="180" height="40" rx="6" fill="white" stroke="#c8c4b8"/><text x="360" y="75" text-anchor="middle" font-family="DM Sans" font-size="10">Subprocess (Python)</text>
       <rect x="270" y="100" width="85" height="36" rx="4" fill="#e8f5ee" stroke="#2a6b45"/><text x="312" y="122" text-anchor="middle" font-family="DM Sans" font-size="8">Scratch dir only</text>
       <rect x="365" y="100" width="85" height="36" rx="4" fill="#e8f5ee" stroke="#2a6b45"/><text x="407" y="122" text-anchor="middle" font-family="DM Sans" font-size="8">Net allowlist</text>
@@ -415,21 +463,40 @@
       <rect x="600" y="80" width="100" height="50" rx="6" fill="#e8f1f9" stroke="#2b5f8a"/><text x="650" y="110" text-anchor="middle" font-family="DM Sans" font-size="10">Validated JSON</text>
       <line x1="120" y1="105" x2="268" y2="105" stroke="#8a8880" marker-end="url(#x1)"/>
       <line x1="452" y1="105" x2="598" y2="105" stroke="#8a8880" marker-end="url(#x1)"/>
-      <text x="360" y="210" text-anchor="middle" font-family="DM Mono" font-size="9" fill="#9a2323">no eval/exec on raw LLM output · no arbitrary domains</text>
+      <text x="360" y="210" text-anchor="middle" font-family="DM Mono" font-size="9" fill="#9a2323">no eval/exec on raw LLM output · no arbitrary domains · seccomp syscall filter (kernel-level, not just app-level)</text>
     </svg>
-    <div class="diagram-caption">Fig 7 — Sandbox isolation: code enters boundary, validated JSON exits</div>
+    <div class="diagram-caption">Fig 8 — Code-exec sandbox isolation: code enters boundary, validated JSON exits</div>
   </div>
   <div class="component-grid">
     <div class="component-card"><div class="tag">Filesystem</div><h4>Scratch-dir only</h4><p>Writes confined to per-run temp directory. No access to host filesystem.</p></div>
-    <div class="component-card"><div class="tag">Network</div><h4>Domain allowlist</h4><p>Only pre-approved domains (e.g. api.tavily.com). Configured via <code>OUTBOUND_DOMAIN_ALLOWLIST</code>.</p></div>
+    <div class="component-card"><div class="tag">Network</div><h4>Domain allowlist + kernel-level syscall filter</h4><p>Outbound network goes through an explicit proxy with a domain allowlist (e.g. <code>api.tavily.com</code>), and <code>seccomp</code> denies raw network syscalls at the kernel level as a second layer — app-level allowlisting alone is not treated as sufficient.</p></div>
     <div class="component-card"><div class="tag">Resources</div><h4>Time + memory caps</h4><p><code>SANDBOX_TIMEOUT_SECONDS=15</code>, <code>SANDBOX_MAX_MEMORY_MB=256</code>. Process killed on exceed.</p></div>
-    <div class="component-card"><div class="tag">Validation</div><h4>Schema gate on exit</h4><p>Output must parse against declared Pydantic schema before leaving sandbox or registering as tool.</p></div>
+    <div class="component-card"><div class="tag">Validation</div><h4>Schema gate on exit</h4><p>Output must parse against declared Pydantic schema before leaving sandbox or registering as a (cross-run cached) tool.</p></div>
+  </div>
+  <div class="callout orange">
+    <p><strong>Alternative considered — stated, not assumed:</strong> subprocess isolation + seccomp restricts syscalls at the app/kernel boundary but shares a kernel with the host. A microVM approach (Firecracker, gVisor) or a managed sandbox service (E2B, Modal) gives a stronger boundary — a separate kernel per execution. For this project's scope, subprocess + seccomp + allowlisting was chosen for build-time simplicity and no added infra dependency; a production deployment handling untrusted multi-tenant code would justify the migration to a microVM-based sandbox. This tradeoff is documented explicitly rather than left implicit, since it's the project's primary security review.</p>
+  </div>
+</div>
+
+<!-- OBSERVABILITY -->
+<div class="section" id="observability">
+  <div class="section-label">09 · Observability (LangSmith)</div>
+  <h2>How tracing and debugging work</h2>
+  <p>Every LangGraph node execution, LLM call, and tool invocation is traced via LangSmith, in addition to the SQLite persistence layer. SQLite is the system of record for plan/step state; LangSmith is the debugging and eval-authoring surface.</p>
+  <div class="component-grid">
+    <div class="component-card"><div class="tag">Run-level trace</div><h4>One LangSmith trace per goal_run</h4><p>Opened on <code>POST /goals</code>, tagged with <code>goal_run_id</code>, closed on <code>run.completed</code> with final metrics (step_count, replan_count, synthesis_count, arm) attached as trace metadata.</p></div>
+    <div class="component-card"><div class="tag">Node spans</div><h4>Nested spans per graph node</h4><p>Planner, Executor, Replanner, Synthesizer, HITL Gate, and Eval each emit a span with their prompt, raw LLM response, and parsed/validated output — this is what makes a bad replan or a bad synthesis attempt inspectable after the fact, not just logged as a pass/fail.</p></div>
+    <div class="component-card"><div class="tag">Tool-call spans</div><h4>Every tool invocation traced</h4><p>Search queries, sandbox executions, and browser actions all appear as child spans with latency and structured output — useful for spotting flaky tools (risk noted in the spec's risk analysis) directly in the trace rather than inferring it from step failures.</p></div>
+    <div class="component-card"><div class="tag">Eval dataset tooling</div><h4>Overlaps with the custom LLM-judge harness</h4><p>LangSmith's dataset/eval features can host the 20-goal golden dataset and run the three-arm comparison natively. Decision: use LangSmith for trace inspection and dataset storage; keep the custom LLM-as-judge scorer (Section 07 of the spec) rather than LangSmith's built-in evaluators, since the judge rubric (completeness/correctness against a human-annotated expected answer) is project-specific.</p></div>
+  </div>
+  <div class="callout">
+    <p><strong>Why this matters for the resume story:</strong> a trace viewer showing exactly which LLM call caused a bad replan, or why a synthesized tool's output failed schema validation, is a much stronger interview artifact than a log line — it's the difference between "the agent sometimes fails" and "here's the exact prompt and response that caused this specific failure mode."</p>
   </div>
 </div>
 
 <!-- API -->
 <div class="section" id="api">
-  <div class="section-label">08 · API + Frontend</div>
+  <div class="section-label">10 · API + Frontend</div>
   <h2>How the UI connects to the agent</h2>
   <p>FastAPI serves REST endpoints and SSE streams. React renders live plan/step/gate updates as the graph runs.</p>
   <div class="diagram-box">
@@ -440,7 +507,7 @@
       <rect x="40" y="60" width="120" height="44" rx="6" fill="white" stroke="#c8c4b8"/><text x="100" y="86" text-anchor="middle" font-family="DM Sans" font-size="9">Goal input</text>
       <rect x="180" y="60" width="120" height="44" rx="6" fill="white" stroke="#c8c4b8"/><text x="240" y="86" text-anchor="middle" font-family="DM Sans" font-size="9">Step list + badges</text>
       <rect x="320" y="60" width="120" height="44" rx="6" fill="white" stroke="#c8c4b8"/><text x="380" y="86" text-anchor="middle" font-family="DM Sans" font-size="9">Plan diff view</text>
-      <rect x="460" y="60" width="120" height="44" rx="6" fill="white" stroke="#c8c4b8"/><text x="520" y="86" text-anchor="middle" font-family="DM Sans" font-size="9">Approve / Reject</text>
+      <rect x="460" y="60" width="120" height="44" rx="6" fill="white" stroke="#c8c4b8"/><text x="520" y="86" text-anchor="middle" font-family="DM Sans" font-size="9">Approve / Reject + code view</text>
       <rect x="600" y="60" width="80" height="44" rx="6" fill="white" stroke="#c8c4b8"/><text x="640" y="86" text-anchor="middle" font-family="DM Sans" font-size="9">Final answer</text>
       <rect x="200" y="150" width="320" height="110" rx="10" fill="#f9ece8" stroke="#c84b2f"/>
       <text x="360" y="175" text-anchor="middle" font-family="DM Mono" font-size="10" fill="#c84b2f">FASTAPI</text>
@@ -453,64 +520,67 @@
       <text x="170" y="160" font-family="DM Mono" font-size="8" fill="#4a4843">SSE events</text>
       <line x1="520" y1="120" x2="285" y2="233" stroke="#8a8880" marker-end="url(#a1b)"/>
     </svg>
-    <div class="diagram-caption">Fig 8 — API surface and frontend components</div>
+    <div class="diagram-caption">Fig 9 — API surface and frontend components</div>
   </div>
   <h3>SSE event types</h3>
   <div class="component-grid">
     <div class="component-card"><div class="tag">plan.created</div><h4>Initial plan</h4><p>Full step list after planner runs. Frontend renders step cards as PENDING.</p></div>
     <div class="component-card"><div class="tag">step.updated</div><h4>Step status change</h4><p>RUNNING → DONE/FAILED with tool output snippet.</p></div>
     <div class="component-card"><div class="tag">plan.revised</div><h4>Replan diff</h4><p>New plan_version with changed remaining steps highlighted.</p></div>
-    <div class="component-card"><div class="tag">gate.pending</div><h4>Approval needed</h4><p>Step details for HITL. Frontend shows approve/reject buttons.</p></div>
-    <div class="component-card"><div class="tag">tool.synthesized</div><h4>New tool registered</h4><p>Tool name + schema. Shown in execution trace.</p></div>
-    <div class="component-card"><div class="tag">run.completed</div><h4>Final answer</h4><p>Goal complete with final response and eval scores.</p></div>
+    <div class="component-card"><div class="tag">gate.pending</div><h4>Approval needed</h4><p>Step details + generated source (if synthesized tool) for HITL. Frontend shows approve/reject buttons.</p></div>
+    <div class="component-card"><div class="tag">tool.synthesized</div><h4>New tool registered</h4><p>Tool name + schema + whether served from cross-run cache or freshly generated.</p></div>
+    <div class="component-card"><div class="tag">content.flagged</div><h4>Possible injection detected</h4><p>Fetched/browsed content tripped the heuristic scan (§07); step forced through HITL regardless of original sensitivity.</p></div>
+    <div class="component-card"><div class="tag">run.completed</div><h4>Final answer</h4><p>Goal complete with final response, eval scores, and LangSmith trace link.</p></div>
   </div>
   <div class="flow-steps">
     <div class="flow-step"><div class="flow-num blue">1</div><div class="flow-body"><h4>User submits goal</h4><p><code>POST /goals</code> with <code>{ "goal": "..." }</code>. Returns <code>goal_run_id</code>.</p></div></div>
     <div class="flow-step"><div class="flow-num blue">2</div><div class="flow-body"><h4>Frontend opens SSE stream</h4><p><code>GET /goals/{id}/stream</code> — receives events as graph nodes execute.</p></div></div>
     <div class="flow-step"><div class="flow-num blue">3</div><div class="flow-body"><h4>Live UI updates</h4><p>Step badges change color: PENDING (gray) → RUNNING (blue) → DONE (green) / FAILED (red).</p></div></div>
-    <div class="flow-step"><div class="flow-num orange">4</div><div class="flow-body"><h4>HITL interaction</h4><p>On <code>gate.pending</code>, user clicks Approve/Reject → <code>POST /goals/{id}/approve</code>.</p></div></div>
-    <div class="flow-step"><div class="flow-num green">5</div><div class="flow-body"><h4>Run completes</h4><p><code>run.completed</code> event delivers final answer. UI shows full execution trace.</p></div></div>
+    <div class="flow-step"><div class="flow-num orange">4</div><div class="flow-body"><h4>HITL interaction</h4><p>On <code>gate.pending</code>, user reviews step (and source code if applicable), clicks Approve/Reject → <code>POST /goals/{id}/approve</code>.</p></div></div>
+    <div class="flow-step"><div class="flow-num green">5</div><div class="flow-body"><h4>Run completes</h4><p><code>run.completed</code> event delivers final answer, eval scores, and a link to the LangSmith trace for this run.</p></div></div>
   </div>
 </div>
 
 <!-- PERSISTENCE -->
 <div class="section" id="persistence">
-  <div class="section-label">09 · State Persistence</div>
+  <div class="section-label">11 · State Persistence</div>
   <h2>How data flows to SQLite</h2>
-  <p>Every graph checkpoint writes to SQLite via SQLAlchemy. Enables inspection, resume, and eval logging.</p>
+  <p>Every graph checkpoint writes to SQLite via SQLAlchemy. Enables inspection, resume, and eval logging. LangSmith traces are the parallel, richer debugging layer (§09) — SQLite remains the source of truth for plan/step state and the cross-run tool cache.</p>
   <div class="diagram-box">
     <svg width="100%" viewBox="0 0 720 200" xmlns="http://www.w3.org/2000/svg">
       <defs><marker id="d1" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M2 1L8 5L2 9" fill="none" stroke="#8a8880" stroke-width="1.2"/></marker></defs>
       <rect x="20" y="60" width="110" height="80" rx="8" fill="#fdf3e3" stroke="#9a5c0a"/><text x="75" y="95" text-anchor="middle" font-family="DM Mono" font-size="9" fill="#9a5c0a">LangGraph</text><text x="75" y="115" text-anchor="middle" font-family="DM Sans" font-size="9">checkpoints</text>
       <rect x="160" y="60" width="110" height="80" rx="8" fill="#f9ece8" stroke="#c84b2f"/><text x="215" y="95" text-anchor="middle" font-family="DM Mono" font-size="9" fill="#c84b2f">SQLAlchemy</text><text x="215" y="115" text-anchor="middle" font-family="DM Sans" font-size="9">ORM layer</text>
-      <rect x="300" y="40" width="400" height="120" rx="10" fill="#f1ecfa" stroke="#5c3b8a"/>
-      <text x="500" y="65" text-anchor="middle" font-family="DM Mono" font-size="10" fill="#5c3b8a">SQLite</text>
-      <rect x="320" y="80" width="80" height="30" rx="4" fill="white" stroke="#c8c4b8"/><text x="360" y="100" text-anchor="middle" font-family="DM Mono" font-size="8">goal_run</text>
-      <rect x="410" y="80" width="80" height="30" rx="4" fill="white" stroke="#c8c4b8"/><text x="450" y="100" text-anchor="middle" font-family="DM Mono" font-size="8">plan_version</text>
-      <rect x="500" y="80" width="50" height="30" rx="4" fill="white" stroke="#c8c4b8"/><text x="525" y="100" text-anchor="middle" font-family="DM Mono" font-size="8">step</text>
-      <rect x="560" y="80" width="80" height="30" rx="4" fill="white" stroke="#c8c4b8"/><text x="600" y="100" text-anchor="middle" font-family="DM Mono" font-size="8">eval_result</text>
-      <rect x="320" y="120" width="100" height="30" rx="4" fill="white" stroke="#c8c4b8"/><text x="370" y="140" text-anchor="middle" font-family="DM Mono" font-size="8">synthesized_tool</text>
-      <rect x="430" y="120" width="100" height="30" rx="4" fill="white" stroke="#c8c4b8"/><text x="480" y="140" text-anchor="middle" font-family="DM Mono" font-size="8">approval_event</text>
+      <rect x="300" y="30" width="400" height="150" rx="10" fill="#f1ecfa" stroke="#5c3b8a"/>
+      <text x="500" y="55" text-anchor="middle" font-family="DM Mono" font-size="10" fill="#5c3b8a">SQLite</text>
+      <rect x="320" y="70" width="80" height="30" rx="4" fill="white" stroke="#c8c4b8"/><text x="360" y="90" text-anchor="middle" font-family="DM Mono" font-size="8">goal_run</text>
+      <rect x="410" y="70" width="80" height="30" rx="4" fill="white" stroke="#c8c4b8"/><text x="450" y="90" text-anchor="middle" font-family="DM Mono" font-size="8">plan_version</text>
+      <rect x="500" y="70" width="50" height="30" rx="4" fill="white" stroke="#c8c4b8"/><text x="525" y="90" text-anchor="middle" font-family="DM Mono" font-size="8">step</text>
+      <rect x="560" y="70" width="80" height="30" rx="4" fill="white" stroke="#c8c4b8"/><text x="600" y="90" text-anchor="middle" font-family="DM Mono" font-size="8">eval_result</text>
+      <rect x="320" y="110" width="110" height="30" rx="4" fill="white" stroke="#c8c4b8"/><text x="375" y="130" text-anchor="middle" font-family="DM Mono" font-size="8">synthesized_tool</text>
+      <rect x="440" y="110" width="100" height="30" rx="4" fill="white" stroke="#c8c4b8"/><text x="490" y="130" text-anchor="middle" font-family="DM Mono" font-size="8">approval_event</text>
+      <rect x="550" y="110" width="90" height="30" rx="4" fill="white" stroke="#c8c4b8"/><text x="595" y="130" text-anchor="middle" font-family="DM Mono" font-size="8">injection_flag</text>
       <line x1="130" y1="100" x2="158" y2="100" stroke="#8a8880" marker-end="url(#d1)"/>
       <line x1="270" y1="100" x2="298" y2="100" stroke="#8a8880" marker-end="url(#d1)"/>
-      <text x="500" y="185" text-anchor="middle" font-family="DM Mono" font-size="8" fill="#5c3b8a">1 goal_run → N plan_versions → N steps · 1 eval_result per run</text>
+      <text x="500" y="195" text-anchor="middle" font-family="DM Mono" font-size="8" fill="#5c3b8a">1 goal_run → N plan_versions → N steps · synthesized_tool is durable across goal_runs</text>
     </svg>
-    <div class="diagram-caption">Fig 9 — Persistence layer: graph checkpoints → ORM → SQLite tables</div>
+    <div class="diagram-caption">Fig 10 — Persistence layer: graph checkpoints → ORM → SQLite tables</div>
   </div>
   <div class="flow-steps">
-    <div class="flow-step"><div class="flow-num purple">1</div><div class="flow-body"><h4>goal_run created</h4><p>On <code>POST /goals</code>: <code>id, goal_text, status=RUNNING, created_at</code>.</p></div></div>
+    <div class="flow-step"><div class="flow-num purple">1</div><div class="flow-body"><h4>goal_run created</h4><p>On <code>POST /goals</code>: <code>id, goal_text, status=RUNNING, created_at, langsmith_trace_id</code>.</p></div></div>
     <div class="flow-step"><div class="flow-num purple">2</div><div class="flow-body"><h4>plan_version on plan/replan</h4><p>Each planner or replanner output → new version. Steps JSON ordered list linked to version.</p></div></div>
     <div class="flow-step"><div class="flow-num purple">3</div><div class="flow-body"><h4>step rows updated per execution</h4><p>Status transitions, <code>tool_name</code>, <code>tool_input</code>, <code>tool_output</code>, <code>error</code> persisted.</p></div></div>
-    <div class="flow-step"><div class="flow-num purple">4</div><div class="flow-body"><h4>Checkpoint on interrupt</h4><p>HITL gate saves full graph state so resume picks up exactly where it paused.</p></div></div>
-    <div class="flow-step"><div class="flow-num purple">5</div><div class="flow-body"><h4>eval_result on completion</h4><p>Judge scores, step_count, replan_count, synthesis_count, approval events logged.</p></div></div>
+    <div class="flow-step"><div class="flow-num purple">4</div><div class="flow-body"><h4>synthesized_tool is cross-run durable</h4><p>Unlike other tables scoped to one <code>goal_run</code>, this table persists across runs — keyed by task signature, it's the cache checked in §04 step 2.</p></div></div>
+    <div class="flow-step"><div class="flow-num purple">5</div><div class="flow-body"><h4>Checkpoint on interrupt</h4><p>HITL gate saves full graph state so resume picks up exactly where it paused.</p></div></div>
+    <div class="flow-step"><div class="flow-num purple">6</div><div class="flow-body"><h4>eval_result on completion</h4><p>Judge scores, step_count, replan_count, synthesis_count, approval events, injection flags logged.</p></div></div>
   </div>
 </div>
 
 <!-- EVAL -->
 <div class="section" id="eval">
-  <div class="section-label">10 · Evaluation</div>
+  <div class="section-label">12 · Evaluation</div>
   <h2>How the ablation study works</h2>
-  <p>Three-arm comparison on a 20-goal golden dataset. Isolates planning efficiency gain and synthesis coverage gain separately.</p>
+  <p>Three-arm comparison on a 20-goal golden dataset. Isolates planning efficiency gain and synthesis coverage gain separately. Arm 1 (ReAct) is built explicitly, not assumed.</p>
   <div class="diagram-box">
     <svg width="100%" viewBox="0 0 720 240" xmlns="http://www.w3.org/2000/svg">
       <defs><marker id="v1" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M2 1L8 5L2 9" fill="none" stroke="#8a8880" stroke-width="1.2"/></marker></defs>
@@ -518,7 +588,7 @@
       <rect x="30" y="80" width="200" height="60" rx="8" fill="#f9ece8" stroke="#c84b2f"/><text x="130" y="105" text-anchor="middle" font-family="DM Mono" font-size="9" fill="#c84b2f">Arm 1: ReAct</text><text x="130" y="125" text-anchor="middle" font-family="DM Sans" font-size="9">fixed tools only</text>
       <rect x="260" y="80" width="200" height="60" rx="8" fill="#e8f1f9" stroke="#2b5f8a"/><text x="360" y="105" text-anchor="middle" font-family="DM Mono" font-size="9" fill="#2b5f8a">Arm 2: Plan-and-Execute</text><text x="360" y="125" text-anchor="middle" font-family="DM Sans" font-size="9">+ replanning, no synthesis</text>
       <rect x="490" y="80" width="200" height="60" rx="8" fill="#e8f5ee" stroke="#2a6b45"/><text x="590" y="105" text-anchor="middle" font-family="DM Mono" font-size="9" fill="#2a6b45">Arm 3: Full System</text><text x="590" y="125" text-anchor="middle" font-family="DM Sans" font-size="9">+ synthesis + browser</text>
-      <rect x="130" y="170" width="460" height="50" rx="8" fill="#fdf3e3" stroke="#9a5c0a"/><text x="360" y="200" text-anchor="middle" font-family="DM Sans" font-size="10">LLM-as-Judge + metrics: completion %, LLM call count, replan count, synthesis count</text>
+      <rect x="130" y="170" width="460" height="50" rx="8" fill="#fdf3e3" stroke="#9a5c0a"/><text x="360" y="200" text-anchor="middle" font-family="DM Sans" font-size="10">LLM-as-Judge + metrics: completion %, LLM call count, replan count, synthesis count — all captured in LangSmith traces</text>
       <line x1="360" y1="50" x2="130" y2="78" stroke="#8a8880" marker-end="url(#v1)"/>
       <line x1="360" y1="50" x2="360" y2="78" stroke="#8a8880" marker-end="url(#v1)"/>
       <line x1="360" y1="50" x2="590" y2="78" stroke="#8a8880" marker-end="url(#v1)"/>
@@ -526,7 +596,7 @@
       <line x1="360" y1="140" x2="360" y2="168" stroke="#8a8880" marker-end="url(#v1)"/>
       <line x1="590" y1="140" x2="520" y2="168" stroke="#8a8880" marker-end="url(#v1)"/>
     </svg>
-    <div class="diagram-caption">Fig 10 — Three-arm ablation: same 20 goals, different orchestration, unified eval</div>
+    <div class="diagram-caption">Fig 11 — Three-arm ablation: same 20 goals, different orchestration, unified eval</div>
   </div>
   <h3>Golden dataset categories</h3>
   <div class="component-grid">
@@ -535,13 +605,13 @@
     <div class="component-card"><div class="tag">(c)</div><h4>Straightforward</h4><p>No replanning needed. Baseline efficiency test.</p></div>
     <div class="component-card"><div class="tag">(d)</div><h4>Synthesis required</h4><p>Tool not in fixed registry. Fails Arm 2, succeeds Arm 3.</p></div>
     <div class="component-card"><div class="tag">(e)</div><h4>Browser only</h4><p>Requires real site interaction. Booking flows, no API.</p></div>
-    <div class="component-card"><div class="tag">HITL</div><h4>Approval gates</h4><p>Active in all arms for safety. Not a separate ablation variable.</p></div>
+    <div class="component-card"><div class="tag">(f)</div><h4>Adversarial content</h4><p>Fetched page contains an injection attempt — scored on whether the agent ignores it and correctly flags the step.</p></div>
   </div>
   <div class="flow-steps">
     <div class="flow-step"><div class="flow-num purple">1</div><div class="flow-body"><h4>Load golden goal</h4><p>Each goal has expected step count, expected answer, required capability tag.</p></div></div>
     <div class="flow-step"><div class="flow-num purple">2</div><div class="flow-body"><h4>Run through selected arm</h4><p>Same LLM, same fixed tools. Only orchestration differs between arms.</p></div></div>
-    <div class="flow-step"><div class="flow-num purple">3</div><div class="flow-body"><h4>LLM-as-judge scores output</h4><p>Completeness + correctness against original goal. Reasoning logged.</p></div></div>
-    <div class="flow-step"><div class="flow-num purple">4</div><div class="flow-body"><h4>Log operational metrics</h4><p>step_count, replan_count, synthesis_count, approval_events, browser_tool_usage.</p></div></div>
+    <div class="flow-step"><div class="flow-num purple">3</div><div class="flow-body"><h4>LLM-as-judge scores output</h4><p>Completeness + correctness against original goal. Reasoning logged, LangSmith trace linked.</p></div></div>
+    <div class="flow-step"><div class="flow-num purple">4</div><div class="flow-body"><h4>Log operational metrics</h4><p>step_count, replan_count, synthesis_count, cache_hit_count, approval_events, injection_flags, browser_tool_usage.</p></div></div>
     <div class="flow-step"><div class="flow-num purple">5</div><div class="flow-body"><h4>Compare arms</h4><p>Arm 1 vs 2 → planning efficiency. Arm 2 vs 3 → synthesis/browser coverage gain.</p></div></div>
   </div>
   <div class="legend">
@@ -549,13 +619,66 @@
     <div class="legend-item"><div class="legend-dot" style="background:var(--green)"></div> Executor / success path</div>
     <div class="legend-item"><div class="legend-dot" style="background:var(--accent-2)"></div> Replanner / failure path</div>
     <div class="legend-item"><div class="legend-dot" style="background:var(--purple)"></div> Synthesis / persistence / eval</div>
-    <div class="legend-item"><div class="legend-dot" style="background:#9a2323"></div> HITL / security boundary</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#9a2323"></div> HITL / security boundary / injection defense</div>
+  </div>
+</div>
+
+<!-- LIBRARIES & TOOLS -->
+<div class="section" id="stack">
+  <div class="section-label">13 · Libraries & Tools</div>
+  <h2>Full technology stack</h2>
+  <p>Consolidated reference — everything the codebase depends on, and why.</p>
+  <table class="stack-table">
+    <thead><tr><th>Category</th><th>Library / Tool</th><th>Why</th></tr></thead>
+    <tbody>
+      <tr><td>Orchestration</td><td>LangGraph</td><td>Explicit graph nodes for planner/executor/replanner/synthesizer/HITL with conditional edges and a built-in checkpointer for interrupt/resume.</td></tr>
+      <tr><td>Observability</td><td>LangSmith</td><td>Traces every LLM call, tool call, and node transition; hosts the golden dataset; source of the exec traces shown in the README/blog.</td></tr>
+      <tr><td>LLM backbone</td><td>Anthropic Claude API</td><td>Production-quality planning/execution/synthesis/judging.</td></tr>
+      <tr><td>LLM backbone (dev)</td><td>Ollama (qwen2.5:14b)</td><td>Local dev without API costs. Swap via env variable.</td></tr>
+      <tr><td>Tool-calling schema</td><td>LangChain tool interface</td><td>Standardized schema reused across planner, executor, and synthesized tools.</td></tr>
+      <tr><td>Structured output</td><td>Pydantic v2</td><td>Plan/step schema, tool I/O schemas, sandbox output validation gate.</td></tr>
+      <tr><td>Search</td><td>Tavily API</td><td>Fixed search tool.</td></tr>
+      <tr><td>Browser automation</td><td>Playwright (via agent-infra/sandbox)</td><td>navigate/click/fill/screenshot, seccomp-hardened container, network allowlisted.</td></tr>
+      <tr><td>Sandbox isolation</td><td>subprocess + seccomp syscall filtering</td><td>Code-exec sandbox boundary; see §08 for the microVM alternative considered.</td></tr>
+      <tr><td>Backend</td><td>FastAPI + sse-starlette</td><td>Async REST + SSE streaming to the frontend.</td></tr>
+      <tr><td>Rate limiting</td><td>slowapi</td><td>FastAPI-native rate limiter for the public deploy.</td></tr>
+      <tr><td>Config/secrets</td><td>pydantic-settings + python-dotenv</td><td>Env-based config for allowlists, timeouts, budget caps, API keys.</td></tr>
+      <tr><td>Frontend</td><td>React + TypeScript</td><td>Step list, live status badges, plan-diff view, approve/reject + code-review UI.</td></tr>
+      <tr><td>State persistence</td><td>SQLite + SQLAlchemy</td><td>Plans, steps, cross-run synthesized-tool cache, eval results.</td></tr>
+      <tr><td>Migrations</td><td>Alembic</td><td>Schema migrations as tables evolve across build phases.</td></tr>
+      <tr><td>Testing</td><td>pytest + pytest-asyncio</td><td>Unit/integration tests for graph nodes (mostly async), sandbox stress tests.</td></tr>
+      <tr><td>CI</td><td>GitHub Actions</td><td>Lint + test on every push, from Phase 0 onward.</td></tr>
+      <tr><td>Eval framework</td><td>Custom LLM-judge + LangSmith datasets</td><td>Judge scores completeness/correctness; LangSmith hosts the golden dataset and stores per-run traces.</td></tr>
+      <tr><td>Containerization</td><td>Docker Compose</td><td>Single-command setup; one service for API, one for the browser sandbox container.</td></tr>
+      <tr><td>Deployment</td><td>Render or Fly.io</td><td>Phase 9 production deploy target.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- EXTERNAL APIs -->
+<div class="section" id="apis">
+  <div class="section-label">14 · External APIs</div>
+  <h2>Every external API the system calls</h2>
+  <table class="api-table">
+    <thead><tr><th>API</th><th>Called by</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr><td>Anthropic Messages API<br><span style="font-family:var(--mono);font-size:10px;color:var(--ink-3);">api.anthropic.com/v1/messages</span></td><td>Planner, Executor (tool selection), Replanner, Synthesizer (codegen), Final-answer synthesis, LLM-as-judge</td><td>Primary LLM backbone in production. API key via env var only, never logged.</td></tr>
+      <tr><td>Ollama local API<br><span style="font-family:var(--mono);font-size:10px;color:var(--ink-3);">localhost:11434</span></td><td>Same call sites as above</td><td>Dev-mode swap-in, no external network call, no cost.</td></tr>
+      <tr><td>Tavily Search API</td><td>Fixed search tool</td><td>Only fixed external data-retrieval API in the base tool registry.</td></tr>
+      <tr><td>LangSmith API<br><span style="font-family:var(--mono);font-size:10px;color:var(--ink-3);">api.smith.langchain.com</span></td><td>All graph nodes (trace ingestion)</td><td>Async, non-blocking — a LangSmith outage must not block agent execution.</td></tr>
+      <tr><td>Target site(s) reached via browser tool</td><td>Browser automation tool</td><td>Not a formal API — interacted with via Playwright precisely because no API exists. Content returned is untrusted (§07). Domain must be within the browser sandbox's allowlist.</td></tr>
+      <tr><td>Runtime-determined APIs called by synthesized tools</td><td>Code-exec sandbox, on behalf of a synthesized tool</td><td>Not fixed at build time — this is the risk the domain allowlist exists to bound. You can't know in advance which specific API a synthesized tool will call, only which domains you're willing to permit it to reach.</td></tr>
+      <tr><td>Render / Fly.io deploy API</td><td>CI/CD pipeline (not the agent itself)</td><td>Phase 9 deployment only. Never called at agent runtime.</td></tr>
+    </tbody>
+  </table>
+  <div class="callout">
+    <p><strong>Why the runtime-determined row matters:</strong> every other row is a known, fixed dependency you can document once. The synthesized-tool row is structurally different — the set of external APIs touched grows with the goals the agent is given. This is exactly why the sandbox's network-layer allowlist (§08) is the actual security control, not the documentation of which APIs get called.</p>
   </div>
 </div>
 
 <!-- SEQUENCE -->
 <div class="section" id="sequence">
-  <div class="section-label">11 · Sequence Example</div>
+  <div class="section-label">15 · Sequence Example</div>
   <h2>Full run: replan after failure</h2>
   <p>Walkthrough of a category (a) goal where step 2 fails and the replanner revises the remaining plan.</p>
   <div class="diagram-box">
@@ -568,7 +691,7 @@
       <text x="30" y="88" font-family="DM Sans" font-size="10" fill="#2b5f8a">Planner</text>
       <text x="200" y="88" font-family="DM Sans" font-size="10" fill="#4a4843">→ 4 steps: [search A, search B, search C, synthesize table]</text>
       <text x="30" y="118" font-family="DM Sans" font-size="10" fill="#2a6b45">Executor</text>
-      <text x="200" y="118" font-family="DM Sans" font-size="10" fill="#4a4843">Step 1: search A → DONE (results returned)</text>
+      <text x="200" y="118" font-family="DM Sans" font-size="10" fill="#4a4843">Step 1: search A → DONE (results wrapped as untrusted content, read safely)</text>
       <text x="30" y="148" font-family="DM Sans" font-size="10" fill="#c84b2f">Replanner</text>
       <text x="200" y="148" font-family="DM Sans" font-size="10" fill="#4a4843">Step 1 OK → continue (no replan)</text>
       <text x="30" y="178" font-family="DM Sans" font-size="10" fill="#2a6b45">Executor</text>
@@ -580,18 +703,17 @@
       <text x="30" y="268" font-family="DM Sans" font-size="10" fill="#5c3b8a">Synthesise</text>
       <text x="200" y="268" font-family="DM Sans" font-size="10" fill="#4a4843">Combine results → comparison table markdown</text>
       <text x="30" y="298" font-family="DM Sans" font-size="10" fill="#5c3b8a">Eval</text>
-      <text x="200" y="298" font-family="DM Sans" font-size="10" fill="#4a4843">Judge: 92% complete, 88% correct · 5 steps, 1 replan</text>
+      <text x="200" y="298" font-family="DM Sans" font-size="10" fill="#4a4843">Judge: 92% complete, 88% correct · 5 steps, 1 replan · LangSmith trace linked</text>
     </svg>
-    <div class="diagram-caption">Fig 11 — Example sequence: failure on step 2 triggers replan, run completes successfully</div>
+    <div class="diagram-caption">Fig 12 — Example sequence: failure on step 2 triggers replan, run completes successfully</div>
   </div>
 </div>
-
 
 </div>
 
 <div class="footer">
-  <p>Plan-and-Execute Agent · System Wiring v1.0</p>
-  <p><a href="plan-and-execute-agent.html" style="color:var(--ink-3)">Project Spec</a></p>
+  <p>Plan-and-Execute Agent · System Wiring v1.1</p>
+  <p><a href="plan-and-execute-agent.html" style="color:var(--ink-3)">Project Spec</a> · <a href="roadmap.html" style="color:var(--ink-3)">Build Roadmap</a></p>
 </div>
 
 </body>
