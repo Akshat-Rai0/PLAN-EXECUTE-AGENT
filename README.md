@@ -38,3 +38,11 @@ frontend/             FastAPI + React (built last)
 tests/
 docs/
 ```
+
+## To Test
+```bash
+
+% source .venv/bin/activate
+python -m src.agents.plan_execute.main "Plan a weekend trip to Goa"
+
+```
