@@ -1,0 +1,59 @@
+{
+  "goal": "Plan a weekend trip to Goa",
+  "subtasks": [
+    {
+      "id": 1,
+      "task": "Determine travel dates and budget for the weekend trip.",
+      "tool_hint": "none",
+      "status": "PENDING",
+      "sensitive": false,
+      "result": null,
+      "error": null
+    },
+    {
+      "id": 2,
+      "task": "Research and book round-trip travel (flights or train) to Goa for the selected dates.",
+      "tool_hint": "web_search",
+      "status": "PENDING",
+      "sensitive": true,
+      "result": null,
+      "error": null
+    },
+    {
+      "id": 3,
+      "task": "Select and book accommodation (hotel/Airbnb) in Goa based on desired location (e.g., North vs. South Goa) and budget.",
+      "tool_hint": "web_search",
+      "status": "PENDING",
+      "sensitive": true,
+      "result": null,
+      "error": null
+    },
+    {
+      "id": 4,
+      "task": "Plan daily activities, including beach visits, sightseeing, and potential excursions (e.g., spice plantation tour).",
+      "tool_hint": "web_search",
+      "status": "PENDING",
+      "sensitive": false,
+      "result": null,
+      "error": null
+    },
+    {
+      "id": 5,
+      "task": "Research and book necessary local transportation (e.g., taxi passes, scooter rentals) for the weekend.",
+      "tool_hint": "web_search",
+      "status": "PENDING",
+      "sensitive": true,
+      "result": null,
+      "error": null
+    },
+    {
+      "id": 6,
+      "task": "Create a detailed itinerary, including restaurant recommendations and booking confirmations, and finalize the trip plan.",
+      "tool_hint": "none",
+      "status": "PENDING",
+      "sensitive": false,
+      "result": null,
+      "error": null
+    }
+  ]
+}

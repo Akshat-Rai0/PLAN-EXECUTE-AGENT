@@ -3,7 +3,7 @@ from .tools import breakdown_task
 
 
 def plan_node(state: State) -> dict:
-    """Break down the input task into a plan using the breakdown_task tool."""
+    """Break down the input task into a plan using the breakdown_task function."""
     goal = state.get("input", "")
-    plan = breakdown_task.invoke({"goal": goal})
+    plan = breakdown_task(goal)
     return {"plan": plan, "output": plan}
