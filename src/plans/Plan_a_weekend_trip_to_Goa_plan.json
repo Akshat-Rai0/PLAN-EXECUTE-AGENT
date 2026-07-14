@@ -5,54 +5,54 @@
       "id": 1,
       "task": "Determine travel dates and budget for the weekend trip.",
       "tool_hint": "none",
-      "status": "PENDING",
+      "status": "DONE",
       "sensitive": false,
-      "result": null,
+      "result": "[stub] would execute via tool_hint='none': Determine travel dates and budget for the weekend trip.",
       "error": null
     },
     {
       "id": 2,
       "task": "Research and book round-trip travel (flights or train) to Goa for the selected dates.",
       "tool_hint": "web_search",
-      "status": "PENDING",
+      "status": "DONE",
       "sensitive": true,
-      "result": null,
+      "result": "[stub] would execute via tool_hint='web_search': Research and book round-trip travel (flights or train) to Goa for the selected dates.",
       "error": null
     },
     {
       "id": 3,
       "task": "Select and book accommodation (hotel/Airbnb) in Goa based on desired location (e.g., North vs. South Goa) and budget.",
       "tool_hint": "web_search",
-      "status": "PENDING",
+      "status": "DONE",
       "sensitive": true,
-      "result": null,
+      "result": "[stub] would execute via tool_hint='web_search': Select and book accommodation (hotel/Airbnb) in Goa based on desired location (e.g., North vs. South Goa) and budget.",
       "error": null
     },
     {
       "id": 4,
       "task": "Plan daily activities, including beach visits, sightseeing, and potential excursions (e.g., spice plantation tour).",
       "tool_hint": "web_search",
-      "status": "PENDING",
+      "status": "DONE",
       "sensitive": false,
-      "result": null,
+      "result": "[stub] would execute via tool_hint='web_search': Plan daily activities, including beach visits, sightseeing, and potential excursions (e.g., spice plantation tour).",
       "error": null
     },
     {
       "id": 5,
       "task": "Research and book necessary local transportation (e.g., taxi passes, scooter rentals) for the weekend.",
       "tool_hint": "web_search",
-      "status": "PENDING",
+      "status": "DONE",
       "sensitive": true,
-      "result": null,
+      "result": "[stub] would execute via tool_hint='web_search': Research and book necessary local transportation (e.g., taxi passes, scooter rentals) for the weekend.",
       "error": null
     },
     {
       "id": 6,
       "task": "Create a detailed itinerary, including restaurant recommendations and booking confirmations, and finalize the trip plan.",
       "tool_hint": "none",
-      "status": "PENDING",
+      "status": "DONE",
       "sensitive": false,
-      "result": null,
+      "result": "[stub] would execute via tool_hint='none': Create a detailed itinerary, including restaurant recommendations and booking confirmations, and finalize the trip plan.",
       "error": null
     }
   ]
