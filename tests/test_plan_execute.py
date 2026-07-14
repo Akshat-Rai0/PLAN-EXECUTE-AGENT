@@ -26,26 +26,22 @@ def test_state_structure():
     
     state: State = {
         "input": "test input",
-        "plan": plan,
-        "output": "test output"
+        "plan": plan
     }
     
     assert state["input"] == "test input"
     assert state["plan"].goal == "test goal"
-    assert state["output"] == "test output"
 
 
 def test_state_with_none_plan():
     """Test State with None plan."""
     state: State = {
         "input": "test input",
-        "plan": None,
-        "output": ""
+        "plan": None
     }
     
     assert state["input"] == "test input"
     assert state["plan"] is None
-    assert state["output"] == ""
 
 
 def test_step_model_validation():
@@ -100,8 +96,7 @@ def test_plan_generation(input_task):
     
     initial_state: State = {
         "input": input_task,
-        "plan": None,
-        "output": ""
+        "plan": None
     }
     
     config = {"configurable": {"thread_id": "test-thread"}}
@@ -110,11 +105,6 @@ def test_plan_generation(input_task):
     # Verify plan was generated
     assert result["plan"] is not None
     assert isinstance(result["plan"], Plan)
-    
-    # Verify output was generated
-    assert result["output"] is not None
-    assert isinstance(result["output"], str)
-    assert len(result["output"]) > 0
     
     # Validate Plan structure
     plan = result["plan"]
@@ -141,8 +131,7 @@ def test_goa_trip_specific():
     
     initial_state: State = {
         "input": "Plan a weekend trip to Goa",
-        "plan": None,
-        "output": ""
+        "plan": None
     }
     
     config = {"configurable": {"thread_id": "test-thread"}}
