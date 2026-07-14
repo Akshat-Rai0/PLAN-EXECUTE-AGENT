@@ -1,7 +1,9 @@
 
 from enum import Enum
-from typing import Optional, TypedDict
+from typing import Optional, TypedDict, Annotated
 from pydantic import BaseModel, Field
+from typing_extensions import TypedDict as ExtTypedDict
+from operator import add
 
 
 class StepStatus(str, Enum):
@@ -26,7 +28,11 @@ class Plan(BaseModel):
     subtasks: list[Step] = Field(min_length=1)
 
 
-class State(TypedDict):
+def replace_plan(existing: Optional[Plan], new: Optional[Plan]) -> Optional[Plan]:
+    """Reducer function to replace the plan with the new value."""
+    return new
+
+
+class State(ExtTypedDict):
     input: str
-    plan: Optional[Plan]
-    output: str
+    plan: Annotated[Optional[Plan], replace_plan]

@@ -35,8 +35,7 @@ def main():
     # Create initial state
     initial_state: State = {
         "input": user_input,
-        "plan": None,
-        "output": ""
+        "plan": None
     }
     
     # Invoke the graph with required config
@@ -44,15 +43,30 @@ def main():
     result = graph.invoke(initial_state, config)
     
     # Display the result
-    print("✅ Plan Generated:")
-    print("-" * 50)
+    print("✅ Execution Complete:")
+    print("=" * 80)
     
     # Handle Plan object (Pydantic model)
     plan = result["plan"]
     if hasattr(plan, 'model_dump_json'):
         # It's a Pydantic model
-        plan_json = plan.model_dump_json(indent=2)
-        print(plan_json)
+        print(f"\n📋 Goal: {plan.goal}")
+        print(f"\n📝 Steps Executed:")
+        
+        # Display each step with detailed information
+        for step in plan.subtasks:
+            print(f"\n  Step {step.id}: {step.task}")
+            print(f"  └─ Tool: {step.tool_hint}")
+            print(f"  └─ Status: {step.status}")
+            
+            if step.result:
+                print(f"  └─ Result:")
+                # Indent the result for better readability
+                for line in step.result.split('\n'):
+                    print(f"     {line}")
+            
+            if step.error:
+                print(f"  └─ Error: {step.error}")
         
         # Save to file
         output_dir = os.path.join(grandparent_dir, "plans")
@@ -64,6 +78,7 @@ def main():
         filename = f"{safe_goal}_plan.json"
         filepath = os.path.join(output_dir, filename)
         
+        plan_json = plan.model_dump_json(indent=2)
         with open(filepath, 'w') as f:
             f.write(plan_json)
         
@@ -72,7 +87,7 @@ def main():
         # Fallback for string/other types
         print(str(plan))
     
-    print("-" * 50)
+    print("=" * 80)
 
 
 if __name__ == "__main__":
