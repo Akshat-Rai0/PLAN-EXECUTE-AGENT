@@ -6,19 +6,26 @@ load_dotenv()
 
 client = TavilyClient(os.getenv("TAVILY_API_KEY"))
 
-response = client.search(
-    "who is leo messi",
-    search_depth="advanced",
-    chunks_per_source=3,
-    max_results=5,
-    include_answer=True,  
-)
+def tavily_search(query: str) -> str:
+    """
+    use web search to get relevant information using Tavily and return a response.
+    """
+    response = client.search(
+        query=query,
+        search_depth="advanced",
+        chunks_per_source=3,
+        max_results=5,
+        include_answer=True,
+    )
 
-answer = response.get("answer")
-print("ANSWER:", answer)
-print()
 
-for result in response["results"]:
-    print(result["title"])
-    print(result["content"][:200])
-    print()
+    if response.get("answer"):
+        return response["answer"]
+
+
+    if response.get("results"):
+        return "\n\n".join(
+            result["content"] for result in response["results"]
+        )
+
+    return "No results found."
