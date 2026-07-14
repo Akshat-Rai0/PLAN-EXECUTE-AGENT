@@ -1,6 +1,8 @@
 from .state import State, StepStatus
 from .tools import breakdown_task
 from src.tools.registry import tavily_search
+from langchain_core.messages import HumanMessage, SystemMessage
+from .llm import get_llm
 
 def plan_node(state: State) -> dict:
     """Break down the input task into a plan using the breakdown_task function."""
@@ -27,8 +29,8 @@ def tavily_search_node(state: State) -> dict:
         raise RuntimeError("tavily_search_node called with no RUNNING step")
 
     try:
-        # Extract search query from the task description
-        query = current_step.task
+        # Extract search query from the task description, including goal context
+        query = f"{plan.goal} — {current_step.task}"
         result = tavily_search(query)
         current_step.status = StepStatus.DONE
         current_step.result = result
@@ -59,5 +61,61 @@ def executor_node(state: State) -> dict:
         return {"plan": plan}
 
     next_step.status = StepStatus.RUNNING
+
+    return {"plan": plan}
+
+
+def synthesize_node(state: State) -> dict:
+    """
+    Synthesize all step results into a final answer using the LLM.
+
+    This node is called when all steps are complete and the final step has
+    tool_hint="none". It concatenates all step results and asks the LLM to
+    provide a comprehensive answer to the original goal.
+    """
+    plan = state["plan"]
+    if plan is None:
+        raise RuntimeError("synthesize_node called with no plan in state")
+
+    # Collect all step results
+    step_results = []
+    for step in plan.subtasks:
+        if step.result:
+            step_results.append(f"Step {step.id}: {step.task}\nResult: {step.result}")
+        elif step.error:
+            step_results.append(f"Step {step.id}: {step.task}\nError: {step.error}")
+
+    if not step_results:
+        # No results to synthesize
+        return {"plan": plan}
+
+    # Build synthesis prompt
+    synthesis_prompt = f"""Role:
+You are a synthesis assistant that combines information from multiple steps into a comprehensive answer.
+
+Original Goal:
+{plan.goal}
+
+Results from each step:
+{chr(10).join(step_results)}
+
+Task:
+Synthesize the above results into a clear, comprehensive answer to the original goal.
+Focus on the key information and provide a well-structured response."""
+
+    llm = get_llm()
+    messages = [
+        SystemMessage(content="You are a helpful synthesis assistant that combines information from multiple sources."),
+        HumanMessage(content=synthesis_prompt),
+    ]
+    response = llm.invoke(messages)
+
+    # Store the synthesis result in the plan (we'll need to add a field for this)
+    # For now, we'll add it as a special result on a synthetic step or modify the plan
+    # Let's add it as the result of the last step if it had tool_hint="none"
+    for step in reversed(plan.subtasks):
+        if step.tool_hint == "none":
+            step.result = response.content
+            break
 
     return {"plan": plan}

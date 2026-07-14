@@ -1,7 +1,7 @@
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, START, StateGraph
 
-from .nodes import plan_node, executor_node, tavily_search_node
+from .nodes import plan_node, executor_node, tavily_search_node, synthesize_node
 from .state import State, StepStatus
 
 
@@ -36,6 +36,8 @@ def _route_to_tool(state: State) -> str:
     tool_hint = running_step.tool_hint.lower()
     if tool_hint in ("web_search", "tavily_search"):
         return "tavily_search"
+    if tool_hint == "none":
+        return "synthesize"
     
     # Placeholder for other tools - will route to stub for now
     return "stub"
@@ -55,6 +57,7 @@ def build_graph():
     graph.add_node("plan", plan_node)
     graph.add_node("executor", executor_node)
     graph.add_node("tavily_search", tavily_search_node)
+    graph.add_node("synthesize", synthesize_node)
     
     # Stub node for tools not yet implemented
     def stub_node(state: State) -> dict:
@@ -81,6 +84,7 @@ def build_graph():
         _route_to_tool,
         {
             "tavily_search": "tavily_search",
+            "synthesize": "synthesize",
             "stub": "stub",
             "end": END,
         },
@@ -89,6 +93,9 @@ def build_graph():
     # After tool execution, route back to executor to check for more steps
     graph.add_edge("tavily_search", "executor")
     graph.add_edge("stub", "executor")
+    
+    # After synthesis, we're done
+    graph.add_edge("synthesize", END)
 
     checkpointer = InMemorySaver()
     return graph.compile(checkpointer=checkpointer)
