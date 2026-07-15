@@ -170,10 +170,10 @@
     <div class="cap-card"><div class="phase-count">9</div><div class="cap-label">Web UI · SSE · deployed</div></div>
   </div>
   <div class="overview-bar">
-    <div class="overview-seg" style="background:var(--ink-3)"><span>P0</span></div>
-    <div class="overview-seg" style="background:var(--ink-3)"><span>P1</span></div>
-    <div class="overview-seg" style="background:var(--ink-3)"><span>P2</span></div>
-    <div class="overview-seg" style="background:var(--ink-3)"><span>P3</span></div>
+    <div class="overview-seg" style="background:var(--green)"><span>P0</span></div>
+    <div class="overview-seg" style="background:var(--green)"><span>P1</span></div>
+    <div class="overview-seg" style="background:var(--green)"><span>P2</span></div>
+    <div class="overview-seg" style="background:var(--accent)"><span>P3</span></div>
     <div class="overview-seg" style="background:var(--ink-3)"><span>P4</span></div>
     <div class="overview-seg" style="background:var(--ink-3)"><span>P5</span></div>
     <div class="overview-seg" style="background:var(--ink-3)"><span>P6</span></div>
@@ -190,32 +190,32 @@
   <div class="section-label">Phase 0 · Jul 7–13</div>
   <div class="phase">
     <div class="phase-header">
-      <div class="phase-num future">0</div>
+      <div class="phase-num done">0</div>
       <div class="phase-title">
         <h3>LangGraph & Tool-Calling Prereq</h3>
         <div class="phase-meta">7 days · CLI only</div>
         <div class="phase-arm">No arm yet — foundation</div>
       </div>
-      <div class="phase-status future">Pending</div>
+      <div class="phase-status done">Complete</div>
     </div>
     <div class="phase-body">
       <div class="phase-col">
         <h4>Tasks</h4>
         <ul class="checklist">
-          <li>State graphs, nodes, conditional edges</li>
-          <li>Checkpointing (needed later for HITL interrupt/resume)</li>
-          <li>LangChain tool-calling interface basics</li>
-          <li>Minimum viable — not a full course</li>
-          <li>Set up pytest + a CI workflow (lint + unit tests on push)</li>
+          <li class="done">State graphs, nodes, conditional edges</li>
+          <li class="done">Checkpointing (needed later for HITL interrupt/resume)</li>
+          <li class="done">LangChain tool-calling interface basics</li>
+          <li class="done">Minimum viable — not a full course</li>
+          <li class="done">Set up pytest + a CI workflow (lint + unit tests on push)</li>
         </ul>
       </div>
       <div class="phase-col">
         <h4>Deliverables</h4>
         <ul class="checklist">
-          <li>pyproject.toml with dependencies</li>
-          <li>Basic StateGraph scaffold with checkpointer configured</li>
-          <li>.env template</li>
-          <li>CI pipeline running on every commit</li>
+          <li class="done">pyproject.toml with dependencies</li>
+          <li class="done">Basic StateGraph scaffold with checkpointer configured</li>
+          <li class="done">.env template</li>
+          <li class="done">CI pipeline running on every commit</li>
         </ul>
       </div>
       <div class="phase-outcome">
@@ -245,31 +245,31 @@
   <div class="section-label">Phase 1 · Jul 14–17</div>
   <div class="phase">
     <div class="phase-header">
-      <div class="phase-num future">1</div>
+      <div class="phase-num done">1</div>
       <div class="phase-title">
         <h3>Planner + Step Schema</h3>
         <div class="phase-meta">4 days · CLI only</div>
         <div class="phase-arm">Building toward Arm 2</div>
       </div>
-      <div class="phase-status future">Pending</div>
+      <div class="phase-status done">Complete</div>
     </div>
     <div class="phase-body">
       <div class="phase-col">
         <h4>Tasks</h4>
         <ul class="checklist">
-          <li>Pydantic step/plan schema (order, description, tool_hint, sensitive flag)</li>
-          <li>Planner prompt producing ordered, tool-executable steps</li>
-          <li>Schema validation with one retry on parse failure</li>
-          <li>CLI test harness — no frontend yet</li>
+          <li class="done">Pydantic step/plan schema (order, description, tool_hint, sensitive flag)</li>
+          <li class="done">Planner prompt producing ordered, tool-executable steps</li>
+          <li class="done">Schema validation with one retry on parse failure</li>
+          <li class="done">CLI test harness — no frontend yet</li>
         </ul>
       </div>
       <div class="phase-col">
         <h4>Deliverables</h4>
         <ul class="checklist">
-          <li>Planner node with LLM integration (Claude / Ollama swap via env var)</li>
-          <li>PlanSchema + StepSchema data models</li>
-          <li>Plan validation tests</li>
-          <li>CLI to generate and inspect plans</li>
+          <li class="done">Planner node with LLM integration (Claude / Ollama swap via env var)</li>
+          <li class="done">PlanSchema + StepSchema data models</li>
+          <li class="done">Plan validation tests</li>
+          <li class="done">CLI to generate and inspect plans</li>
         </ul>
       </div>
       <div class="phase-outcome">
@@ -302,31 +302,31 @@
   <div class="section-label">Phase 2 · Jul 18–21</div>
   <div class="phase">
     <div class="phase-header">
-      <div class="phase-num future">2</div>
+      <div class="phase-num done">2</div>
       <div class="phase-title">
         <h3>Executor + Fixed Tool Layer</h3>
         <div class="phase-meta">4 days · CLI only</div>
         <div class="phase-arm">Building toward Arm 2</div>
       </div>
-      <div class="phase-status future">Pending</div>
+      <div class="phase-status done">Complete</div>
     </div>
     <div class="phase-body">
       <div class="phase-col">
         <h4>Tasks</h4>
         <ul class="checklist">
-          <li>Wire up search (Tavily), code-exec sandbox (unhardened stub for now), file I/O tools</li>
-          <li>Tool registry lookup by <code>tool_hint</code></li>
-          <li>Executor runs one PENDING step at a time</li>
-          <li>Capture structured success/error result per step</li>
+          <li class="done">Wire up search (Tavily), code-exec sandbox (unhardened stub for now), file I/O tools</li>
+          <li class="done">Tool registry lookup by <code>tool_hint</code></li>
+          <li class="done">Executor runs one PENDING step at a time</li>
+          <li class="done">Capture structured success/error result per step</li>
         </ul>
       </div>
       <div class="phase-col">
         <h4>Deliverables</h4>
         <ul class="checklist">
-          <li>Executor node with tool integration</li>
-          <li>Fixed tool registry (search, sandbox stub, file I/O)</li>
-          <li>Step status tracking (PENDING/RUNNING/DONE/FAILED)</li>
-          <li>Structured tool_output / error persistence</li>
+          <li class="done">Executor node with tool integration</li>
+          <li class="done">Fixed tool registry (search, sandbox stub, file I/O)</li>
+          <li class="done">Step status tracking (PENDING/RUNNING/DONE/FAILED)</li>
+          <li class="done">Structured tool_output / error persistence</li>
         </ul>
       </div>
       <div class="phase-outcome">
@@ -355,19 +355,19 @@
   <div class="section-label">Phase 3 · Jul 22–24</div>
   <div class="phase">
     <div class="phase-header">
-      <div class="phase-num future">3</div>
+      <div class="phase-num active">3</div>
       <div class="phase-title">
         <h3>Replanner + Termination Logic</h3>
         <div class="phase-meta">3 days · CLI only</div>
         <div class="phase-arm">Arm 2 complete at end of this phase</div>
       </div>
-      <div class="phase-status future">Pending</div>
+      <div class="phase-status active">In Progress</div>
     </div>
     <div class="phase-body">
       <div class="phase-col">
         <h4>Tasks</h4>
         <ul class="checklist">
-          <li>Replan prompt reviewing step result vs. remaining plan</li>
+          <li class="done">Replan prompt reviewing step result vs. remaining plan</li>
           <li>Replan triggers ONLY on FAILED status or explicit "plan invalid" signal — never on default success (anti-thrashing rule)</li>
           <li>Hard step-count cap with partial-answer termination</li>
           <li>Test on 10 hand-crafted multi-step goals</li>
@@ -376,7 +376,7 @@
       <div class="phase-col">
         <h4>Deliverables</h4>
         <ul class="checklist">
-          <li>Replanner node with continue/revise/complete decision</li>
+          <li class="done">Replanner node with continue/revise/complete decision</li>
           <li>New plan_version persisted on every revision</li>
           <li>Step-cap guard</li>
           <li>End-to-end planner → executor → replanner loop</li>
