@@ -35,7 +35,8 @@ def main():
     # Create initial state
     initial_state: State = {
         "input": user_input,
-        "plan": None
+        "plan": None,
+        "replan_count": 0,
     }
     
     # Invoke the graph with required config
@@ -67,7 +68,19 @@ def main():
             
             if step.error:
                 print(f"  └─ Error: {step.error}")
-        
+
+        # Print the LLM-synthesized final answer explicitly. This is distinct
+        # from any individual step's raw result — previously the CLI never
+        # surfaced this at all, so what looked like "the final answer" was
+        # actually just whichever step happened to run last.
+        print(f"\n{'=' * 80}")
+        print("🧾 Final Answer:")
+        print("=" * 80)
+        if plan.final_answer:
+            print(plan.final_answer)
+        else:
+            print("(No synthesized final answer was produced for this run.)")
+
         # Save to file
         output_dir = os.path.join(grandparent_dir, "plans")
         os.makedirs(output_dir, exist_ok=True)

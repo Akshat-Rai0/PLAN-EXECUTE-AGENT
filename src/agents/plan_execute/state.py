@@ -26,6 +26,7 @@ class Step(BaseModel):
 class Plan(BaseModel):
     goal: str
     subtasks: list[Step] = Field(min_length=1)
+    final_answer: Optional[str] = None
 
 
 def replace_plan(existing: Optional[Plan], new: Optional[Plan]) -> Optional[Plan]:
@@ -33,6 +34,12 @@ def replace_plan(existing: Optional[Plan], new: Optional[Plan]) -> Optional[Plan
     return new
 
 
+def sum_replan_count(existing: Optional[int], new: Optional[int]) -> int:
+    """Reducer function to accumulate replan_count across graph steps."""
+    return (existing or 0) + (new or 0)
+
+
 class State(ExtTypedDict):
     input: str
     plan: Annotated[Optional[Plan], replace_plan]
+    replan_count: Annotated[int, sum_replan_count]

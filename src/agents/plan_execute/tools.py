@@ -66,7 +66,7 @@ def _strip_markdown_fences(content: str) -> str:
     return content
 
 
-def breakdown_task(goal: str) -> Plan:
+def breakdown_task(goal: str, context: list[str] = None) -> Plan:
     """
     Break down a goal into a validated Plan of Steps.
     Retries up to MAX_RETRIES times if the model returns invalid JSON
@@ -76,7 +76,11 @@ def breakdown_task(goal: str) -> Plan:
     callers must handle this rather than receiving silently broken data.
     """
     llm = get_llm()
-    prompt = PROMPT_TEMPLATE.format(goal=goal)
+    if context:
+        context_str = "\n".join(context)
+        prompt = PROMPT_TEMPLATE.format(goal=goal) + f"\n\nContext of completed/failed steps:\n{context_str}\n\nPlease revise/update the remaining steps of the plan based on the context above. Keep only pending and revised steps in the returned list of subtasks."
+    else:
+        prompt = PROMPT_TEMPLATE.format(goal=goal)
     last_error = None
 
     for attempt in range(MAX_RETRIES + 1):
@@ -93,7 +97,10 @@ def breakdown_task(goal: str) -> Plan:
             return plan
         except (json.JSONDecodeError, ValidationError) as e:
             last_error = e
-            prompt = PROMPT_TEMPLATE.format(goal=goal) + RETRY_SUFFIX.format(error=str(e))
+            if context:
+                prompt = PROMPT_TEMPLATE.format(goal=goal) + f"\n\nContext of completed/failed steps:\n{context_str}\n\nPlease revise/update the remaining steps of the plan based on the context above. Keep only pending and revised steps in the returned list of subtasks." + RETRY_SUFFIX.format(error=str(e))
+            else:
+                prompt = PROMPT_TEMPLATE.format(goal=goal) + RETRY_SUFFIX.format(error=str(e))
             continue
 
     raise RuntimeError(

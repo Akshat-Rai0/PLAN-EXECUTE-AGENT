@@ -79,3 +79,9 @@ def tavily_search(query: str, search_depth: str = "basic") -> str:
         return "\n\n".join(filtered_results)
 
     return "No results found."
+
+
+def today_date() -> str:
+    """Return today's date in YYYY-MM-DD format."""
+    from datetime import datetime
+    return datetime.now().strftime("%Y-%m-%d")

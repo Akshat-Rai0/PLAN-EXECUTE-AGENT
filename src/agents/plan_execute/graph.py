@@ -1,7 +1,7 @@
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, START, StateGraph
 
-from .nodes import plan_node, executor_node, tavily_search_node, synthesize_node
+from .nodes import plan_node, executor_node, tavily_search_node, synthesize_node , replaner
 from .state import State, StepStatus
 
 
@@ -18,29 +18,52 @@ def _has_pending_steps(state: State) -> str:
 def _route_to_tool(state: State) -> str:
     """
     Route executor to the appropriate tool node based on the RUNNING step's tool_hint.
-    
+
     Returns:
         "tavily_search" if tool_hint is "web_search" or "tavily_search"
         "stub" for other tool hints (placeholder for future tools)
-        "end" if no RUNNING step found (all steps completed)
+        "synthesize" if tool_hint is "none", OR if no RUNNING step remains
+            (i.e. all steps are DONE/FAILED). Previously this fell through to
+            "end", which skipped synthesis entirely whenever the planner
+            didn't happen to emit a final tool_hint="none" step — silently
+            discarding the LLM-synthesized answer. Every run should reach
+            synthesis once there's nothing left to execute.
     """
     plan = state["plan"]
     if plan is None:
         return "end"
-    
+
     running_step = next((s for s in plan.subtasks if s.status == StepStatus.RUNNING), None)
     if running_step is None:
-        # No running step - all steps must be DONE or FAILED
-        return "end"
-    
+        # No running step and no PENDING left (executor only sets RUNNING when
+        # there's a PENDING step to pick up) - all steps are DONE/FAILED.
+        # Always route to synthesize so a final answer is produced.
+        return "synthesize"
+
     tool_hint = running_step.tool_hint.lower()
     if tool_hint in ("web_search", "tavily_search"):
         return "tavily_search"
     if tool_hint == "none":
         return "synthesize"
-    
+
     # Placeholder for other tools - will route to stub for now
     return "stub"
+
+
+def _route_after_tool(state: State) -> str:
+    """
+    Route after tool execution:
+    - Route to "replaner" if any step failed (status=FAILED).
+    - Otherwise, route back to "executor".
+    """
+    plan = state["plan"]
+    if plan is None:
+        return "executor"
+    
+    if any(s.status == StepStatus.FAILED for s in plan.subtasks):
+        return "replaner"
+        
+    return "executor"
 
 
 def build_graph():
@@ -58,6 +81,7 @@ def build_graph():
     graph.add_node("executor", executor_node)
     graph.add_node("tavily_search", tavily_search_node)
     graph.add_node("synthesize", synthesize_node)
+    graph.add_node("replaner", replaner)
     
     # Stub node for tools not yet implemented
     def stub_node(state: State) -> dict:
@@ -90,9 +114,26 @@ def build_graph():
         },
     )
     
-    # After tool execution, route back to executor to check for more steps
-    graph.add_edge("tavily_search", "executor")
-    graph.add_edge("stub", "executor")
+    # After tool execution, conditionally route to replaner or back to executor
+    graph.add_conditional_edges(
+        "tavily_search",
+        _route_after_tool,
+        {
+            "replaner": "replaner",
+            "executor": "executor",
+        },
+    )
+    graph.add_conditional_edges(
+        "stub",
+        _route_after_tool,
+        {
+            "replaner": "replaner",
+            "executor": "executor",
+        },
+    )
+    
+    # After replaning, route back to executor to run the new plan
+    graph.add_edge("replaner", "executor")
     
     # After synthesis, we're done
     graph.add_edge("synthesize", END)

@@ -17,12 +17,21 @@ def _build_anthropic():
     model = os.getenv("CLAUDE_MODEL", "claude-opus-4-8")
     return ChatAnthropic(model=model, temperature=0)
 
+def _build_groq():
+    from langchain_groq import ChatGroq
+    model = os.getenv("GROQ_MODEL", "qwen/qwen3.6-27b")
+    api_key = os.getenv("GROQ_API_KEY")
+    if not api_key:
+        raise ValueError("GROQ_API_KEY is not set in the environment variables.")
+    return ChatGroq(model=model, api_key=api_key, temperature=0)
 
 def get_llm():
     if LLM_PROVIDER == "ollama":
         return _build_ollama()
     elif LLM_PROVIDER == "anthropic":
         return _build_anthropic()
+    elif LLM_PROVIDER == "groq":
+        return _build_groq()
     raise ValueError(f"Unknown LLM_PROVIDER={LLM_PROVIDER!r}")
 
 
