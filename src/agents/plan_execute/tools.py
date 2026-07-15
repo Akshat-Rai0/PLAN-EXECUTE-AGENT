@@ -18,6 +18,9 @@ Constraints:
 - Each step should be specific and executable
 - Steps should follow a logical sequence
 - Keep steps concise but descriptive
+- For questions about current events (sports, news, tournaments, live data), first determine the current status/state before searching for outcomes or winners
+- Avoid assumptions about event completion when dealing with time-sensitive topics
+- If the goal references "the most recent match," treat that literally as the latest completed fixture — do not assume it means the tournament final unless the goal says so explicitly
 
 Goal:
 {goal}

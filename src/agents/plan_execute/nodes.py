@@ -31,7 +31,16 @@ def tavily_search_node(state: State) -> dict:
     try:
         # Extract search query from the task description, including goal context
         query = f"{plan.goal} — {current_step.task}"
-        result = tavily_search(query)
+        
+        # Determine search depth based on step type
+        # Use "basic" for status-check queries, "advanced" for detailed searches
+        task_lower = current_step.task.lower()
+        status_check_keywords = ["status", "current stage", "has the", "is the", "what is the current", "ongoing", "progress"]
+        is_status_check = any(keyword in task_lower for keyword in status_check_keywords)
+        
+        search_depth = "basic" if is_status_check else "advanced"
+        
+        result = tavily_search(query, search_depth=search_depth)
         current_step.status = StepStatus.DONE
         current_step.result = result
     except Exception as e:
@@ -90,18 +99,18 @@ def synthesize_node(state: State) -> dict:
         return {"plan": plan}
 
     # Build synthesis prompt
-    synthesis_prompt = f"""Role:
-You are a synthesis assistant that combines information from multiple steps into a comprehensive answer.
+    synthesis_prompt = f"""You are given raw, noisy scraped web content related to: "{plan.goal}"
 
-Original Goal:
-{plan.goal}
+The content contains navigation menus, stadium tables, and unrelated trivia mixed in with the actual relevant facts. Your job:
 
-Results from each step:
-{chr(10).join(step_results)}
+1. Find the specific fact(s) that answer the goal — dates, scores, team names, match stage (group/knockout/semi/final).
+2. Ignore boilerplate, image alt-text, navigation links, stadium capacity tables, and unrelated historical trivia.
+3. Determine the MOST RECENT dated event relevant to the goal — sort by date, not by position in the text.
+4. If the specific event asked about (e.g., "the final") hasn't occurred, identify the most recent completed match instead from the data provided, and answer using that — do not simply state that no winner was found.
+5. Give a direct, confident answer grounded only in facts present in the search results. Do not hedge with "consult a live source" — you have the current data, use it.
 
-Task:
-Synthesize the above results into a clear, comprehensive answer to the original goal.
-Focus on the key information and provide a well-structured response."""
+Search results:
+{chr(10).join(step_results)}"""
 
     llm = get_llm()
     messages = [
