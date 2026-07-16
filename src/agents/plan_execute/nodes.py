@@ -1,3 +1,5 @@
+from datetime import date
+
 from .state import State, StepStatus
 from .tools import breakdown_task
 from src.tools.registry import tavily_search
@@ -43,6 +45,83 @@ def tavily_search_node(state: State) -> dict:
         result = tavily_search(query, search_depth=search_depth)
         current_step.status = StepStatus.DONE
         current_step.result = result
+    except Exception as e:
+        current_step.status = StepStatus.FAILED
+        current_step.error = str(e)
+
+    return {"plan": plan}
+
+
+def reason_node(state: State) -> dict:
+    """
+    Execute a step whose tool_hint is "none" — i.e. a pure-reasoning step with
+    no external tool call (e.g. "determine the current date", "plan the
+    itinerary", "create a budget", "identify the winner from prior results").
+
+    Previously these steps were routed to `stub_node`, which just marked them
+    DONE with a placeholder string and did no actual work. That silently
+    dropped steps the planner considered load-bearing — e.g. "determine the
+    current year" never running meant downstream searches had no year anchor,
+    and "plan the itinerary" never running meant a trip-planning goal's core
+    deliverable was just missing from the final answer.
+
+    This node makes a real LLM call, grounded in:
+      - the current date (so date/recency-dependent reasoning steps like
+        "what year is it" or "has this event happened yet" have a real anchor
+        instead of falling back on the model's stale training data)
+      - the original goal
+      - all prior DONE steps' results, so this step can build on earlier
+        research (e.g. "plan the itinerary" can use the weather/accommodation
+        results already gathered)
+    """
+    plan = state["plan"]
+    if plan is None:
+        raise RuntimeError("reason_node called with no plan in state")
+
+    current_step = next((s for s in plan.subtasks if s.status == StepStatus.RUNNING), None)
+    if current_step is None:
+        raise RuntimeError("reason_node called with no RUNNING step")
+
+    try:
+        prior_context = []
+        for step in plan.subtasks:
+            if step.id == current_step.id:
+                break
+            if step.status == StepStatus.DONE and step.result:
+                result_str = step.result
+                if len(result_str) > 1500:
+                    result_str = result_str[:1500] + "... [truncated]"
+                prior_context.append(f"Step {step.id}: {step.task}\nResult: {result_str}")
+
+        context_block = "\n\n".join(prior_context) if prior_context else "(no prior step results)"
+        today = date.today().isoformat()
+
+        reasoning_prompt = f"""Today's date is {today}.
+
+Overall goal: "{plan.goal}"
+
+You are performing ONE step of a larger plan toward that goal. This step requires reasoning/synthesis, not an external tool call.
+
+Step to complete: {current_step.task}
+
+Prior step results so far:
+{context_block}
+
+Instructions:
+- Complete this step directly and concretely, using today's date and the prior results above where relevant.
+- If this step depends on information not present in the prior results and not derivable from today's date, say plainly what's missing rather than guessing.
+- Do not restate the whole goal — just produce the output this specific step calls for.
+- Be concise but complete."""
+
+        llm = get_llm()
+        messages = [
+            SystemMessage(content="You are a careful reasoning assistant completing one step of a larger plan."),
+            HumanMessage(content=reasoning_prompt),
+        ]
+        response = llm.invoke(messages)
+
+        current_step.status = StepStatus.DONE
+        current_step.result = response.content
     except Exception as e:
         current_step.status = StepStatus.FAILED
         current_step.error = str(e)

@@ -1,7 +1,7 @@
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, START, StateGraph
 
-from .nodes import plan_node, executor_node, tavily_search_node, synthesize_node , replaner
+from .nodes import plan_node, executor_node, tavily_search_node, synthesize_node, replaner, reason_node
 from .state import State, StepStatus
 
 
@@ -21,13 +21,19 @@ def _route_to_tool(state: State) -> str:
 
     Returns:
         "tavily_search" if tool_hint is "web_search" or "tavily_search"
-        "stub" for other tool hints (placeholder for future tools)
-        "synthesize" if tool_hint is "none", OR if no RUNNING step remains
-            (i.e. all steps are DONE/FAILED). Previously this fell through to
-            "end", which skipped synthesis entirely whenever the planner
-            didn't happen to emit a final tool_hint="none" step — silently
-            discarding the LLM-synthesized answer. Every run should reach
-            synthesis once there's nothing left to execute.
+        "reason" if tool_hint is "none" — a pure-reasoning step, now handled
+            by reason_node with a real LLM call instead of being silently
+            no-op'd by stub_node
+        "stub" for any other/unimplemented tool hint (e.g. "code_executor",
+            "file_editor") — still a placeholder until those tools exist
+        "synthesize" only once no RUNNING step remains (all steps DONE/FAILED).
+            This is the sole trigger for global synthesis now. Previously,
+            tool_hint == "none" on ANY running step (not just a final one)
+            routed straight to synthesize — so if the planner emitted more
+            than one tool_hint="none" step (e.g. an "analyze results" step
+            followed by a "compile answer" step), the first one would
+            short-circuit the whole rest of the plan straight to synthesis,
+            silently skipping every step after it.
     """
     plan = state["plan"]
     if plan is None:
@@ -44,9 +50,9 @@ def _route_to_tool(state: State) -> str:
     if tool_hint in ("web_search", "tavily_search"):
         return "tavily_search"
     if tool_hint == "none":
-        return "synthesize"
+        return "reason"
 
-    # Placeholder for other tools - will route to stub for now
+    # Any other/unimplemented tool hint falls through to "stub" for now.
     return "stub"
 
 
@@ -80,10 +86,13 @@ def build_graph():
     graph.add_node("plan", plan_node)
     graph.add_node("executor", executor_node)
     graph.add_node("tavily_search", tavily_search_node)
+    graph.add_node("reason", reason_node)
     graph.add_node("synthesize", synthesize_node)
     graph.add_node("replaner", replaner)
     
-    # Stub node for tools not yet implemented
+    # Stub node for tools not yet implemented (e.g. code_executor, file_editor).
+    # NOTE: tool_hint == "none" no longer routes here — see reason_node, which
+    # gives those steps a real LLM call instead of a silent no-op.
     def stub_node(state: State) -> dict:
         """Placeholder for tools not yet implemented."""
         plan = state["plan"]
@@ -108,6 +117,7 @@ def build_graph():
         _route_to_tool,
         {
             "tavily_search": "tavily_search",
+            "reason": "reason",
             "synthesize": "synthesize",
             "stub": "stub",
             "end": END,
@@ -117,6 +127,14 @@ def build_graph():
     # After tool execution, conditionally route to replaner or back to executor
     graph.add_conditional_edges(
         "tavily_search",
+        _route_after_tool,
+        {
+            "replaner": "replaner",
+            "executor": "executor",
+        },
+    )
+    graph.add_conditional_edges(
+        "reason",
         _route_after_tool,
         {
             "replaner": "replaner",
