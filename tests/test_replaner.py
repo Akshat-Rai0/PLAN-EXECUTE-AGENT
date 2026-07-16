@@ -28,8 +28,11 @@ def test_replan_count_accumulates():
 def test_max_replan_guard_terminates():
     """
     MAX_REPLAN guard actually terminates.
-    Force replan_count >= MAX_REPLAN, assert remaining PENDING/RUNNING steps get marked FAILED
-    with the limit-exceeded message, and breakdown_task is NOT called (no wasted LLM call once terminated).
+    Force replan_count >= MAX_REPLAN, assert remaining PENDING/RUNNING steps get
+    marked CANCELLED and moved to plan.cancelled_steps (not left in subtasks as
+    FAILED — FAILED implies "attempted and broke", which is misleading for a
+    step that never actually ran). breakdown_task must NOT be called (no wasted
+    LLM call once terminated).
     """
     plan = Plan(
         goal="test goal",
@@ -50,14 +53,20 @@ def test_max_replan_guard_terminates():
         
         # breakdown_task should NOT be called (no wasted LLM call)
         mock_breakdown.assert_not_called()
-        
-        # PENDING and RUNNING steps should be marked FAILED
-        assert result["plan"].subtasks[1].status == StepStatus.FAILED
-        assert result["plan"].subtasks[2].status == StepStatus.FAILED
-        
-        # Error message should indicate limit exceeded
-        assert "Replan limit" in result["plan"].subtasks[1].error
-        assert "exceeded" in result["plan"].subtasks[1].error.lower()
+
+        # DONE step remains in subtasks, unaffected
+        assert len(result["plan"].subtasks) == 1
+        assert result["plan"].subtasks[0].status == StepStatus.DONE
+
+        # PENDING and RUNNING steps should be CANCELLED and moved out of
+        # subtasks into cancelled_steps
+        assert len(result["plan"].cancelled_steps) == 2
+        cancelled_ids = {s.id for s in result["plan"].cancelled_steps}
+        assert cancelled_ids == {2, 3}
+        for step in result["plan"].cancelled_steps:
+            assert step.status == StepStatus.CANCELLED
+            assert "Replan limit" in step.error
+            assert "exceeded" in step.error.lower()
 
 
 def test_done_steps_preserved_renumbered():

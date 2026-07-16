@@ -209,6 +209,9 @@ def test_e2e_max_replan_termination():
     """
     End-to-end test that verifies MAX_REPLAN guard terminates execution.
     Simplified to avoid msgpack serialization issues with MagicMock.
+
+    PENDING/RUNNING steps at termination should be CANCELLED and moved to
+    plan.cancelled_steps, not left in subtasks marked FAILED.
     """
     # Test the guard logic directly at the node level instead of full graph
     from src.agents.plan_execute.nodes import MAX_REPLAN
@@ -231,10 +234,13 @@ def test_e2e_max_replan_termination():
         
         # breakdown_task should NOT be called (no wasted LLM call)
         mock_breakdown.assert_not_called()
-        
-        # PENDING steps should be marked FAILED
-        assert result["plan"].subtasks[1].status == StepStatus.FAILED
-        assert "Replan limit" in result["plan"].subtasks[1].error
+
+        # PENDING step should be CANCELLED and moved to cancelled_steps
+        assert len(result["plan"].subtasks) == 1
+        assert len(result["plan"].cancelled_steps) == 1
+        cancelled_step = result["plan"].cancelled_steps[0]
+        assert cancelled_step.status == StepStatus.CANCELLED
+        assert "Replan limit" in cancelled_step.error
 
 
 def test_e2e_tool_hint_none_mid_plan():
