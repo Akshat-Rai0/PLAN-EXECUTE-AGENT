@@ -113,6 +113,10 @@
     .phase-status { grid-column: 1 / -1; justify-self: start; } .cap-grid { grid-template-columns: 1fr; }
   }
 </style>
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+  mermaid.initialize({ startOnLoad: true });
+</script>
 </head>
 <body>
 
@@ -121,6 +125,7 @@
   <h1>What You Can Do <em>After Each Phase</em></h1>
   <p class="hero-sub">Ten build phases from LangGraph foundations through production deploy, matching the dated timeline (Jul 7 – Aug 10) and feature scope in the Project Spec. Arm labels, "synthesis" terminology, and phase content have been corrected to match <a href="plan-and-execute-agent.html" style="color:#c6dced;">plan-and-execute-agent.html</a> and <a href="system-wiring.html" style="color:#c6dced;">system-wiring.html</a> — see the changelog below for what changed from v1.</p>
   <div class="nav-links">
+    <a href="#langgraph-structure">LangGraph Structure</a>
     <a href="#changelog">Changelog</a>
     <a href="#overview">Overview</a>
     <a href="#phase-0">Phase 0</a>
@@ -139,6 +144,40 @@
 </div>
 
 <div class="container">
+
+<div class="section" id="langgraph-structure">
+  <div class="section-label">LangGraph Structure</div>
+  <h2>Current Implementation Flow</h2>
+  <pre class="mermaid">
+graph TD
+    START([START]) --> plan_node[plan_node]
+    plan_node --> executor_node[executor_node]
+    
+    executor_node -->|tool_hint: web_search/tavily_search| tavily_search_node[tavily_search_node]
+    executor_node -->|tool_hint: none| synthesize_node[synthesize_node]
+    executor_node -->|other tool hints| stub_node[stub_node]
+    executor_node -->|no RUNNING step| synthesize_node
+    
+    tavily_search_node -->|step failed| replaner_node[replaner_node]
+    tavily_search_node -->|step success| executor_node
+    
+    stub_node -->|step failed| replaner_node
+    stub_node -->|step success| executor_node
+    
+    replaner_node --> executor_node
+    
+    synthesize_node --> END([END])
+    
+    style START fill:#e1f5ff
+    style plan_node fill:#fff4e1
+    style executor_node fill:#ffe1f5
+    style tavily_search_node fill:#e1ffe1
+    style stub_node fill:#f5e1ff
+    style replaner_node fill:#ffe1e1
+    style synthesize_node fill:#e1f5ff
+    style END fill:#e1f5ff
+  </pre>
+</div>
 
 <div class="section" id="changelog">
   <div class="section-label">Changelog · v1 → v2</div>
