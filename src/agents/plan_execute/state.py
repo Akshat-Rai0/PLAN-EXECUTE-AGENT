@@ -39,7 +39,13 @@ def sum_replan_count(existing: Optional[int], new: Optional[int]) -> int:
     return (existing or 0) + (new or 0)
 
 
+def sum_steps_executed(existing: Optional[int], new: Optional[int]) -> int:
+    """Reducer function to accumulate total executed steps across the run."""
+    return (existing or 0) + (new or 0)
+
+
 class State(ExtTypedDict):
     input: str
     plan: Annotated[Optional[Plan], replace_plan]
     replan_count: Annotated[int, sum_replan_count]
+    steps_executed: Annotated[int, sum_steps_executed]

@@ -1,7 +1,7 @@
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, START, StateGraph
 
-from .nodes import plan_node, executor_node, tavily_search_node, synthesize_node, replaner, reason_node
+from .nodes import plan_node, executor_node, tavily_search_node, synthesize_node, replaner, reason_node, MAX_TOTAL_STEPS
 from .state import State, StepStatus
 
 
@@ -59,12 +59,22 @@ def _route_to_tool(state: State) -> str:
 def _route_after_tool(state: State) -> str:
     """
     Route after tool execution:
+    - Force termination if step cap exceeded.
     - Route to "replaner" if any step failed (status=FAILED).
     - Otherwise, route back to "executor".
     """
     plan = state["plan"]
     if plan is None:
         return "executor"
+    
+    # Check step cap - force termination if exceeded
+    if state.get("steps_executed", 0) >= MAX_TOTAL_STEPS:
+        # Mark all remaining PENDING/RUNNING steps as FAILED
+        for s in plan.subtasks:
+            if s.status in (StepStatus.PENDING, StepStatus.RUNNING):
+                s.status = StepStatus.FAILED
+                s.error = f"Step cap ({MAX_TOTAL_STEPS}) exceeded - execution terminated"
+        return "synthesize"
     
     if any(s.status == StepStatus.FAILED for s in plan.subtasks):
         return "replaner"
@@ -104,7 +114,7 @@ def build_graph():
             running_step.status = StepStatus.DONE
             running_step.result = f"[stub] Tool not implemented for hint: {running_step.tool_hint}"
         
-        return {"plan": plan}
+        return {"plan": plan, "steps_executed": 1}
     
     graph.add_node("stub", stub_node)
 
@@ -124,13 +134,14 @@ def build_graph():
         },
     )
     
-    # After tool execution, conditionally route to replaner or back to executor
+    # After tool execution, conditionally route to replaner, executor, or synthesize
     graph.add_conditional_edges(
         "tavily_search",
         _route_after_tool,
         {
             "replaner": "replaner",
             "executor": "executor",
+            "synthesize": "synthesize",
         },
     )
     graph.add_conditional_edges(
@@ -139,6 +150,7 @@ def build_graph():
         {
             "replaner": "replaner",
             "executor": "executor",
+            "synthesize": "synthesize",
         },
     )
     graph.add_conditional_edges(
@@ -147,6 +159,7 @@ def build_graph():
         {
             "replaner": "replaner",
             "executor": "executor",
+            "synthesize": "synthesize",
         },
     )
     

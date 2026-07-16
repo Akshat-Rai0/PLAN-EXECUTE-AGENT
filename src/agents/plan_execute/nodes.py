@@ -206,7 +206,7 @@ def tavily_search_node(state: State) -> dict:
         current_step.status = StepStatus.FAILED
         current_step.error = str(e)
 
-    return {"plan": plan}
+    return {"plan": plan, "steps_executed": 1}
 
 
 def reason_node(state: State) -> dict:
@@ -283,7 +283,7 @@ Instructions:
         current_step.status = StepStatus.FAILED
         current_step.error = str(e)
 
-    return {"plan": plan}
+    return {"plan": plan, "steps_executed": 1}
 
 
 def executor_node(state: State) -> dict:
@@ -368,6 +368,7 @@ Search results:
     return {"plan": plan}
 
 MAX_REPLAN = 4
+MAX_TOTAL_STEPS = 15
 
 
 def replaner(state: State) -> dict:
