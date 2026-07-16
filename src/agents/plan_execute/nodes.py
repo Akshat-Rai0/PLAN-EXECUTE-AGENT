@@ -1,9 +1,9 @@
 import re
 from datetime import date
 
-from .state import State, StepStatus
+from .state import State, StepStatus, Step, Plan
 from .tools import breakdown_task
-from src.tools.registry import tavily_search
+from src.tools.registry import tavily_search, today_date
 from langchain_core.messages import HumanMessage, SystemMessage
 from .llm import get_llm
 
@@ -74,11 +74,110 @@ def _extract_search_context(plan, current_step) -> str:
     return " ".join(context_parts)
 
 
+# Words/phrases that signal a goal is asking about something time-relative —
+# "latest", "recent", "current", "this year", etc. For these goals, knowing
+# today's actual date is load-bearing for every downstream search (see: "who
+# won the world cup this year" defaulting to 2022 because nothing in the
+# pipeline was anchored to the real current date). Rather than relying on the
+# LLM planner to remember to add a "determine the current date" step — which
+# it does inconsistently — we detect this deterministically from the goal
+# text and prepend a real date step every time, guaranteed, before the plan
+# is even generated.
+#
+# NOTE: "todays?" (with an optional trailing s, no apostrophe needed) covers
+# both "today's date" and the common typed form "todays date" — \btoday\b
+# alone does NOT match "todays", since there's no word boundary between the
+# "y" and the "s" (both are word characters), which was the original bug:
+# "whats todays date ?" went completely undetected and fell through to a full
+# unnecessary web search instead of using today_date() directly.
+_RECENCY_KEYWORDS = re.compile(
+    r"\b(latest|recent(?:ly)?|current(?:ly)?|now|todays?|this year|this month|"
+    r"this week|so far|up[- ]to[- ]date|as of|ongoing|most recent)\b",
+    re.IGNORECASE,
+)
+
+# Goals that are PURELY asking for the current date/day/time — as opposed to
+# goals that merely reference recency in passing while asking about something
+# else (e.g. "who won the world cup this year"). For these, planning and
+# searching is pure waste: the whole goal is answered by a single
+# today_date() call. Matched narrowly on purpose — this should only catch
+# goals where the date genuinely IS the entire question, not just a
+# component of a larger one.
+_PURE_DATE_QUERY = re.compile(
+    r"^\s*(what'?s?|whats|what is|tell me|give me)?\s*"
+    r"(today'?s?|the current|current)\s*(date|day)\s*\??\s*$",
+    re.IGNORECASE,
+)
+
+
+def _is_pure_date_query(goal: str) -> bool:
+    """Return True if the goal is asking ONLY for today's date/day, with
+    nothing else — in which case planning and searching are unnecessary."""
+    return bool(_PURE_DATE_QUERY.match(goal.strip()))
+
+
+def _needs_date_anchor(goal: str) -> bool:
+    """Return True if the goal contains recency language that needs today's
+    actual date resolved before anything else runs."""
+    return bool(_RECENCY_KEYWORDS.search(goal))
+
+
+def _make_date_anchor_step(next_id: int) -> Step:
+    """
+    Build a deterministic first step that calls today_date() directly —
+    no LLM call, no search, just the real system date — and prepend it to
+    the plan. Marked DONE immediately since there's nothing to execute; the
+    fact is already known.
+    """
+    return Step(
+        id=next_id,
+        task="Determine today's actual date to anchor all recency-related reasoning and searches in this plan.",
+        tool_hint="none",
+        status=StepStatus.DONE,
+        result=f"Today's date is {today_date()}.",
+    )
+
+
 def plan_node(state: State) -> dict:
-    """Break down the input task into a plan using the breakdown_task function."""
+    """Break down the input task into a plan using the breakdown_task function.
+
+    Two deterministic shortcuts, both bypassing the LLM planner's own
+    (inconsistent) judgment about when the date matters:
+
+    1. Pure date queries ("what's today's date?", "whats todays date?") skip
+       planning and search entirely — a single DONE step with the real date
+       and an immediate final_answer is the whole plan. Previously even this
+       trivial case triggered a full web search for something the process
+       already knows via today_date().
+
+    2. Goals that merely REFERENCE recency ("who won the world cup this
+       year") get a date-anchor step prepended before the LLM planner's own
+       steps, so every later step/search has the real date available from
+       the start — see _extract_search_context, which auto-folds short prior
+       results (including this anchor) into later search queries.
+    """
     goal = state.get("input", "")
+
+    if _is_pure_date_query(goal):
+        anchor_step = _make_date_anchor_step(next_id=1)
+        plan = Plan(
+            goal=goal,
+            subtasks=[anchor_step],
+            final_answer=anchor_step.result,
+        )
+        return {"plan": plan}
+
     plan = breakdown_task(goal)
+
+    if _needs_date_anchor(goal):
+        anchor_step = _make_date_anchor_step(next_id=1)
+        # Renumber the planner's own steps to come after the anchor step.
+        for i, step in enumerate(plan.subtasks, start=2):
+            step.id = i
+        plan.subtasks = [anchor_step] + plan.subtasks
+
     return {"plan": plan}
+
 
 
 def _check_search_relevance(step_task: str, goal: str, result: str) -> tuple[bool, str]:
@@ -369,6 +468,66 @@ Search results:
 
 MAX_REPLAN = 4
 MAX_TOTAL_STEPS = 15
+MAX_CONSECUTIVE_IDENTICAL_REPLANS = 2
+
+
+def _check_replan_novelty(previous_context: list[str], new_context: list[str]) -> tuple[bool, str]:
+    """
+    Use LLM to determine if new replan provides meaningful new information.
+    
+    Compares the previous step results with the new step results to detect
+    whether the replan actually produced new, useful information or if it's
+    essentially repeating the same search results.
+    
+    Returns (has_new_info, reason).
+    """
+    if not previous_context:
+        # First replan always has new info by definition
+        return True, "First replan - no previous context to compare"
+    
+    previous_str = "\n".join(previous_context)
+    new_str = "\n".join(new_context)
+    
+    # Truncate to keep the check fast and cheap
+    previous_excerpt = previous_str[:3000]
+    new_excerpt = new_str[:3000]
+    
+    novelty_prompt = f"""Previous step results:
+{previous_excerpt}
+
+New step results:
+{new_excerpt}
+
+Does the new step results contain genuinely new information that wasn't present in the previous results? Consider:
+- Are there new facts, dates, or specific details?
+- Is there new perspective or analysis?
+- Or is this essentially the same information rephrased?
+
+Respond in EXACTLY this format, nothing else:
+HAS_NEW_INFO: yes or no
+REASON: one short sentence explaining why"""
+
+    llm = get_llm()
+    messages = [
+        SystemMessage(content="You are a strict novelty checker. Be skeptical — rephrased or marginally different content counts as NOT having new information."),
+        HumanMessage(content=novelty_prompt),
+    ]
+    response = llm.invoke(messages)
+    content = response.content.strip()
+
+    has_new_info = True
+    reason = ""
+    for line in content.splitlines():
+        line = line.strip()
+        if line.upper().startswith("HAS_NEW_INFO:"):
+            has_new_info = "yes" in line.lower()
+        elif line.upper().startswith("REASON:"):
+            reason = line.split(":", 1)[1].strip() if ":" in line else ""
+
+    if not reason:
+        reason = "Could not determine novelty - assuming new information" if has_new_info else "No meaningful new information detected"
+
+    return has_new_info, reason
 
 
 def replaner(state: State) -> dict:
@@ -385,18 +544,37 @@ def replaner(state: State) -> dict:
     if plan is None:
         raise RuntimeError("replaner called with no plan in state")
 
+    # Check for consecutive identical replans - early termination
+    consecutive_count = state.get("consecutive_identical_replans", 0)
+    if consecutive_count >= MAX_CONSECUTIVE_IDENTICAL_REPLANS:
+        # Mark all remaining PENDING/RUNNING steps as CANCELLED
+        cancelled_steps = [s for s in plan.subtasks if s.status in (StepStatus.PENDING, StepStatus.RUNNING)]
+        for step in cancelled_steps:
+            step.status = StepStatus.CANCELLED
+            step.error = "Unable to find additional reliable information after multiple search attempts."
+        plan.cancelled_steps.extend(cancelled_steps)
+        # Remove cancelled steps from subtasks (filter by original status before we changed it)
+        plan.subtasks = [s for s in plan.subtasks if s.status not in (StepStatus.CANCELLED,)]
+        return {"plan": plan}
+
     # Check replan limit. `replan_count` accumulates via the sum_replan_count
     # reducer in state.py, so this reads the true total across all prior
     # replans, not just the delta from the last node call.
     current_replan_count = state.get("replan_count", 0)
     if current_replan_count >= MAX_REPLAN:
-        for step in plan.subtasks:
-            if step.status in (StepStatus.PENDING, StepStatus.RUNNING):
-                step.status = StepStatus.FAILED
-                step.error = f"Replan limit ({MAX_REPLAN}) exceeded - execution terminated"
+        # Mark all remaining PENDING/RUNNING steps as CANCELLED instead of FAILED
+        cancelled_steps = [s for s in plan.subtasks if s.status in (StepStatus.PENDING, StepStatus.RUNNING)]
+        for step in cancelled_steps:
+            step.status = StepStatus.CANCELLED
+            step.error = f"Replan limit ({MAX_REPLAN}) exceeded - execution terminated"
+        plan.cancelled_steps.extend(cancelled_steps)
+        # Remove cancelled steps from subtasks (filter by original status before we changed it)
+        plan.subtasks = [s for s in plan.subtasks if s.status not in (StepStatus.CANCELLED,)]
         return {"plan": plan}
 
-    # Collect the results of completed steps
+    # Collect the results of completed steps — this reflects what actually
+    # EXECUTED so far in this run (i.e. the outcome of the previous replan
+    # cycle, if any).
     completed_results = []
     done_steps = []
     for step in plan.subtasks:
@@ -406,6 +584,24 @@ def replaner(state: State) -> dict:
                 completed_results.append(f"Step {step.id}: {step.task}\nResult: {step.result}")
         elif step.status == StepStatus.FAILED and step.error:
             completed_results.append(f"Step {step.id}: {step.task}\nError: {step.error}")
+
+    # Compare THIS replan's incoming context (what execution has produced so
+    # far) against what was on hand at the time of the LAST replan. This is
+    # the correct comparison — real outcomes vs. real outcomes.
+    #
+    # Previously this compared `completed_results` against the results of the
+    # brand-new plan `breakdown_task` was about to generate — but a
+    # freshly-generated plan is always all-PENDING and has never executed, so
+    # that comparison was structurally guaranteed to find "no new info" every
+    # single time, regardless of whether the replan was actually repetitive.
+    # That caused premature termination after just one real replan cycle.
+    previous_context = state.get("last_replan_context")
+    if previous_context is None:
+        # No prior replan cycle to compare against yet (this is the first
+        # replan in the run) — nothing to judge novelty against.
+        has_new_info, novelty_reason = True, "First replan - no previous context to compare"
+    else:
+        has_new_info, novelty_reason = _check_replan_novelty(previous_context, completed_results)
 
     # Generate a new plan based on the original goal and the results of completed steps
     new_plan = breakdown_task(plan.goal, context=completed_results)
@@ -428,5 +624,22 @@ def replaner(state: State) -> dict:
     # the registered reducers (see state.py) to whatever this dict returns;
     # writing to `state` in place bypasses that and can cause inconsistent
     # results when nodes run concurrently or the graph replays from a checkpoint.
-    return {"plan": new_plan, "replan_count": 1}
+    if has_new_info:
+        # Reset consecutive counter when we have new information
+        return {
+            "plan": new_plan,
+            "replan_count": 1,
+            "consecutive_identical_replans": 0,
+            "last_replan_context": completed_results,
+        }
+    else:
+        # Increment consecutive counter when no new information. The reducer
+        # now REPLACES rather than accumulates, so we must compute the new
+        # value explicitly here rather than returning a delta of 1.
+        return {
+            "plan": new_plan,
+            "replan_count": 1,
+            "consecutive_identical_replans": consecutive_count + 1,
+            "last_replan_context": completed_results,
+        }
 

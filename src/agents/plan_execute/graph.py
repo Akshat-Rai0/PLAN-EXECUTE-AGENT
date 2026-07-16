@@ -61,6 +61,7 @@ def _route_after_tool(state: State) -> str:
     Route after tool execution:
     - Force termination if step cap exceeded.
     - Route to "replaner" if any step failed (status=FAILED).
+    - Route to "synthesize" if any step cancelled (status=CANCELLED).
     - Otherwise, route back to "executor".
     """
     plan = state["plan"]
@@ -69,11 +70,15 @@ def _route_after_tool(state: State) -> str:
     
     # Check step cap - force termination if exceeded
     if state.get("steps_executed", 0) >= MAX_TOTAL_STEPS:
-        # Mark all remaining PENDING/RUNNING steps as FAILED
+        # Mark all remaining PENDING/RUNNING steps as CANCELLED
         for s in plan.subtasks:
             if s.status in (StepStatus.PENDING, StepStatus.RUNNING):
-                s.status = StepStatus.FAILED
+                s.status = StepStatus.CANCELLED
                 s.error = f"Step cap ({MAX_TOTAL_STEPS}) exceeded - execution terminated"
+        return "synthesize"
+    
+    # Check for CANCELLED steps - terminate if any exist
+    if any(s.status == StepStatus.CANCELLED for s in plan.subtasks):
         return "synthesize"
     
     if any(s.status == StepStatus.FAILED for s in plan.subtasks):

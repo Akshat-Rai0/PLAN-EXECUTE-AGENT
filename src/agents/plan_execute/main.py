@@ -37,6 +37,7 @@ def main():
         "input": user_input,
         "plan": None,
         "replan_count": 0,
+        "consecutive_identical_replans": 0,
     }
     
     # Invoke the graph with required config
@@ -68,6 +69,13 @@ def main():
             
             if step.error:
                 print(f"  └─ Error: {step.error}")
+
+        # Display cancelled steps separately
+        if plan.cancelled_steps:
+            print(f"\n❌ Cancelled Steps (never executed):")
+            for step in plan.cancelled_steps:
+                print(f"\n  Step {step.id}: {step.task}")
+                print(f"  └─ Reason: {step.error}")
 
         # Print the LLM-synthesized final answer explicitly. This is distinct
         # from any individual step's raw result — previously the CLI never

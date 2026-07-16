@@ -11,6 +11,7 @@ class StepStatus(str, Enum):
     RUNNING = "RUNNING"
     DONE = "DONE"
     FAILED = "FAILED"
+    CANCELLED = "CANCELLED"
 
 
 class Step(BaseModel):
@@ -27,6 +28,7 @@ class Plan(BaseModel):
     goal: str
     subtasks: list[Step] = Field(min_length=1)
     final_answer: Optional[str] = None
+    cancelled_steps: list[Step] = Field(default_factory=list)
 
 
 def replace_plan(existing: Optional[Plan], new: Optional[Plan]) -> Optional[Plan]:
@@ -44,8 +46,37 @@ def sum_steps_executed(existing: Optional[int], new: Optional[int]) -> int:
     return (existing or 0) + (new or 0)
 
 
+def replace_last_replan_context(existing: Optional[list], new: Optional[list]) -> Optional[list]:
+    """
+    Reducer function to replace the stored 'last replan context' with the new
+    value. This holds the completed-step results from the most recent replan
+    cycle's EXECUTION (i.e. after its new steps actually ran), so the next
+    novelty check compares real outcomes against real outcomes instead of
+    comparing "results so far" against a freshly-generated, not-yet-executed
+    plan (which is always empty and made the novelty check always fail).
+    """
+    return new if new is not None else existing
+
+
+def replace_consecutive_identical_replans(existing: Optional[int], new: Optional[int]) -> int:
+    """
+    Reducer function that REPLACES (not accumulates) consecutive_identical_replans.
+
+    This value needs to reset to 0 when a replan finds new info, and jump to
+    an explicit count when it doesn't — replaner always knows the exact value
+    it wants this to become, so accumulation (sum_replan_count's behavior) is
+    wrong here. Reusing the additive reducer meant returning 0 to "reset" the
+    counter actually left it unchanged (added 0 to whatever it already was),
+    so it could only ever climb, never reset — masking genuinely fresh
+    replans as consecutive-identical ones.
+    """
+    return new if new is not None else (existing or 0)
+
+
 class State(ExtTypedDict):
     input: str
     plan: Annotated[Optional[Plan], replace_plan]
     replan_count: Annotated[int, sum_replan_count]
     steps_executed: Annotated[int, sum_steps_executed]
+    consecutive_identical_replans: Annotated[int, replace_consecutive_identical_replans]
+    last_replan_context: Annotated[Optional[list], replace_last_replan_context]
