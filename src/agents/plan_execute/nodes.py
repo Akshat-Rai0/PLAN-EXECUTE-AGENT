@@ -1,3 +1,4 @@
+import re
 from datetime import date
 
 from .state import State, StepStatus
@@ -6,11 +7,138 @@ from src.tools.registry import tavily_search
 from langchain_core.messages import HumanMessage, SystemMessage
 from .llm import get_llm
 
+# Matches a plausible 4-digit year (1900-2099). Used to pull a year mentioned
+# in a prior reasoning step (e.g. "The current year is 2026.") forward into a
+# later search query, since search relevance depends heavily on the query
+# text itself — a correct fact determined in an earlier step does nothing for
+# retrieval quality unless it's actually present in the words being searched.
+_YEAR_PATTERN = re.compile(r"\b(19|20)\d{2}\b")
+
+# Above this length, a prior step's result is almost certainly a raw scraped
+# search result (noisy, long, full of boilerplate) rather than a short
+# reasoning-step conclusion. We don't want to feed that kind of text into a
+# new search query — long, noisy queries tend to return WORSE results, not
+# better. Short results (like a one-line date fact from reason_node) are safe
+# to fold in directly.
+_SHORT_RESULT_CHAR_LIMIT = 200
+
+
+def _extract_search_context(plan, current_step) -> str:
+    """
+    Build a short, targeted context string from the most recent prior DONE
+    step, to append to this step's search query.
+
+    Only looks at the single most recent prior step (not all of them) and
+    only uses its result if it's short — i.e. looks like a reasoning-step
+    conclusion (e.g. "The current year is 2026.") rather than a raw scraped
+    search result. This deliberately does NOT concatenate every prior
+    result — that would bloat the query with noise and degrade search
+    relevance rather than improve it.
+
+    Additionally, scans ALL prior DONE step results (short or long) for a
+    plausible year, since a correctly-determined year is the single most
+    common piece of context a later search needs (see: "who won world cup
+    this year" — the year is what search needs, not the surrounding prose).
+    """
+    prior_done_steps = [
+        s for s in plan.subtasks
+        if s.id != current_step.id and s.status == StepStatus.DONE and s.result
+    ]
+    # Only steps that come before this one in the plan
+    prior_done_steps = [s for s in prior_done_steps if s.id < current_step.id]
+    if not prior_done_steps:
+        return ""
+
+    context_parts = []
+
+    # 1. Most recent short prior result — folded in directly.
+    most_recent = max(prior_done_steps, key=lambda s: s.id)
+    if len(most_recent.result) <= _SHORT_RESULT_CHAR_LIMIT:
+        context_parts.append(most_recent.result.strip())
+
+    # 2. Any year mentioned in ANY prior DONE step — surfaced explicitly.
+    # Search separately from (1) since the year might be buried in a step
+    # that isn't the most recent one, or in a result too long to fold in
+    # directly.
+    detected_years = []
+    for step in prior_done_steps:
+        for match in _YEAR_PATTERN.finditer(step.result):
+            detected_years.append(match.group())
+    if detected_years:
+        # Prefer the year from the most recent step if it appears in the
+        # detected set; otherwise just take the most recently detected one.
+        year = detected_years[-1]
+        if year not in " ".join(context_parts):
+            context_parts.append(year)
+
+    return " ".join(context_parts)
+
+
 def plan_node(state: State) -> dict:
     """Break down the input task into a plan using the breakdown_task function."""
     goal = state.get("input", "")
     plan = breakdown_task(goal)
     return {"plan": plan}
+
+
+def _check_search_relevance(step_task: str, goal: str, result: str) -> tuple[bool, str]:
+    """
+    Ask the LLM whether a search result actually answers the step it was
+    meant to answer, as opposed to merely having executed successfully.
+
+    This closes a gap where a search could return DONE with plausible-looking
+    but irrelevant/stale/off-target content (e.g. searching for "the most
+    recent World Cup winner" and getting a list of historical winners with no
+    signal about whether the current tournament has concluded). Previously
+    nothing distinguished that from a genuinely useful result — both looked
+    identical to the graph (status=DONE), so a bad result would flow straight
+    into synthesis with no chance to replan around it.
+
+    Returns (is_relevant, reason). reason is a short explanation used as the
+    step's error message when irrelevant, so the replanner has something
+    concrete to react to rather than just "step failed."
+
+    Deliberately a single short, cheap LLM call — not full synthesis-grade
+    reasoning — since this runs after every search and shouldn't meaningfully
+    add to latency/cost per step.
+    """
+    # Truncate — this check only needs enough of the result to judge
+    # relevance, not the full text (keeps the check itself fast and cheap).
+    excerpt = result[:2000]
+
+    check_prompt = f"""Goal: "{goal}"
+Step this search was meant to answer: "{step_task}"
+
+Search result excerpt:
+{excerpt}
+
+Does this search result contain information that actually answers the step above — not just topically related content, but the specific fact(s) needed?
+
+Respond in EXACTLY this format, nothing else:
+RELEVANT: yes or no
+REASON: one short sentence explaining why"""
+
+    llm = get_llm()
+    messages = [
+        SystemMessage(content="You are a strict relevance checker. Be skeptical — topically-related content that doesn't contain the specific answer counts as NOT relevant."),
+        HumanMessage(content=check_prompt),
+    ]
+    response = llm.invoke(messages)
+    content = response.content.strip()
+
+    is_relevant = True
+    reason = ""
+    for line in content.splitlines():
+        line = line.strip()
+        if line.upper().startswith("RELEVANT:"):
+            is_relevant = "yes" in line.lower()
+        elif line.upper().startswith("REASON:"):
+            reason = line.split(":", 1)[1].strip() if ":" in line else ""
+
+    if not reason:
+        reason = "Search result did not contain the specific information needed for this step."
+
+    return is_relevant, reason
 
 
 def tavily_search_node(state: State) -> dict:
@@ -33,7 +161,17 @@ def tavily_search_node(state: State) -> dict:
     try:
         # Extract search query from the task description, including goal context
         query = f"{plan.goal} — {current_step.task}"
-        
+
+        # Fold in short, targeted context from prior steps (e.g. a year
+        # determined by an earlier reason_node step). Previously this
+        # function had no visibility into prior results at all, so a
+        # correctly-determined fact like "the current year is 2026" never
+        # reached the actual search query — search would default to
+        # historically dominant results instead of recency-anchored ones.
+        search_context = _extract_search_context(plan, current_step)
+        if search_context:
+            query = f"{query} {search_context}"
+
         # Determine search depth based on step type
         # Use "basic" for status-check queries, "advanced" for detailed searches
         task_lower = current_step.task.lower()
@@ -43,8 +181,27 @@ def tavily_search_node(state: State) -> dict:
         search_depth = "basic" if is_status_check else "advanced"
         
         result = tavily_search(query, search_depth=search_depth)
-        current_step.status = StepStatus.DONE
-        current_step.result = result
+
+        # A search can succeed (no exception, real content returned) while
+        # still being useless for this specific step — e.g. returning a
+        # historical winners list when the step needed "has this year's
+        # tournament concluded". Without this check that case looked
+        # identical to a genuinely useful result (status=DONE), so it flowed
+        # straight into synthesis with no opportunity to replan.
+        is_relevant, reason = _check_search_relevance(current_step.task, plan.goal, result)
+        if is_relevant:
+            current_step.status = StepStatus.DONE
+            current_step.result = result
+        else:
+            current_step.status = StepStatus.FAILED
+            current_step.error = f"Search returned content, but it doesn't answer this step: {reason}"
+            # Keep the raw result too — even an "irrelevant" search can carry
+            # useful signal (e.g. a mention of "semi-finals" that hints at
+            # what to search for next), and the replanner's context-building
+            # step only looks at DONE steps' results, not FAILED ones' raw
+            # result field, so this is preserved for debugging/visibility
+            # without changing replan behavior.
+            current_step.result = result
     except Exception as e:
         current_step.status = StepStatus.FAILED
         current_step.error = str(e)
@@ -210,7 +367,7 @@ Search results:
 
     return {"plan": plan}
 
-MAX_REPLAN = 3
+MAX_REPLAN = 4
 
 
 def replaner(state: State) -> dict:
