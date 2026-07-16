@@ -154,12 +154,15 @@ graph TD
     plan_node --> executor_node[executor_node]
     
     executor_node -->|tool_hint: web_search/tavily_search| tavily_search_node[tavily_search_node]
-    executor_node -->|tool_hint: none| synthesize_node[synthesize_node]
+    executor_node -->|tool_hint: none| reason_node[reason_node]
     executor_node -->|other tool hints| stub_node[stub_node]
     executor_node -->|no RUNNING step| synthesize_node
     
     tavily_search_node -->|step failed| replaner_node[replaner_node]
     tavily_search_node -->|step success| executor_node
+    
+    reason_node -->|step failed| replaner_node
+    reason_node -->|step success| executor_node
     
     stub_node -->|step failed| replaner_node
     stub_node -->|step success| executor_node
@@ -172,6 +175,7 @@ graph TD
     style plan_node fill:#fff4e1
     style executor_node fill:#ffe1f5
     style tavily_search_node fill:#e1ffe1
+    style reason_node fill:#fff4e1
     style stub_node fill:#f5e1ff
     style replaner_node fill:#ffe1e1
     style synthesize_node fill:#e1f5ff
@@ -394,31 +398,32 @@ graph TD
   <div class="section-label">Phase 3 · Jul 22–24</div>
   <div class="phase">
     <div class="phase-header">
-      <div class="phase-num active">3</div>
+      <div class="phase-num done">3</div>
       <div class="phase-title">
         <h3>Replanner + Termination Logic</h3>
         <div class="phase-meta">3 days · CLI only</div>
         <div class="phase-arm">Arm 2 complete at end of this phase</div>
       </div>
-      <div class="phase-status active">In Progress</div>
+      <div class="phase-status done">Complete</div>
     </div>
     <div class="phase-body">
       <div class="phase-col">
         <h4>Tasks</h4>
         <ul class="checklist">
           <li class="done">Replan prompt reviewing step result vs. remaining plan</li>
-          <li>Replan triggers ONLY on FAILED status or explicit "plan invalid" signal — never on default success (anti-thrashing rule)</li>
-          <li>Hard step-count cap with partial-answer termination</li>
-          <li>Test on 10 hand-crafted multi-step goals</li>
+          <li class="done">Replan triggers ONLY on FAILED status or explicit "plan invalid" signal — never on default success (anti-thrashing rule)</li>
+          <li class="done">Hard step-count cap with partial-answer termination</li>
+          <li class="done">Comprehensive regression tests (50 tests) for routing, nodes, and end-to-end flows</li>
         </ul>
       </div>
       <div class="phase-col">
         <h4>Deliverables</h4>
         <ul class="checklist">
           <li class="done">Replanner node with continue/revise/complete decision</li>
-          <li>New plan_version persisted on every revision</li>
-          <li>Step-cap guard</li>
-          <li>End-to-end planner → executor → replanner loop</li>
+          <li class="done">New plan_version persisted on every revision</li>
+          <li class="done">Step-cap guard</li>
+          <li class="done">End-to-end planner → executor → replanner loop</li>
+          <li class="done">50 regression tests covering routing, nodes, and e2e flows</li>
         </ul>
       </div>
       <div class="phase-outcome">
