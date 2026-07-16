@@ -150,35 +150,41 @@
   <h2>Current Implementation Flow</h2>
   <pre class="mermaid">
 graph TD
-    START([START]) --> plan_node[plan_node]
-    plan_node --> executor_node[executor_node]
+    START([START]) --> plan[plan]
+    plan --> executor[executor]
     
-    executor_node -->|tool_hint: web_search/tavily_search| tavily_search_node[tavily_search_node]
-    executor_node -->|tool_hint: none| reason_node[reason_node]
-    executor_node -->|other tool hints| stub_node[stub_node]
-    executor_node -->|no RUNNING step| synthesize_node
+    executor -->|tool_hint: web_search/tavily_search| tavily_search[tavily_search]
+    executor -->|tool_hint: none| reason[reason]
+    executor -->|other tool hints| stub[stub]
+    executor -->|no RUNNING step| synthesize[synthesize]
     
-    tavily_search_node -->|step failed| replaner_node[replaner_node]
-    tavily_search_node -->|step success| executor_node
+    tavily_search -->|step FAILED| replaner[replaner]
+    tavily_search -->|step CANCELLED| synthesize
+    tavily_search -->|step cap exceeded| synthesize
+    tavily_search -->|step DONE| executor
     
-    reason_node -->|step failed| replaner_node
-    reason_node -->|step success| executor_node
+    reason -->|step FAILED| replaner
+    reason -->|step CANCELLED| synthesize
+    reason -->|step cap exceeded| synthesize
+    reason -->|step DONE| executor
     
-    stub_node -->|step failed| replaner_node
-    stub_node -->|step success| executor_node
+    stub -->|step FAILED| replaner
+    stub -->|step CANCELLED| synthesize
+    stub -->|step cap exceeded| synthesize
+    stub -->|step DONE| executor
     
-    replaner_node --> executor_node
+    replaner --> executor
     
-    synthesize_node --> END([END])
+    synthesize --> END([END])
     
     style START fill:#e1f5ff
-    style plan_node fill:#fff4e1
-    style executor_node fill:#ffe1f5
-    style tavily_search_node fill:#e1ffe1
-    style reason_node fill:#fff4e1
-    style stub_node fill:#f5e1ff
-    style replaner_node fill:#ffe1e1
-    style synthesize_node fill:#e1f5ff
+    style plan fill:#fff4e1
+    style executor fill:#ffe1f5
+    style tavily_search fill:#e1ffe1
+    style reason fill:#fff4e1
+    style stub fill:#f5e1ff
+    style replaner fill:#ffe1e1
+    style synthesize fill:#e1f5ff
     style END fill:#e1f5ff
   </pre>
 </div>
