@@ -124,7 +124,7 @@ def test_unknown_hints_route_to_stub():
     """
     Test that unknown tool hints route to stub_node.
     """
-    unknown_hints = ["code_executor", "file_editor", "database", "api_call"]
+    unknown_hints = ["file_editor", "database", "api_call"]
     
     for hint in unknown_hints:
         plan = Plan(
@@ -137,6 +137,22 @@ def test_unknown_hints_route_to_stub():
         
         result = _route_to_tool(state)
         assert result == "stub", f"Expected 'stub' for hint '{hint}', got '{result}'"
+
+
+def test_code_executor_routes_to_code_executor_node():
+    """
+    Test that code_executor hint routes to code_executor_node (not stub).
+    """
+    plan = Plan(
+        goal="test goal",
+        subtasks=[
+            Step(id=1, task="execute python code", tool_hint="code_executor", status=StepStatus.RUNNING)
+        ]
+    )
+    state: State = {"input": "test", "plan": plan}
+    
+    result = _route_to_tool(state)
+    assert result == "code_executor", f"Expected 'code_executor' for code_executor hint, got '{result}'"
 
 
 def test_route_after_tool_failed_step():
