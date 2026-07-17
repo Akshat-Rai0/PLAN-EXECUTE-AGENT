@@ -222,12 +222,12 @@ graph TD
     <div class="overview-seg" style="background:var(--green)"><span>P0</span></div>
     <div class="overview-seg" style="background:var(--green)"><span>P1</span></div>
     <div class="overview-seg" style="background:var(--green)"><span>P2</span></div>
-    <div class="overview-seg" style="background:var(--accent)"><span>P3</span></div>
+    <div class="overview-seg" style="background:var(--green)"><span>P3</span></div>
     <div class="overview-seg" style="background:var(--ink-3)"><span>P4</span></div>
     <div class="overview-seg" style="background:var(--ink-3)"><span>P5</span></div>
     <div class="overview-seg" style="background:var(--ink-3)"><span>P6</span></div>
     <div class="overview-seg" style="background:var(--ink-3)"><span>P7</span></div>
-    <div class="overview-seg" style="background:var(--ink-3)"><span>P8</span></div>
+    <div class="overview-seg" style="background:var(--accent)"><span>P8</span></div>
     <div class="overview-seg" style="background:var(--ink-3)"><span>P9</span></div>
   </div>
   <div class="callout">
@@ -693,19 +693,19 @@ graph TD
   <div class="section-label">Phase 8 · Aug 5–7</div>
   <div class="phase">
     <div class="phase-header">
-      <div class="phase-num future">8</div>
+      <div class="phase-num active">8</div>
       <div class="phase-title">
         <h3>Eval Harness, Golden Dataset + ReAct Baseline</h3>
         <div class="phase-meta">3 days · CLI only</div>
         <div class="phase-arm">Arm 1 built here; all 3 arms compared</div>
       </div>
-      <div class="phase-status future">Pending</div>
+      <div class="phase-status active">In Progress</div>
     </div>
     <div class="phase-body">
       <div class="phase-col">
         <h4>Tasks</h4>
         <ul class="checklist">
-          <li><strong>Build the actual ReAct baseline (Arm 1)</strong> — a plain interleaved reason+act loop using the same fixed tool set and same LLM, no explicit plan, no replanner</li>
+          <li class="done"><strong>Build the actual ReAct baseline (Arm 1)</strong> — a plain interleaved reason+act loop using the same fixed tool set and same LLM, no explicit plan, no replanner</li>
           <li>20-goal golden dataset across 5 categories (a–e, see spec §07)</li>
           <li>Human-annotate expected step count, expected answer, required capability</li>
           <li>LLM-as-judge for completeness/correctness</li>
