@@ -3,13 +3,13 @@ import os
 import json
 from datetime import datetime
 
-
+# When running directly, add parent directories to path for imports
 current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)
 grandparent_dir = os.path.dirname(parent_dir)
 sys.path.insert(0, grandparent_dir)
 
-
+# Now use absolute imports
 from src.agents.react.state import ReactState
 from src.agents.react.graph import build_react_graph
 

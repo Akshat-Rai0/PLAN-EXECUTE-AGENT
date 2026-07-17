@@ -278,8 +278,18 @@ def tavily_search_node(state: State) -> dict:
         is_status_check = any(keyword in task_lower for keyword in status_check_keywords)
         
         search_depth = "basic" if is_status_check else "advanced"
-        
-        result = tavily_search(query, search_depth=search_depth)
+
+        # Bias toward live/news results when either the overall goal or this
+        # specific step carries recency language ("latest", "current",
+        # "this year", etc.) — reuses the same detection already built for
+        # the deterministic date-anchor step, rather than a second regex.
+        # This matters because general web search happily surfaces
+        # well-indexed historical/reference content (e.g. a "F1 race winners"
+        # page that still lists last year's race) even when a plain day-count
+        # filter is applied — see tavily_search's recency_sensitive param.
+        recency_sensitive = _needs_date_anchor(plan.goal) or _needs_date_anchor(current_step.task)
+
+        result = tavily_search(query, search_depth=search_depth, recency_sensitive=recency_sensitive)
 
         # A search can succeed (no exception, real content returned) while
         # still being useless for this specific step — e.g. returning a

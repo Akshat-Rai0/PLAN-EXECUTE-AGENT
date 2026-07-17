@@ -66,6 +66,20 @@ def _strip_markdown_fences(content: str) -> str:
     return content
 
 
+REPLAN_INSTRUCTIONS = """
+
+Context of completed/failed steps:
+{context_str}
+
+Please revise/update the remaining steps of the plan based on the context above. Keep only pending and revised steps in the returned list of subtasks.
+
+CRITICAL — read each failure reason carefully before writing new steps:
+- If a step's error says a search "doesn't answer" or "doesn't specify" or "doesn't contain" the needed information, that means the search ran successfully but was too GENERIC or too BROAD. Do not repeat a similarly generic search — the new step's task description must be MORE SPECIFIC than the one that failed. Narrow it using any concrete details already surfaced in other steps' results (exact team/entity names, exact dates, tournament stage, match ID, etc.) rather than re-describing the same broad question in different words.
+- Example: if "search for the latest match results" failed because the results were a generic schedule/fixture list with no explicit winner, the next step should target the SPECIFIC match already identified (e.g. "search for the result of the France vs Spain semi-final on July 14, 2026"), not a rephrased generic query like "find recent match results".
+- If you cannot identify a more specific angle from the available context, say so explicitly in the step's task description (e.g. "no more specific match identified in prior results — broaden search to include result pages specifically, not schedule/fixture pages") rather than silently repeating the same query shape that already failed.
+"""
+
+
 def breakdown_task(goal: str, context: list[str] = None) -> Plan:
     """
     Break down a goal into a validated Plan of Steps.
@@ -78,7 +92,7 @@ def breakdown_task(goal: str, context: list[str] = None) -> Plan:
     llm = get_llm()
     if context:
         context_str = "\n".join(context)
-        prompt = PROMPT_TEMPLATE.format(goal=goal) + f"\n\nContext of completed/failed steps:\n{context_str}\n\nPlease revise/update the remaining steps of the plan based on the context above. Keep only pending and revised steps in the returned list of subtasks."
+        prompt = PROMPT_TEMPLATE.format(goal=goal) + REPLAN_INSTRUCTIONS.format(context_str=context_str)
     else:
         prompt = PROMPT_TEMPLATE.format(goal=goal)
     last_error = None
@@ -98,7 +112,7 @@ def breakdown_task(goal: str, context: list[str] = None) -> Plan:
         except (json.JSONDecodeError, ValidationError) as e:
             last_error = e
             if context:
-                prompt = PROMPT_TEMPLATE.format(goal=goal) + f"\n\nContext of completed/failed steps:\n{context_str}\n\nPlease revise/update the remaining steps of the plan based on the context above. Keep only pending and revised steps in the returned list of subtasks." + RETRY_SUFFIX.format(error=str(e))
+                prompt = PROMPT_TEMPLATE.format(goal=goal) + REPLAN_INSTRUCTIONS.format(context_str=context_str) + RETRY_SUFFIX.format(error=str(e))
             else:
                 prompt = PROMPT_TEMPLATE.format(goal=goal) + RETRY_SUFFIX.format(error=str(e))
             continue
