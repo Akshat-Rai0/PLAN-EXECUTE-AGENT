@@ -45,26 +45,52 @@ def _filter_noise(content: str) -> str:
     return "\n".join(filtered_lines)
 
 
-def tavily_search(query: str, search_depth: str = "basic") -> str:
+def tavily_search(query: str, search_depth: str = "basic", recency_sensitive: bool = False) -> str:
     """
     Use web search to get relevant information using Tavily and return a response.
-    
+
     Args:
         query: The search query string
         search_depth: Either "basic" or "advanced" - basic for status checks, advanced for detailed searches
-    
+        recency_sensitive: If True, biases the search toward live/current results using
+            Tavily's topic="news" mode plus a tight time_range, instead of general web
+            search. This matters because "days=7" alone does not reliably filter out
+            stale content — Wikipedia-style reference pages and SEO aggregator content
+            often pass a raw day-count filter even though the actual FACTS on the page
+            span multiple years (e.g. a "F1 winners" page updated last week that still
+            lists a 2025 race as if current). topic="news" applies much stronger
+            recency weighting on top of any day/time_range filter. Callers should pass
+            True for goals/steps carrying recency language ("latest", "recent",
+            "current", "this year", etc.) — see _needs_date_anchor in
+            plan_execute/nodes.py, which already detects this same signal for the
+            date-anchor feature and can be reused here.
+
     Returns:
         Filtered search results with noise removed
     """
-    response = client.search(
-        query=query,
-        search_depth=search_depth,
-        chunks_per_source=3,
-        max_results=3,
-        include_answer=False,   
-        include_raw_content=False,
-        days=7,                 
-    )
+    params = {
+        "query": query,
+        "search_depth": search_depth,
+        "chunks_per_source": 3,
+        "max_results": 3,
+        "include_answer": False,
+        "include_raw_content": False,
+    }
+
+    if recency_sensitive:
+        # topic="news" applies much stronger recency weighting than the default
+        # "general" topic — general web search happily surfaces well-indexed
+        # reference/historical pages (Wikipedia, stat sites) that a raw days=N
+        # filter doesn't reliably exclude, since those pages' last-modified
+        # timestamps can be recent even when the specific fact needed is stale.
+        params["topic"] = "news"
+        params["time_range"] = "week"
+    else:
+        # Non-recency-sensitive queries (e.g. static/historical facts) keep the
+        # original loose day filter — no need to bias toward news sources.
+        params["days"] = 7
+
+    response = client.search(**params)
 
     if response.get("answer"):
         return _filter_noise(response["answer"])
@@ -75,7 +101,7 @@ def tavily_search(query: str, search_depth: str = "basic") -> str:
             filtered_content = _filter_noise(result["content"])
             if filtered_content.strip():
                 filtered_results.append(filtered_content)
-        
+
         return "\n\n".join(filtered_results)
 
     return "No results found."
