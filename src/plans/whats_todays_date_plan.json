@@ -1,5 +1,5 @@
 {
-  "goal": "whats todays date ? ",
+  "goal": "whats todays date ?",
   "subtasks": [
     {
       "id": 1,
@@ -11,6 +11,6 @@
       "error": null
     }
   ],
-  "final_answer": "Today's date is 2026-07-17.",
+  "final_answer": "To answer the question \"what's today's date?\", I can directly provide the result from the search findings. \n\nToday's date is 2026-07-17.",
   "cancelled_steps": []
 }
