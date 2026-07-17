@@ -76,12 +76,13 @@ def test_failed_replan_success_cycle():
         ]
     )
     
-    # Replan after failure (only step 2 and 3)
+    # Replan after failure (only step 2 and 3, renamed distinctly so they
+    # don't accidentally re-match the original failing query below)
     replan_plan = Plan(
         goal="test goal",
         subtasks=[
-            Step(id=1, task="revised search step 2", tool_hint="web_search", status=StepStatus.PENDING),
-            Step(id=2, task="revised search step 3", tool_hint="web_search", status=StepStatus.PENDING),
+            Step(id=1, task="alternate query for topic B", tool_hint="web_search", status=StepStatus.PENDING),
+            Step(id=2, task="alternate query for topic C", tool_hint="web_search", status=StepStatus.PENDING),
         ]
     )
     
@@ -105,15 +106,16 @@ def test_failed_replan_success_cycle():
         mock_breakdown.side_effect = breakdown_side_effect
         
         with patch('src.agents.plan_execute.nodes.tavily_search') as mock_search:
-            # First call succeeds, second call fails (triggers replan), subsequent calls succeed
-            search_call_count = [0]
-            
-            def search_side_effect(query, search_depth=None):
-                search_call_count[0] += 1
-                if search_call_count[0] == 2:
+            # Fail deterministically on "search step 2" specifically (by query
+            # content), not by a global call-count position. A global counter
+            # broke once a replan changed the step sequence — the "2nd search
+            # call ever made" landed on a different, unrelated step after
+            # replanning, causing spurious additional failures/replans.
+            def search_side_effect(query, search_depth=None, recency_sensitive=False):
+                if query.startswith("test goal — search step 2"):
                     raise Exception("Search timeout")
                 return "Search result"
-            
+
             mock_search.side_effect = search_side_effect
             
             with patch('src.agents.plan_execute.nodes._check_search_relevance') as mock_relevance:

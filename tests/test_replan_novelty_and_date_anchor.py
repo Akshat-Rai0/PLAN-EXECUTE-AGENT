@@ -188,7 +188,76 @@ def test_consecutive_identical_replans_triggers_termination():
         assert result["plan"].cancelled_steps[0].status == StepStatus.CANCELLED
 
 
-# --- Date-anchor injection -----------------------------------------------
+# --- Pure date query fast-path & "todays" regex fix ----------------------
+
+@pytest.mark.parametrize("goal", [
+    "whats todays date ?",
+    "what's today's date",
+    "today's date",
+    "what is the current date",
+    "what is today's day",
+])
+def test_needs_date_anchor_catches_todays_without_apostrophe(goal):
+    """
+    Regression test for the exact bug: "whats todays date ?" (no apostrophe
+    in "todays") previously did NOT match \\btoday\\b, since there's no word
+    boundary between "y" and "s" — both are word characters. This slipped
+    through undetected and triggered a full unnecessary web search.
+    """
+    from src.agents.plan_execute.nodes import _needs_date_anchor
+    assert _needs_date_anchor(goal) is True, f"Should detect date reference in: {goal!r}"
+
+
+@pytest.mark.parametrize("goal", [
+    "whats todays date ?",
+    "what's today's date",
+    "today's date",
+    "what is the current date",
+    "tell me today's date",
+])
+def test_is_pure_date_query_detects_date_only_goals(goal):
+    from src.agents.plan_execute.nodes import _is_pure_date_query
+    assert _is_pure_date_query(goal) is True, f"Should be a pure date query: {goal!r}"
+
+
+@pytest.mark.parametrize("goal", [
+    "who won the world cup this year",
+    "what's the latest news on AI",
+    "explain photosynthesis",
+])
+def test_is_pure_date_query_ignores_non_pure_goals(goal):
+    """
+    Goals that reference recency/date as part of a larger question should NOT
+    be treated as pure date queries — they still need the full plan, just
+    with a date anchor prepended (see _needs_date_anchor).
+    """
+    from src.agents.plan_execute.nodes import _is_pure_date_query
+    assert _is_pure_date_query(goal) is False, f"Should NOT be a pure date query: {goal!r}"
+
+
+def test_plan_node_pure_date_query_skips_planning_and_search():
+    """
+    For a pure date query, plan_node should skip breakdown_task entirely
+    (no LLM planning call, no search) and return a single DONE step plus a
+    final_answer already set — the whole goal is answered by today_date().
+    """
+    state: State = {"input": "whats todays date ?", "plan": None}
+
+    with patch('src.agents.plan_execute.nodes.breakdown_task') as mock_breakdown:
+        with patch('src.agents.plan_execute.nodes.today_date') as mock_today:
+            mock_today.return_value = "2026-07-16"
+
+            result = plan_node(state)
+
+            mock_breakdown.assert_not_called()
+
+            plan = result["plan"]
+            assert len(plan.subtasks) == 1
+            assert plan.subtasks[0].status == StepStatus.DONE
+            assert "2026-07-16" in plan.subtasks[0].result
+            assert plan.final_answer is not None
+            assert "2026-07-16" in plan.final_answer
+
 
 @pytest.mark.parametrize("goal", [
     "who won the world cup this year",
