@@ -6,6 +6,7 @@ from .tools import breakdown_task
 from src.tools.registry import tavily_search, today_date
 from langchain_core.messages import HumanMessage, SystemMessage
 from .llm import get_llm
+from src.sandbox.runner import run_in_sandbox
 
 # Matches a plausible 4-digit year (1900-2099). Used to pull a year mentioned
 # in a prior reasoning step (e.g. "The current year is 2026.") forward into a
@@ -393,6 +394,160 @@ Instructions:
         current_step.error = str(e)
 
     return {"plan": plan, "steps_executed": 1}
+
+
+# Exception types that are typically fixable with small code adjustments
+_FIXABLE_ERRORS = {
+    "ImportError",
+    "ModuleNotFoundError",
+    "IndexError",
+    "KeyError",
+    "AttributeError",
+    "TypeError",
+    "NameError",
+}
+
+
+def _is_fixable_error(error_message: str) -> bool:
+    """
+    Determine if an error is likely fixable with a small code adjustment.
+    Fixable errors are typically import issues, index/key errors, or simple type mismatches.
+    Logical errors (ValueError, AssertionError, etc.) are not considered fixable.
+    """
+    for error_type in _FIXABLE_ERRORS:
+        if error_type in error_message:
+            return True
+    return False
+
+
+def code_executor_node(state: State) -> dict:
+    """
+    Execute a step whose tool_hint is "code_executor" — generates and runs Python code.
+
+    This node:
+    1. Uses the LLM to generate Python code based on the step's task description
+    2. Executes the code in the sandbox (subprocess isolation, timeout, memory limits)
+    3. Auto-retries for fixable errors (import errors, index errors, etc.) up to 2 times
+    4. Marks the step DONE with the result (stdout) or error message
+
+    The code generation LLM is given:
+    - The current step's task description
+    - Prior DONE step results for context
+    - Instructions to print results to stdout for capture
+    """
+    plan = state["plan"]
+    if plan is None:
+        raise RuntimeError("code_executor_node called with no plan in state")
+
+    current_step = next((s for s in plan.subtasks if s.status == StepStatus.RUNNING), None)
+    if current_step is None:
+        raise RuntimeError("code_executor_node called with no RUNNING step")
+
+    try:
+        # Build context from prior DONE steps
+        prior_context = []
+        for step in plan.subtasks:
+            if step.id == current_step.id:
+                break
+            if step.status == StepStatus.DONE and step.result:
+                result_str = step.result
+                if len(result_str) > 1500:
+                    result_str = result_str[:1500] + "... [truncated]"
+                prior_context.append(f"Step {step.id}: {step.task}\nResult: {result_str}")
+
+        context_block = "\n\n".join(prior_context) if prior_context else "(no prior step results)"
+        today = date.today().isoformat()
+
+        code_generation_prompt = f"""Today's date is {today}.
+
+Overall goal: "{plan.goal}"
+
+You are performing ONE step of a larger plan toward that goal. This step requires writing and executing Python code.
+
+Step to complete: {current_step.task}
+
+Prior step results so far:
+{context_block}
+
+Instructions:
+- Write Python code to complete this step directly and concretely.
+- Use the prior results above where relevant.
+- Print your final answer/result to stdout using print() — this is how the result will be captured.
+- Keep the code simple and focused on the specific task.
+- If you need to import modules, use standard library modules only (no external packages unless you're certain they're available).
+- Do not include markdown code fences — output only the raw Python code."""
+
+        llm = get_llm()
+        
+        # Generate code with auto-retry for fixable errors
+        max_retries = 2
+        generated_code = None
+        last_error = None
+        
+        for attempt in range(max_retries + 1):
+            messages = [
+                SystemMessage(content="You are a Python code generator. Output only raw Python code, no markdown fences, no explanations."),
+                HumanMessage(content=code_generation_prompt),
+            ]
+            
+            if attempt > 0:
+                # Add error context to help fix the code
+                messages[-1] = HumanMessage(
+                    content=code_generation_prompt + f"\n\nPrevious attempt failed with error:\n{last_error}\n\nFix the code and try again."
+                )
+            
+            response = llm.invoke(messages)
+            generated_code = response.content.strip()
+            
+            # Remove markdown fences if present
+            if generated_code.startswith("```"):
+                lines = generated_code.split("\n")
+                if lines[0].startswith("```"):
+                    lines = lines[1:]
+                if lines and lines[-1].strip() == "```":
+                    lines = lines[:-1]
+                generated_code = "\n".join(lines).strip()
+            
+            # Execute the code in the sandbox
+            result = run_in_sandbox(
+                generated_code,
+                timeout_seconds=15,
+                memory_limit_mb=256,
+            )
+            
+            if result.success:
+                # Code executed successfully
+                current_step.status = StepStatus.DONE
+                current_step.result = result.stdout if result.stdout else "Code executed successfully with no output."
+                return {"plan": plan, "steps_executed": 1}
+            else:
+                # Code execution failed
+                last_error = result.error or result.stderr or "Unknown error"
+                
+                # Check if this is a fixable error
+                if _is_fixable_error(last_error) and attempt < max_retries:
+                    # Retry with error context
+                    continue
+                else:
+                    # Either not fixable or out of retries - mark as DONE with error
+                    current_step.status = StepStatus.DONE
+                    error_message = f"Code execution failed: {last_error}"
+                    if result.stdout:
+                        error_message += f"\nStdout: {result.stdout}"
+                    if result.stderr:
+                        error_message += f"\nStderr: {result.stderr}"
+                    current_step.result = error_message
+                    return {"plan": plan, "steps_executed": 1}
+        
+        # Should not reach here, but handle gracefully
+        current_step.status = StepStatus.DONE
+        current_step.result = f"Code execution failed after {max_retries + 1} attempts. Last error: {last_error}"
+        return {"plan": plan, "steps_executed": 1}
+        
+    except Exception as e:
+        current_step.status = StepStatus.DONE
+        current_step.result = f"Code executor node error: {str(e)}"
+        return {"plan": plan, "steps_executed": 1}
 
 
 def executor_node(state: State) -> dict:
