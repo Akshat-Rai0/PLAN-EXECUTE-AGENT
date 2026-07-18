@@ -32,10 +32,14 @@ to real network isolation.
 """
 
 import os
+import shutil
+import tempfile
 import textwrap
 from urllib.parse import urlparse
 
 _ALLOWLIST_ENV_VAR = "SANDBOX_ALLOWED_DOMAINS"
+_GUARD_DIR_ENV_VAR = "_SANDBOX_NETWORK_GUARD_DIR"
+_GUARD_DIR_PREFIX = "sandbox-netguard-"
 
 _SITECUSTOMIZE_TEMPLATE = '''
 import os
@@ -84,7 +88,6 @@ def prepare_network_restricted_env(env: dict, allowed_domains: list[str]) -> dic
         module, so the interpreter picks it up automatically at startup.
       - SANDBOX_ALLOWED_DOMAINS, read by that sitecustomize module.
     """
-    import tempfile
     import uuid
 
     guard_dir = os.path.join(tempfile.gettempdir(), f"sandbox-netguard-{uuid.uuid4().hex}")
@@ -100,8 +103,30 @@ def prepare_network_restricted_env(env: dict, allowed_domains: list[str]) -> dic
         guard_dir + os.pathsep + existing_pythonpath if existing_pythonpath else guard_dir
     )
     new_env[_ALLOWLIST_ENV_VAR] = ",".join(_normalize_domain(d) for d in allowed_domains)
+    # This is private process metadata for the runner. It is removed before
+    # launching untrusted code and lets the caller reliably clean the unique
+    # directory after the subprocess exits.
+    new_env[_GUARD_DIR_ENV_VAR] = guard_dir
 
     return new_env
+
+
+def cleanup_network_restricted_env(env: dict) -> None:
+    """Delete the temporary sitecustomize directory created for `env`.
+
+    Restrict removal to directories we created inside the system temp folder;
+    callers can safely invoke this from a `finally` block.
+    """
+    guard_dir = env.get(_GUARD_DIR_ENV_VAR)
+    if not guard_dir:
+        return
+    temp_dir = os.path.realpath(tempfile.gettempdir())
+    resolved_guard_dir = os.path.realpath(guard_dir)
+    if (
+        os.path.dirname(resolved_guard_dir) == temp_dir
+        and os.path.basename(resolved_guard_dir).startswith(_GUARD_DIR_PREFIX)
+    ):
+        shutil.rmtree(resolved_guard_dir, ignore_errors=True)
 
 
 def _normalize_domain(domain: str) -> str:
