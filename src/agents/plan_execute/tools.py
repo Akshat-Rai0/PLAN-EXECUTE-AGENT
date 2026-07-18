@@ -41,9 +41,23 @@ Return ONLY a valid JSON object with this exact structure, no markdown fences, n
 }}
 
 Notes:
-- "tool_hint": suggest a tool (e.g., "web_search", "code_executor", "file_editor") or "none"
+- "tool_hint": suggest a tool from this list:
+    "web_search"       - search the web for information
+    "code_executor"    - write and execute a Python script
+    "setup_workspace"  - create a project directory (use as FIRST step of any app/coding task)
+    "shell_command"    - run a CLI command (npm init, npm install, npx create-vite, mkdir, git, etc.)
+    "write_file"       - write or edit a source code file inside the project workspace
+    "start_server"     - start a dev server (use as LAST step of app-building tasks)
+    "none"             - pure reasoning, no external tool
 - "status": always "PENDING"
 - "sensitive": true only if human confirmation should be required before this step runs
+
+For app/coding tasks, always follow this step order:
+  1. setup_workspace (create the project directory)
+  2. shell_command (scaffold, e.g. npx create-vite@latest . --template react)
+  3. write_file (write/edit source files, one step per logical file group)
+  4. shell_command (npm install or pip install)
+  5. start_server (npm run dev, python3 -m http.server, uvicorn, etc.)
 """
 
 RETRY_SUFFIX = """
