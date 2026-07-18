@@ -123,9 +123,10 @@ def test_web_search_routes_to_tavily():
 def test_unknown_hints_route_to_stub():
     """
     Test that unknown tool hints route to stub_node.
+    file_editor is now a known hint (routes to write_file), so removed from this list.
     """
-    unknown_hints = ["file_editor", "database", "api_call"]
-    
+    unknown_hints = ["database", "api_call", "some_future_tool"]
+
     for hint in unknown_hints:
         plan = Plan(
             goal="test goal",
@@ -134,9 +135,37 @@ def test_unknown_hints_route_to_stub():
             ]
         )
         state: State = {"input": "test", "plan": plan}
-        
+
         result = _route_to_tool(state)
         assert result == "stub", f"Expected 'stub' for hint '{hint}', got '{result}'"
+
+
+def test_coding_tool_hints_route_correctly():
+    """
+    Test that the new coding-agent tool hints route to the correct nodes.
+    """
+    cases = [
+        ("setup_workspace", "setup_workspace"),
+        ("shell_command", "shell"),
+        ("write_file", "write_file"),
+        ("file_editor", "write_file"),   # file_editor is an alias for write_file
+        ("start_server", "start_server"),
+    ]
+
+    for hint, expected_route in cases:
+        plan = Plan(
+            goal="build a todo app",
+            subtasks=[
+                Step(id=1, task="coding step", tool_hint=hint, status=StepStatus.RUNNING)
+            ]
+        )
+        state: State = {"input": "test", "plan": plan}
+
+        result = _route_to_tool(state)
+        assert result == expected_route, (
+            f"Expected '{expected_route}' for tool_hint='{hint}', got '{result}'"
+        )
+
 
 
 def test_code_executor_routes_to_code_executor_node():
