@@ -152,36 +152,43 @@
 graph TD
     START([START]) --> plan[plan]
     plan --> executor[executor]
-    
-    executor -->|tool_hint: web_search/tavily_search| tavily_search[tavily_search]
-    executor -->|tool_hint: none| reason[reason]
-    executor -->|other tool hints| stub[stub]
+
+    executor -->|web_search / tavily_search| tavily_search[tavily_search]
+    executor -->|code_executor| code_executor[code_executor]
+    executor -->|none| reason[reason]
+    executor -->|setup_workspace| setup_workspace[setup_workspace]
+    executor -->|shell_command| shell[shell]
+    executor -->|write_file / file_editor| write_file[write_file]
+    executor -->|start_server| start_server[start_server]
+    executor -->|unimplemented hint| stub[stub]
     executor -->|no RUNNING step| synthesize[synthesize]
-    
-    tavily_search -->|step FAILED| replaner[replaner]
-    tavily_search -->|step CANCELLED| synthesize
-    tavily_search -->|step cap exceeded| synthesize
-    tavily_search -->|step DONE| executor
-    
-    reason -->|step FAILED| replaner
-    reason -->|step CANCELLED| synthesize
-    reason -->|step cap exceeded| synthesize
-    reason -->|step DONE| executor
-    
-    stub -->|step FAILED| replaner
-    stub -->|step CANCELLED| synthesize
-    stub -->|step cap exceeded| synthesize
-    stub -->|step DONE| executor
-    
+
+    tavily_search --> after_tool{post-tool routing}
+    code_executor --> after_tool
+    reason --> after_tool
+    setup_workspace --> after_tool
+    shell --> after_tool
+    write_file --> after_tool
+    start_server --> after_tool
+    stub --> after_tool
+
+    after_tool -->|step FAILED| replaner[replaner]
+    after_tool -->|step DONE| executor
+    after_tool -->|CANCELLED or step cap| synthesize
     replaner --> executor
-    
     synthesize --> END([END])
-    
+
     style START fill:#e1f5ff
     style plan fill:#fff4e1
     style executor fill:#ffe1f5
     style tavily_search fill:#e1ffe1
+    style code_executor fill:#e1ffe1
     style reason fill:#fff4e1
+    style setup_workspace fill:#e1ffe1
+    style shell fill:#e1ffe1
+    style write_file fill:#e1ffe1
+    style start_server fill:#e1ffe1
+    style after_tool fill:#fff4e1
     style stub fill:#f5e1ff
     style replaner fill:#ffe1e1
     style synthesize fill:#e1f5ff
