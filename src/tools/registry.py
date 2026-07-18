@@ -3,6 +3,9 @@ from dotenv import load_dotenv
 import os
 import re
 
+from src.sandbox.shell_runner import run_shell_command, write_file as sandbox_write_file, ALLOWED_COMMANDS
+from src.sandbox.server_manager import start_dev_server
+
 load_dotenv()
 
 client = TavilyClient(os.getenv("TAVILY_API_KEY"))
@@ -111,3 +114,73 @@ def today_date() -> str:
     """Return today's date in YYYY-MM-DD format."""
     from datetime import datetime
     return datetime.now().strftime("%Y-%m-%d")
+
+
+# ---------------------------------------------------------------------------
+# Coding-agent tools — shell, file I/O, dev server
+# ---------------------------------------------------------------------------
+
+def shell_command_tool(command: str, workspace_path: str) -> str:
+    """
+    Run a shell command inside the agent workspace and return stdout or an
+    error string. Wraps shell_runner.run_shell_command.
+
+    Args:
+        command: The command to run (e.g. "npm install", "npx create-vite@latest . --template react").
+        workspace_path: Absolute path to the project workspace.
+
+    Returns:
+        stdout on success, or "ERROR: <message>\n<stderr>" on failure.
+    """
+    result = run_shell_command(command, cwd=workspace_path)
+    if result.success:
+        output = result.stdout.strip()
+        return output if output else f"Command '{command}' completed successfully (no output)."
+    else:
+        parts = [f"ERROR: {result.error}"]
+        if result.stderr and result.stderr.strip():
+            parts.append(f"stderr: {result.stderr.strip()[:2000]}")
+        if result.stdout and result.stdout.strip():
+            parts.append(f"stdout: {result.stdout.strip()[:1000]}")
+        return "\n".join(parts)
+
+
+def write_file_tool(relative_path: str, content: str, workspace_path: str) -> str:
+    """
+    Write a file into the workspace at `relative_path`.
+
+    Args:
+        relative_path: Path relative to workspace root (e.g. "src/App.jsx").
+        content: Full file content (UTF-8).
+        workspace_path: Absolute path to the project workspace.
+
+    Returns:
+        Confirmation string on success, or "ERROR: <message>" on failure.
+    """
+    result = sandbox_write_file(relative_path, content, workspace_path)
+    if result["success"]:
+        return f"Wrote {result['bytes_written']} bytes to {relative_path}"
+    else:
+        return f"ERROR: {result['error']}"
+
+
+def start_dev_server_tool(command_str: str, workspace_path: str, port: int) -> str:
+    """
+    Start a dev server and return its URL or an error string.
+
+    Args:
+        command_str: Server start command, e.g. "npm run dev" or "python3 -m http.server 8080".
+        workspace_path: Absolute path to the project workspace.
+        port: Port the server is expected to listen on.
+
+    Returns:
+        "http://localhost:<port>" on success, or "ERROR: <message>" on failure.
+    """
+    result = start_dev_server(command_str, cwd=workspace_path, port=port)
+    if result["success"]:
+        return result["url"]
+    else:
+        parts = [f"ERROR: {result['error']}"]
+        if result.get("stderr"):
+            parts.append(f"stderr: {result['stderr'][:1000]}")
+        return "\n".join(parts)
