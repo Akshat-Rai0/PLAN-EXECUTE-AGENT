@@ -1,7 +1,6 @@
 
 import sys
 import os
-import json
 
 # When running directly, add parent directories to path for imports
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -12,6 +11,7 @@ sys.path.insert(0, grandparent_dir)
 # Now use absolute imports
 from src.agents.plan_execute.state import State
 from src.agents.plan_execute.graph import build_graph
+from src.agents.plan_execute.output_store import persist_run_artifacts
 
 def main():
     """Main CLI entry point for plan generation."""
@@ -91,30 +91,25 @@ def main():
         else:
             print("(No synthesized final answer was produced for this run.)")
 
-        # Surface coding-agent artifacts if present
+        # Surface coding-agent artifacts if present, then persist the complete
+        # run in the repository so generated code and Markdown do not remain
+        # stranded in the temporary sandbox workspace.
         workspace = result.get("workspace_path")
         server_url = result.get("server_url")
-        if workspace:
-            print(f"\n📁 Project Workspace: {workspace}")
         if server_url:
             print(f"\n🌐 App running at:     {server_url}")
             print(f"   Open in browser:    {server_url}")
 
-        # Save to file
-        output_dir = os.path.join(grandparent_dir, "plans")
-        os.makedirs(output_dir, exist_ok=True)
-        
-        # Generate filename based on goal (sanitized)
-        safe_goal = "".join(c for c in user_input if c.isalnum() or c in (' ', '-', '_')).rstrip()
-        safe_goal = safe_goal.replace(' ', '_')[:50]  # Limit length
-        filename = f"{safe_goal}_plan.json"
-        filepath = os.path.join(output_dir, filename)
-        
-        plan_json = plan.model_dump_json(indent=2)
-        with open(filepath, 'w') as f:
-            f.write(plan_json)
-        
-        print(f"\n💾 Plan saved to: {filepath}")
+        repo_root = os.path.dirname(grandparent_dir)
+        artifact_dir = persist_run_artifacts(
+            repo_root=repo_root,
+            plan=plan,
+            workspace_path=workspace,
+            server_url=server_url,
+        )
+        print(f"\n📦 Agent output saved to: {artifact_dir}")
+        if workspace:
+            print(f"   Generated files:      {artifact_dir / 'workspace'}")
     else:
         # Fallback for string/other types
         print(str(plan))
