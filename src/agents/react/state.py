@@ -8,7 +8,7 @@ from operator import add
 # Import the reducers from plan_execute
 from src.agents.plan_execute.state import sum_replan_count, replace_workspace_path
 
-MAX_REACT_ITERATIONS = 5
+MAX_REACT_ITERATIONS = 15
 
 class Turn(BaseModel):
     thought: str
