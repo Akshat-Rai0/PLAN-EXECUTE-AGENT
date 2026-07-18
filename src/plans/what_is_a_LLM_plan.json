@@ -1,0 +1,34 @@
+{
+  "goal": "what is a LLM",
+  "subtasks": [
+    {
+      "id": 1,
+      "task": "setup_workspace",
+      "tool_hint": "setup_workspace",
+      "status": "DONE",
+      "sensitive": false,
+      "result": "Project workspace created at: /var/folders/mp/7t6q9m351gz4nybk6qspk6_40000gn/T/agent-workspaces/what-is-a-llm-faa468b3",
+      "error": null
+    },
+    {
+      "id": 2,
+      "task": "search the web for information on LLM",
+      "tool_hint": "web_search",
+      "status": "DONE",
+      "sensitive": false,
+      "result": "Skip to Main Content\nThe University of Arizona Wordmark Line Logo White\nUniversity Libraries\n My account\nAsk Us\n1. University of Arizona Libraries\n2. University of Arizona Libraries\n# What is a large language model (LLM)?\nA large language model (LLM) is a type of AI system trained on massive text datasets, often billions of words, that can generate and work with human language. By analyzing all this data, the model learns patterns and structures of language, enabling it to predict and generate plausible text.\n All\n Topics \n  + 8Accounts\n  + 4Campus & community resources\n  + 5Campus resources\n  + 14Ebooks\n  + 11Evaluating\n  + 8Getting started\n  + 17Giving credit\n  + 40Materials\n  + 9OpenAthens\n  + 5Requesting items\n  + 53Searching\n  + 2Software & Tech Support\n  + 22Spaces\n  + 22Special Collections\n  + 11Technology\n  + 20Writing\n## Question and Answer\n## What is a large language model (LLM)?\nA large language model (LLM) is a type of AI system trained on massive text datasets, often billions of words, that can generate and work with human language. By analyzing all this data, the model learns patterns and structures of language, enabling it to predict and generate plausible text.\n\n# What is LLM (Large Language Model)?\nCreate an AWS Account\n## Page topics\n What are Large Language Models?\n Why are large language models important?\n How do large language models work?\n What are applications of large language models?\n How are large language models trained?\n What is the future of LLMs?\n How can AWS help with LLMs?\n## What are Large Language Models?\nLLM are proficient in code generation from natural language prompts. Examples include Amazon CodeWhisperer and Open AI's codex used in GitHub Copilot, which can code in Python, JavaScript, Ruby and several other programming languages. Other coding applications include creating SQL queries, writing shell commands and website design. Learn more about AI code generation.\n### Text generation\n## How are large language models trained?\n\n# What are large language models (LLMs)?\nBy Cole Stryker\n## What are LLMs?\nLarge language models (LLMs) are a category of deep learning models trained on immense amounts of data, making them capable of understanding and generating natural language and other types of content to perform a wide range of tasks. LLMs are built on a type of neural network architecture called a transformer which excels at handling sequences of words and capturing patterns in text.",
+      "error": null
+    },
+    {
+      "id": 3,
+      "task": "write a summary of what LLM is",
+      "tool_hint": "write_file",
+      "status": "DONE",
+      "sensitive": false,
+      "result": "Wrote 856 bytes to src/what-is-llm.md\nPath: src/what-is-llm.md",
+      "error": null
+    }
+  ],
+  "final_answer": "**Final Answer:**\n\nA large language model (LLM) is a type of AI system trained on massive text datasets, often billions of words, that can generate and work with human language. By analyzing all this data, the model learns patterns and structures of language, enabling it to predict and generate plausible text.\n\n**Summary of what was built:**\n\nA Markdown file (src/what-is-llm.md) containing a summary of what a large language model (LLM) is.\n\n**No running app was built.**",
+  "cancelled_steps": []
+}
