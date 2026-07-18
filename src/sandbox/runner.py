@@ -124,6 +124,7 @@ def run_in_sandbox(
     python_executable = python_executable or sys.executable
     scratch_dir = _make_scratch_dir()
     script_path = os.path.join(scratch_dir, "script.py")
+    network_guard_env: Optional[dict] = None
 
     try:
         with open(script_path, "w") as f:
@@ -139,7 +140,10 @@ def run_in_sandbox(
             # Delegate actual enforcement to network_guard — this module
             # only wires the env var the guard's sitecustomize hook reads.
             from .network_guard import prepare_network_restricted_env
-            env = prepare_network_restricted_env(env, allowed_domains)
+            network_guard_env = prepare_network_restricted_env(env, allowed_domains)
+            env = dict(network_guard_env)
+            # Do not expose runner bookkeeping to the sandboxed process.
+            env.pop("_SANDBOX_NETWORK_GUARD_DIR", None)
 
         start = time.monotonic()
         try:
@@ -213,6 +217,9 @@ def run_in_sandbox(
         return result
 
     finally:
+        if network_guard_env is not None:
+            from .network_guard import cleanup_network_restricted_env
+            cleanup_network_restricted_env(network_guard_env)
         shutil.rmtree(scratch_dir, ignore_errors=True)
 
 
