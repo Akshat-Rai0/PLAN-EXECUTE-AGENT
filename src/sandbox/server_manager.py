@@ -29,6 +29,9 @@ from typing import Optional
 
 # {workspace_path: DevServer}
 _REGISTRY: dict[str, "DevServer"] = {}
+DEFAULT_READY_TIMEOUT_SECONDS = 15
+READY_POLL_INTERVAL_SECONDS = 0.2
+PORT_CHECK_TIMEOUT_SECONDS = 0.2
 
 
 def get_server(workspace_path: str) -> Optional["DevServer"]:
@@ -85,13 +88,15 @@ class DevServer:
         self.process: Optional[subprocess.Popen] = None
         self._started_at: Optional[float] = None
 
-    def start(self, timeout_for_ready: int = 60) -> dict:
+    def start(self, timeout_for_ready: int = DEFAULT_READY_TIMEOUT_SECONDS) -> dict:
         """
         Start the server and block until the port is open (server is ready).
 
         Args:
             timeout_for_ready: Max seconds to wait for the port to open.
-                               Default 60s — enough for Vite HMR startup.
+                               Defaults to 15s. Set a larger value only for a
+                               known slow server, so failed startups do not
+                               occupy a worker for a full minute.
 
         Returns:
             {"success": True, "url": "http://localhost:<port>", "pid": int}
@@ -126,7 +131,10 @@ class DevServer:
         self._started_at = time.monotonic()
         deadline = self._started_at + timeout_for_ready
 
-        while time.time() < deadline:
+        # `deadline` is based on monotonic time, so compare it to the same
+        # clock. Mixing in time.time() makes the deadline nonsensical and can
+        # cause immediate readiness failures.
+        while time.monotonic() < deadline:
             # Check if process exited early (crash before port opened)
             if self.process.poll() is not None:
                 stderr_output = ""
@@ -152,7 +160,7 @@ class DevServer:
                     "pid": self.process.pid,
                 }
 
-            time.sleep(0.5)
+            time.sleep(READY_POLL_INTERVAL_SECONDS)
 
         # Timeout — kill the process and report failure
         self.stop()
@@ -198,7 +206,9 @@ class DevServer:
     def _is_port_open(self) -> bool:
         """Return True if localhost:<self.port> accepts a TCP connection."""
         try:
-            with socket.create_connection(("127.0.0.1", self.port), timeout=1):
+            with socket.create_connection(
+                ("127.0.0.1", self.port), timeout=PORT_CHECK_TIMEOUT_SECONDS
+            ):
                 return True
         except OSError:
             return False
@@ -221,7 +231,7 @@ def start_dev_server(
     command_str: str,
     cwd: str,
     port: int,
-    timeout_for_ready: int = 60,
+    timeout_for_ready: int = DEFAULT_READY_TIMEOUT_SECONDS,
 ) -> dict:
     """
     Parse `command_str`, create a DevServer, start it, and return the result dict.
