@@ -67,6 +67,23 @@ python3 -m pytest tests/test_routing.py -v
 python3 -m pytest tests/ --cov=src --cov-report=html
 ```
 
+## Agent outputs
+
+Every completed Plan-and-Execute or ReAct CLI run is persisted under the
+repository-root `agent_outputs/` directory using a labelled folder such as
+`20260718-134500_what-is-a-llm/`.
+
+```
+agent_outputs/<timestamp>_<goal>/
+  summary.md       concise final answer and step index
+  plan.json        complete Plan-and-Execute plan and raw tool output
+  react-trace.json complete ReAct turn history and raw observations
+  workspace/       generated source code and Markdown files, when applicable
+```
+
+The execution workspace remains temporary and sandboxed. Dependency/cache
+directories such as `node_modules/` are not copied; generated deliverables are.
+
 ### Regression Bugs Covered
 Tests specifically target and validate fixes for production bugs:
 - **Premature-synthesis bug** - `tool_hint="none"` steps no longer short-circuit to synthesis
