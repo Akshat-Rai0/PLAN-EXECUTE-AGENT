@@ -114,10 +114,11 @@ def test_extract_search_context_no_prior_steps():
     assert context == "", "Should return empty string when no prior DONE steps"
 
 
-def test_relevance_check_irrelevant_fails():
+def test_relevance_check_irrelevant_fails(monkeypatch):
     """
     Relevance check: irrelevant result → FAILED with a populated .error, not DONE.
     """
+    monkeypatch.setenv("VALIDATE_SEARCH_RELEVANCE", "true")
     plan = Plan(
         goal="test goal",
         subtasks=[
@@ -141,10 +142,11 @@ def test_relevance_check_irrelevant_fails():
             assert "doesn't answer this step" in result["plan"].subtasks[0].error
 
 
-def test_relevance_check_relevant_succeeds():
+def test_relevance_check_relevant_succeeds(monkeypatch):
     """
     Relevance check: relevant result → DONE, .result set correctly.
     """
+    monkeypatch.setenv("VALIDATE_SEARCH_RELEVANCE", "true")
     plan = Plan(
         goal="test goal",
         subtasks=[

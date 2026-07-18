@@ -2,6 +2,7 @@
 
 import pytest
 from src.agents.plan_execute.nodes import replaner, MAX_REPLAN
+from src.agents.plan_execute.tools import MAX_REPLAN_CONTEXT_CHARS, bound_replan_context
 from src.agents.plan_execute.state import State, Plan, Step, StepStatus
 from unittest.mock import patch, MagicMock
 
@@ -239,6 +240,35 @@ def test_replaner_context_passed_to_breakdown_task():
         context_str = " ".join(context)
         assert "Result 1" in context_str, "Context should contain DONE step result"
         assert "API timeout" in context_str, "Context should contain FAILED step error"
+
+
+def test_replan_context_is_bounded_before_calling_planner():
+    """Large tool payloads must not be concatenated into an unbounded prompt."""
+    plan = Plan(
+        goal="test goal",
+        subtasks=[
+            Step(id=1, task="large result", tool_hint="web_search", status=StepStatus.DONE, result="x" * 50_000),
+            Step(id=2, task="failed step", tool_hint="web_search", status=StepStatus.FAILED, error="timeout"),
+        ],
+    )
+    new_plan = Plan(
+        goal="test goal",
+        subtasks=[Step(id=1, task="revised step", tool_hint="web_search", status=StepStatus.PENDING)],
+    )
+    state: State = {"input": "test", "plan": plan, "replan_count": 0}
+
+    with patch("src.agents.plan_execute.nodes.breakdown_task", return_value=new_plan) as mock_breakdown:
+        result = replaner(state)
+
+    context = mock_breakdown.call_args.kwargs["context"]
+    assert len("\n".join(context)) <= MAX_REPLAN_CONTEXT_CHARS
+    assert "characters omitted" in "\n".join(context)
+    assert len("\n".join(result["last_replan_context"])) <= MAX_REPLAN_CONTEXT_CHARS
+
+
+def test_bound_replan_context_preserves_short_records():
+    context = ["Step 1: useful result", "Step 2: timeout"]
+    assert bound_replan_context(context) == context
 
 
 def test_replaner_returns_delta():

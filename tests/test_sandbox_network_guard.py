@@ -10,7 +10,11 @@ purpose — we're asserting the guard's decision, not real network reachability)
 """
 
 from src.sandbox.runner import run_in_sandbox
-from src.sandbox.network_guard import _normalize_domain, prepare_network_restricted_env
+from src.sandbox.network_guard import (
+    _normalize_domain,
+    cleanup_network_restricted_env,
+    prepare_network_restricted_env,
+)
 
 
 def test_disallowed_domain_blocked():
@@ -96,15 +100,29 @@ def test_normalize_domain_lowercases():
 def test_prepare_env_sets_allowlist_var():
     env = prepare_network_restricted_env({}, ["api.tavily.com", "fifa.com"])
     assert env["SANDBOX_ALLOWED_DOMAINS"] == "api.tavily.com,fifa.com"
+    cleanup_network_restricted_env(env)
 
 
 def test_prepare_env_sets_pythonpath():
     env = prepare_network_restricted_env({}, ["api.tavily.com"])
     assert "PYTHONPATH" in env
     assert env["PYTHONPATH"]  # non-empty
+    cleanup_network_restricted_env(env)
 
 
 def test_prepare_env_preserves_existing_pythonpath():
     original_env = {"PYTHONPATH": "/some/existing/path"}
     env = prepare_network_restricted_env(original_env, ["api.tavily.com"])
     assert "/some/existing/path" in env["PYTHONPATH"]
+    cleanup_network_restricted_env(env)
+
+
+def test_network_guard_directory_is_cleaned_up():
+    """The runner cleans these directories; direct callers can too."""
+    import os
+
+    env = prepare_network_restricted_env({}, ["api.tavily.com"])
+    guard_dir = env["_SANDBOX_NETWORK_GUARD_DIR"]
+    assert os.path.isdir(guard_dir)
+    cleanup_network_restricted_env(env)
+    assert not os.path.exists(guard_dir)
