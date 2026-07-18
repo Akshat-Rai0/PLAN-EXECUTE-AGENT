@@ -1,4 +1,5 @@
 import os
+from functools import lru_cache
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -25,7 +26,15 @@ def _build_groq():
         raise ValueError("GROQ_API_KEY is not set in the environment variables.")
     return ChatGroq(model=model, api_key=api_key, temperature=0)
 
+@lru_cache(maxsize=1)
 def get_llm():
+    """Return the configured chat client, constructing it once per process.
+
+    LangGraph invokes several nodes for one request and each node may need the
+    same provider client.  These clients are safe to reuse and constructing a
+    fresh one per node adds connection/setup overhead without changing model
+    configuration, which is read from the environment at process startup.
+    """
     if LLM_PROVIDER == "ollama":
         return _build_ollama()
     elif LLM_PROVIDER == "anthropic":
