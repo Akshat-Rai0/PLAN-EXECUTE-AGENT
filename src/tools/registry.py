@@ -10,19 +10,20 @@ load_dotenv()
 
 client = TavilyClient(os.getenv("TAVILY_API_KEY"))
 
+_NOISE_PATTERNS = tuple(re.compile(pattern, re.IGNORECASE) for pattern in (
+    r"subscribe", r"follow", r"channel", r"nav", r"footer", r"menu",
+    r"subscribers?", r"views", r"like", r"share", r"comment",
+    r"FOLLOW.*CHANNELS?", r"SUBSCRIBE", r"©\s*\d{4}",
+    r"privacy policy", r"terms of service", r"cookie",
+))
+_EXCESSIVE_PUNCTUATION = re.compile(r"[!?.]{3,}")
+
 
 def _filter_noise(content: str) -> str:
     """
     Filter out navigation bars, footers, and other noise from search results.
     Removes lines containing common navigation/footer patterns.
     """
-    noise_patterns = [
-        r"subscribe", r"follow", r"channel", r"nav", r"footer", r"menu",
-        r"subscribers?", r"views", r"like", r"share", r"comment",
-        r"FOLLOW.*CHANNELS?", r"SUBSCRIBE", r"©\s*\d{4}",
-        r"privacy policy", r"terms of service", r"cookie",
-    ]
-    
     lines = content.split("\n")
     filtered_lines = []
     
@@ -32,7 +33,7 @@ def _filter_noise(content: str) -> str:
             continue
         
         # Skip lines that match noise patterns (case-insensitive)
-        if any(re.search(pattern, line_stripped, re.IGNORECASE) for pattern in noise_patterns):
+        if any(pattern.search(line_stripped) for pattern in _NOISE_PATTERNS):
             continue
         
         # Skip lines that are all caps (likely headers/ads)
@@ -40,7 +41,7 @@ def _filter_noise(content: str) -> str:
             continue
         
         # Skip lines with excessive punctuation (likely ads/promotions)
-        if len(re.findall(r"[!?.]{3,}", line_stripped)) > 0:
+        if _EXCESSIVE_PUNCTUATION.search(line_stripped):
             continue
         
         filtered_lines.append(line)
