@@ -713,6 +713,12 @@ graph TD
         <h4>Tasks</h4>
         <ul class="checklist">
           <li class="done"><strong>Build the actual ReAct baseline (Arm 1)</strong> — a plain interleaved reason+act loop using the same fixed tool set and same LLM, no explicit plan, no replanner</li>
+          <li class="done">Wire all tools from registry (tavily_search, today_date, shell_command, write_file, start_dev_server)</li>
+          <li class="done">Add set_workspace_path tool for workspace-based operations</li>
+          <li class="done">Add progress printing for step-by-step feedback</li>
+          <li class="done">Fix shell_command to handle JSON input from LLM</li>
+          <li class="done">Update prompts to guide agent behavior (bash -c for commands with arguments, python3 vs python)</li>
+          <li class="done">Increase MAX_REACT_ITERATIONS from 5 to 15 for longer tasks</li>
           <li>20-goal golden dataset across 5 categories (a–e, see spec §07)</li>
           <li>Human-annotate expected step count, expected answer, required capability</li>
           <li>LLM-as-judge for completeness/correctness</li>
