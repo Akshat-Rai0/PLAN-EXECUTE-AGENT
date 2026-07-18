@@ -3,7 +3,11 @@ from datetime import date
 
 from .state import State, StepStatus, Step, Plan
 from .tools import breakdown_task
-from src.tools.registry import tavily_search, today_date
+from src.tools.registry import (
+    tavily_search, today_date,
+    shell_command_tool, write_file_tool, start_dev_server_tool,
+)
+from src.sandbox.shell_runner import make_project_workspace
 from langchain_core.messages import HumanMessage, SystemMessage
 from .llm import get_llm
 from src.sandbox.runner import run_in_sandbox
@@ -529,25 +533,353 @@ Instructions:
                     # Retry with error context
                     continue
                 else:
-                    # Either not fixable or out of retries - mark as DONE with error
-                    current_step.status = StepStatus.DONE
+                    # Either not fixable or out of retries. This step never
+                    # actually succeeded — it must be FAILED, not DONE.
+                    # Previously this was marked DONE with the error text
+                    # stuffed into .result, which meant: (a) _route_after_tool
+                    # never saw a FAILED status, so the replanner never
+                    # engaged for a code-exec failure, and (b) synthesize_node
+                    # had no way to distinguish "this is the answer" from
+                    # "this is an error message that happens to live in the
+                    # result field" — a failed step could silently read as a
+                    # legitimate finding in the final answer.
+                    current_step.status = StepStatus.FAILED
                     error_message = f"Code execution failed: {last_error}"
                     if result.stdout:
                         error_message += f"\nStdout: {result.stdout}"
                     if result.stderr:
                         error_message += f"\nStderr: {result.stderr}"
+                    current_step.error = error_message
                     current_step.result = error_message
                     return {"plan": plan, "steps_executed": 1}
         
-        # Should not reach here, but handle gracefully
-        current_step.status = StepStatus.DONE
-        current_step.result = f"Code execution failed after {max_retries + 1} attempts. Last error: {last_error}"
+        # Should not reach here, but handle gracefully. Same reasoning as
+        # above — retries exhausted with no success means this step FAILED.
+        current_step.status = StepStatus.FAILED
+        final_error = f"Code execution failed after {max_retries + 1} attempts. Last error: {last_error}"
+        current_step.error = final_error
+        current_step.result = final_error
         return {"plan": plan, "steps_executed": 1}
         
     except Exception as e:
-        current_step.status = StepStatus.DONE
-        current_step.result = f"Code executor node error: {str(e)}"
+        # An exception in the node itself (not the sandboxed code) is also a
+        # genuine failure, not a completed step.
+        current_step.status = StepStatus.FAILED
+        error_message = f"Code executor node error: {str(e)}"
+        current_step.error = error_message
+        current_step.result = error_message
         return {"plan": plan, "steps_executed": 1}
+
+
+# ---------------------------------------------------------------------------
+# Coding-agent nodes
+# ---------------------------------------------------------------------------
+
+def setup_workspace_node(state: State) -> dict:
+    """
+    Create a fresh project workspace directory and store its path in state.
+
+    This is always the FIRST step for any app-building task. Subsequent nodes
+    read workspace_path from state so they all operate inside the same directory.
+    """
+    plan = state["plan"]
+    if plan is None:
+        raise RuntimeError("setup_workspace_node called with no plan in state")
+
+    current_step = next((s for s in plan.subtasks if s.status == StepStatus.RUNNING), None)
+    if current_step is None:
+        raise RuntimeError("setup_workspace_node called with no RUNNING step")
+
+    # Derive a slug from the goal for a human-readable directory name
+    slug = "-".join(plan.goal.lower().split()[:4])
+    slug = "".join(c if c.isalnum() or c == "-" else "-" for c in slug)[:40]
+
+    workspace_path = make_project_workspace(slug)
+
+    current_step.status = StepStatus.DONE
+    current_step.result = f"Project workspace created at: {workspace_path}"
+
+    return {"plan": plan, "steps_executed": 1, "workspace_path": workspace_path}
+
+
+def _build_coding_context(plan, current_step) -> str:
+    """Build a short prior-steps context block for coding node prompts."""
+    prior = []
+    for step in plan.subtasks:
+        if step.id >= current_step.id:
+            break
+        if step.status == StepStatus.DONE and step.result:
+            text = step.result if len(step.result) <= 1200 else step.result[:1200] + "... [truncated]"
+            prior.append(f"Step {step.id} ({step.tool_hint}): {step.task}\nResult: {text}")
+    return "\n\n".join(prior) if prior else "(no prior step results)"
+
+
+def shell_node(state: State) -> dict:
+    """
+    Execute a shell command step (tool_hint='shell_command').
+
+    Asks the LLM to produce the exact shell command to run for this step,
+    then runs it via shell_command_tool inside the project workspace.
+    The LLM receives the full goal, prior results, and the workspace path
+    so it can construct the correct command (e.g. correct project root).
+    """
+    plan = state["plan"]
+    if plan is None:
+        raise RuntimeError("shell_node called with no plan in state")
+
+    current_step = next((s for s in plan.subtasks if s.status == StepStatus.RUNNING), None)
+    if current_step is None:
+        raise RuntimeError("shell_node called with no RUNNING step")
+
+    workspace_path = state.get("workspace_path") or ""
+    if not workspace_path:
+        current_step.status = StepStatus.FAILED
+        current_step.error = (
+            "shell_node: no workspace_path in state. "
+            "Ensure a setup_workspace step runs before any shell_command step."
+        )
+        return {"plan": plan, "steps_executed": 1}
+
+    context_block = _build_coding_context(plan, current_step)
+
+    command_prompt = f"""You are generating a single shell command to complete one step of building a software project.
+
+Overall goal: "{plan.goal}"
+Project workspace directory: {workspace_path}
+
+Step to complete: {current_step.task}
+
+Prior steps and results:
+{context_block}
+
+Rules:
+- Output ONLY the raw shell command, nothing else. No explanation, no markdown.
+- The command will run with cwd={workspace_path}, so paths relative to that are fine.
+- Use non-interactive flags where available (e.g. npm --yes, npx --yes).
+- For npx create-vite, use: npx --yes create-vite@latest . --template react
+- Do NOT use shell operators (&&, ||, ;, |, $()) — output ONE command only.
+- Do NOT use sudo."""
+
+    llm = get_llm()
+    messages = [
+        SystemMessage(content="You are a shell command generator. Output only the raw command, no markdown, no explanation."),
+        HumanMessage(content=command_prompt),
+    ]
+
+    try:
+        response = llm.invoke(messages)
+        command = response.content.strip()
+        # Strip any accidental markdown fences the LLM might add
+        if command.startswith("```"):
+            lines = command.split("\n")
+            command = "\n".join(
+                line for line in lines if not line.startswith("```")
+            ).strip()
+
+        result_str = shell_command_tool(command, workspace_path)
+
+        if result_str.startswith("ERROR:"):
+            current_step.status = StepStatus.FAILED
+            current_step.error = result_str
+            current_step.result = f"Command attempted: {command}\n{result_str}"
+        else:
+            current_step.status = StepStatus.DONE
+            current_step.result = f"$ {command}\n{result_str}"
+
+    except Exception as e:
+        current_step.status = StepStatus.FAILED
+        current_step.error = f"shell_node error: {str(e)}"
+
+    return {"plan": plan, "steps_executed": 1}
+
+
+def write_file_node(state: State) -> dict:
+    """
+    Generate and write a source code file (tool_hint='write_file' or 'file_editor').
+
+    The LLM generates the complete file content for the requested file. The
+    node writes it to disk inside the project workspace via write_file_tool.
+    """
+    plan = state["plan"]
+    if plan is None:
+        raise RuntimeError("write_file_node called with no plan in state")
+
+    current_step = next((s for s in plan.subtasks if s.status == StepStatus.RUNNING), None)
+    if current_step is None:
+        raise RuntimeError("write_file_node called with no RUNNING step")
+
+    workspace_path = state.get("workspace_path") or ""
+    if not workspace_path:
+        current_step.status = StepStatus.FAILED
+        current_step.error = (
+            "write_file_node: no workspace_path in state. "
+            "Ensure a setup_workspace step runs before any write_file step."
+        )
+        return {"plan": plan, "steps_executed": 1}
+
+    context_block = _build_coding_context(plan, current_step)
+    today = date.today().isoformat()
+
+    file_prompt = f"""You are generating source code for one step of building a software project.
+
+Today's date: {today}
+Overall goal: "{plan.goal}"
+Project workspace directory: {workspace_path}
+
+Step to complete: {current_step.task}
+
+Prior steps and results:
+{context_block}
+
+Rules:
+- Output a JSON object with exactly two keys:
+    "path": relative file path from the project root (e.g. "src/App.jsx", "index.html")
+    "content": the complete file content as a string
+- No markdown fences around the JSON. Output only the raw JSON object.
+- Write complete, working code — not stubs or placeholders.
+- If this step requires writing multiple files, pick the most important one;
+  the agent can write others in subsequent steps."""
+
+    llm = get_llm()
+    messages = [
+        SystemMessage(content="You are a code generator. Output only a raw JSON object with 'path' and 'content' keys, no markdown."),
+        HumanMessage(content=file_prompt),
+    ]
+
+    try:
+        import json
+
+        response = llm.invoke(messages)
+        raw = response.content.strip()
+
+        # Strip markdown fences if present
+        if raw.startswith("```"):
+            lines = raw.split("\n")
+            raw = "\n".join(line for line in lines if not line.startswith("```")).strip()
+
+        data = json.loads(raw)
+        rel_path = data.get("path", "")
+        content = data.get("content", "")
+
+        if not rel_path:
+            current_step.status = StepStatus.FAILED
+            current_step.error = "write_file_node: LLM returned empty 'path'"
+            return {"plan": plan, "steps_executed": 1}
+
+        result_str = write_file_tool(rel_path, content, workspace_path)
+
+        if result_str.startswith("ERROR:"):
+            current_step.status = StepStatus.FAILED
+            current_step.error = result_str
+        else:
+            current_step.status = StepStatus.DONE
+            current_step.result = f"{result_str}\nPath: {rel_path}"
+
+    except json.JSONDecodeError as e:
+        current_step.status = StepStatus.FAILED
+        current_step.error = f"write_file_node: LLM returned invalid JSON: {e}"
+    except Exception as e:
+        current_step.status = StepStatus.FAILED
+        current_step.error = f"write_file_node error: {str(e)}"
+
+    return {"plan": plan, "steps_executed": 1}
+
+
+def start_server_node(state: State) -> dict:
+    """
+    Start a dev server and store its URL in state (tool_hint='start_server').
+
+    Asks the LLM which command and port to use based on the project type
+    (detected from prior step results), then starts the server via
+    start_dev_server_tool. The URL is stored in state["server_url"] so
+    synthesize_node can surface it in the final answer.
+    """
+    plan = state["plan"]
+    if plan is None:
+        raise RuntimeError("start_server_node called with no plan in state")
+
+    current_step = next((s for s in plan.subtasks if s.status == StepStatus.RUNNING), None)
+    if current_step is None:
+        raise RuntimeError("start_server_node called with no RUNNING step")
+
+    workspace_path = state.get("workspace_path") or ""
+    if not workspace_path:
+        current_step.status = StepStatus.FAILED
+        current_step.error = (
+            "start_server_node: no workspace_path in state. "
+            "Ensure a setup_workspace step runs before start_server."
+        )
+        return {"plan": plan, "steps_executed": 1}
+
+    context_block = _build_coding_context(plan, current_step)
+
+    server_prompt = f"""You are determining how to start the dev server for a software project.
+
+Overall goal: "{plan.goal}"
+Project workspace directory: {workspace_path}
+
+Step to complete: {current_step.task}
+
+Prior steps and results:
+{context_block}
+
+Output a JSON object with exactly two keys:
+  "command": the server start command string (e.g. "npm run dev", "python3 -m http.server 3000")
+  "port": the integer port number the server will listen on
+
+Common conventions:
+- Vite (React/Vue): command="npm run dev", port=5173
+- Create React App: command="npm start", port=3000
+- Next.js: command="npm run dev", port=3000
+- Flask: command="python3 app.py", port=5000
+- Express: command="node index.js", port=3000
+- Python http.server: command="python3 -m http.server 8080", port=8080
+
+No markdown fences — output only the raw JSON object."""
+
+    llm = get_llm()
+    messages = [
+        SystemMessage(content="You are a dev server configuration expert. Output only a raw JSON object with 'command' and 'port' keys."),
+        HumanMessage(content=server_prompt),
+    ]
+
+    try:
+        import json
+
+        response = llm.invoke(messages)
+        raw = response.content.strip()
+
+        if raw.startswith("```"):
+            lines = raw.split("\n")
+            raw = "\n".join(line for line in lines if not line.startswith("```")).strip()
+
+        data = json.loads(raw)
+        command = data.get("command", "npm run dev")
+        port = int(data.get("port", 5173))
+
+        url_or_error = start_dev_server_tool(command, workspace_path, port)
+
+        if url_or_error.startswith("ERROR:"):
+            current_step.status = StepStatus.FAILED
+            current_step.error = url_or_error
+            return {"plan": plan, "steps_executed": 1}
+
+        # Success — record the URL
+        current_step.status = StepStatus.DONE
+        current_step.result = (
+            f"✅ Dev server running at {url_or_error}\n"
+            f"Command: {command}\nPort: {port}\nWorkspace: {workspace_path}"
+        )
+        return {"plan": plan, "steps_executed": 1, "server_url": url_or_error}
+
+    except json.JSONDecodeError as e:
+        current_step.status = StepStatus.FAILED
+        current_step.error = f"start_server_node: LLM returned invalid JSON: {e}"
+    except Exception as e:
+        current_step.status = StepStatus.FAILED
+        current_step.error = f"start_server_node error: {str(e)}"
+
+    return {"plan": plan, "steps_executed": 1}
 
 
 def executor_node(state: State) -> dict:
@@ -603,18 +935,17 @@ def synthesize_node(state: State) -> dict:
         return {"plan": plan}
 
     # Build synthesis prompt
-    synthesis_prompt = f"""You are given raw, noisy scraped web content related to: "{plan.goal}"
+    synthesis_prompt = f"""You are given the results of executing a multi-step plan toward this goal: "{plan.goal}"
 
-The content contains navigation menus, stadium tables, and unrelated trivia mixed in with the actual relevant facts. Your job:
+For information/research goals: extract the specific facts that answer the goal, ignoring boilerplate.
+For app-building goals: summarize what was built, what files were created, and — most importantly — how to access the running app.
 
-1. Find the specific fact(s) that answer the goal — dates, scores, team names, match stage (group/knockout/semi/final).
-2. Ignore boilerplate, image alt-text, navigation links, stadium capacity tables, and unrelated historical trivia.
-3. Determine the MOST RECENT dated event relevant to the goal — sort by date, not by position in the text.
-4. If the specific event asked about (e.g., "the final") hasn't occurred, identify the most recent completed match instead from the data provided, and answer using that — do not simply state that no winner was found.
-5. Give a direct, confident answer grounded only in facts present in the search results. Do not hedge with "consult a live source" — you have the current data, use it.
+Step results:
+{chr(10).join(step_results)}
 
-Search results:
-{chr(10).join(step_results)}"""
+{f'\n✅ A dev server is running at: {state.get("server_url")}\n' if state.get("server_url") else ''}
+
+Provide a clear, direct final answer. For apps, lead with the URL if one is running."""
 
     llm = get_llm()
     messages = [
@@ -736,75 +1067,75 @@ def replaner(state: State) -> dict:
         # Remove cancelled steps from subtasks (filter by original status before we changed it)
         plan.subtasks = [s for s in plan.subtasks if s.status not in (StepStatus.CANCELLED,)]
         return {"plan": plan}
-
-    # Collect the results of completed steps — this reflects what actually
-    # EXECUTED so far in this run (i.e. the outcome of the previous replan
-    # cycle, if any).
-    completed_results = []
-    done_steps = []
-    for step in plan.subtasks:
-        if step.status == StepStatus.DONE:
-            done_steps.append(step)
-            if step.result:
-                completed_results.append(f"Step {step.id}: {step.task}\nResult: {step.result}")
-        elif step.status == StepStatus.FAILED and step.error:
-            completed_results.append(f"Step {step.id}: {step.task}\nError: {step.error}")
-
-    # Compare THIS replan's incoming context (what execution has produced so
-    # far) against what was on hand at the time of the LAST replan. This is
-    # the correct comparison — real outcomes vs. real outcomes.
-    #
-    # Previously this compared `completed_results` against the results of the
-    # brand-new plan `breakdown_task` was about to generate — but a
-    # freshly-generated plan is always all-PENDING and has never executed, so
-    # that comparison was structurally guaranteed to find "no new info" every
-    # single time, regardless of whether the replan was actually repetitive.
-    # That caused premature termination after just one real replan cycle.
-    previous_context = state.get("last_replan_context")
-    if previous_context is None:
-        # No prior replan cycle to compare against yet (this is the first
-        # replan in the run) — nothing to judge novelty against.
-        has_new_info, novelty_reason = True, "First replan - no previous context to compare"
     else:
-        has_new_info, novelty_reason = _check_replan_novelty(previous_context, completed_results)
+        # Collect the results of completed steps — this reflects what actually
+        # EXECUTED so far in this run (i.e. the outcome of the previous replan
+        # cycle, if any).
+        completed_results = []
+        done_steps = []
+        for step in plan.subtasks:
+            if step.status == StepStatus.DONE:
+                done_steps.append(step)
+                if step.result:
+                    completed_results.append(f"Step {step.id}: {step.task}\nResult: {step.result}")
+            elif step.status == StepStatus.FAILED and step.error:
+                completed_results.append(f"Step {step.id}: {step.task}\nError: {step.error}")
 
-    # Generate a new plan based on the original goal and the results of completed steps
-    new_plan = breakdown_task(plan.goal, context=completed_results)
+        # Compare THIS replan's incoming context (what execution has produced so
+        # far) against what was on hand at the time of the LAST replan. This is
+        # the correct comparison — real outcomes vs. real outcomes.
+        #
+        # Previously this compared `completed_results` against the results of the
+        # brand-new plan `breakdown_task` was about to generate — but a
+        # freshly-generated plan is always all-PENDING and has never executed, so
+        # that comparison was structurally guaranteed to find "no new info" every
+        # single time, regardless of whether the replan was actually repetitive.
+        # That caused premature termination after just one real replan cycle.
+        previous_context = state.get("last_replan_context")
+        if previous_context is None:
+            # No prior replan cycle to compare against yet (this is the first
+            # replan in the run) — nothing to judge novelty against.
+            has_new_info, novelty_reason = True, "First replan - no previous context to compare"
+        else:
+            has_new_info, novelty_reason = _check_replan_novelty(previous_context, completed_results)
 
-    # Merge DONE steps back to preserve execution history and results for synthesis
-    next_id = 1
-    if done_steps:
-        done_steps.sort(key=lambda s: s.id)
-        for s in done_steps:
+        # Generate a new plan based on the original goal and the results of completed steps
+        new_plan = breakdown_task(plan.goal, context=completed_results)
+
+        # Merge DONE steps back to preserve execution history and results for synthesis
+        next_id = 1
+        if done_steps:
+            done_steps.sort(key=lambda s: s.id)
+            for s in done_steps:
+                s.id = next_id
+                next_id += 1
+
+        for s in new_plan.subtasks:
             s.id = next_id
             next_id += 1
 
-    for s in new_plan.subtasks:
-        s.id = next_id
-        next_id += 1
+        new_plan.subtasks = done_steps + new_plan.subtasks
 
-    new_plan.subtasks = done_steps + new_plan.subtasks
-
-    # Return the delta only — do not mutate `state` directly. LangGraph applies
-    # the registered reducers (see state.py) to whatever this dict returns;
-    # writing to `state` in place bypasses that and can cause inconsistent
-    # results when nodes run concurrently or the graph replays from a checkpoint.
-    if has_new_info:
-        # Reset consecutive counter when we have new information
-        return {
-            "plan": new_plan,
-            "replan_count": 1,
-            "consecutive_identical_replans": 0,
-            "last_replan_context": completed_results,
-        }
-    else:
-        # Increment consecutive counter when no new information. The reducer
-        # now REPLACES rather than accumulates, so we must compute the new
-        # value explicitly here rather than returning a delta of 1.
-        return {
-            "plan": new_plan,
-            "replan_count": 1,
-            "consecutive_identical_replans": consecutive_count + 1,
-            "last_replan_context": completed_results,
-        }
+        # Return the delta only — do not mutate `state` directly. LangGraph applies
+        # the registered reducers (see state.py) to whatever this dict returns;
+        # writing to `state` in place bypasses that and can cause inconsistent
+        # results when nodes run concurrently or the graph replays from a checkpoint.
+        if has_new_info:
+            # Reset consecutive counter when we have new information
+            return {
+                "plan": new_plan,
+                "replan_count": 1,
+                "consecutive_identical_replans": 0,
+                "last_replan_context": completed_results,
+            }
+        else:
+            # Increment consecutive counter when no new information. The reducer
+            # now REPLACES rather than accumulates, so we must compute the new
+            # value explicitly here rather than returning a delta of 1.
+            return {
+                "plan": new_plan,
+                "replan_count": 1,
+                "consecutive_identical_replans": consecutive_count + 1,
+                "last_replan_context": completed_results,
+            }
 

@@ -1,7 +1,12 @@
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, START, StateGraph
 
-from .nodes import plan_node, executor_node, tavily_search_node, synthesize_node, replaner, reason_node, code_executor_node, MAX_TOTAL_STEPS
+from .nodes import (
+    plan_node, executor_node, tavily_search_node, synthesize_node,
+    replaner, reason_node, code_executor_node,
+    setup_workspace_node, shell_node, write_file_node, start_server_node,
+    MAX_TOTAL_STEPS,
+)
 from .state import State, StepStatus
 
 
@@ -53,6 +58,14 @@ def _route_to_tool(state: State) -> str:
         return "code_executor"
     if tool_hint == "none":
         return "reason"
+    if tool_hint == "setup_workspace":
+        return "setup_workspace"
+    if tool_hint == "shell_command":
+        return "shell"
+    if tool_hint in ("write_file", "file_editor"):
+        return "write_file"
+    if tool_hint == "start_server":
+        return "start_server"
 
     # Any other/unimplemented tool hint falls through to "stub" for now.
     return "stub"
@@ -107,6 +120,10 @@ def build_graph():
     graph.add_node("reason", reason_node)
     graph.add_node("synthesize", synthesize_node)
     graph.add_node("replaner", replaner)
+    graph.add_node("setup_workspace", setup_workspace_node)
+    graph.add_node("shell", shell_node)
+    graph.add_node("write_file", write_file_node)
+    graph.add_node("start_server", start_server_node)
     
     # Stub node for tools not yet implemented (e.g. file_editor).
     # NOTE: tool_hint == "none" no longer routes here — see reason_node, which
@@ -140,6 +157,10 @@ def build_graph():
             "reason": "reason",
             "synthesize": "synthesize",
             "stub": "stub",
+            "setup_workspace": "setup_workspace",
+            "shell": "shell",
+            "write_file": "write_file",
+            "start_server": "start_server",
             "end": END,
         },
     )
@@ -181,6 +202,13 @@ def build_graph():
             "synthesize": "synthesize",
         },
     )
+
+    # Coding-agent nodes — all share the same post-execution routing
+    _coding_routing = {"replaner": "replaner", "executor": "executor", "synthesize": "synthesize"}
+    graph.add_conditional_edges("setup_workspace", _route_after_tool, _coding_routing)
+    graph.add_conditional_edges("shell", _route_after_tool, _coding_routing)
+    graph.add_conditional_edges("write_file", _route_after_tool, _coding_routing)
+    graph.add_conditional_edges("start_server", _route_after_tool, _coding_routing)
     
     # After replaning, route back to executor to run the new plan
     graph.add_edge("replaner", "executor")

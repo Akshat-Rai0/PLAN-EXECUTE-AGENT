@@ -6,6 +6,7 @@ from typing_extensions import TypedDict as ExtTypedDict
 from operator import add
 
 
+
 class StepStatus(str, Enum):
     PENDING = "PENDING"
     RUNNING = "RUNNING"
@@ -73,6 +74,16 @@ def replace_consecutive_identical_replans(existing: Optional[int], new: Optional
     return new if new is not None else (existing or 0)
 
 
+def replace_workspace_path(existing: Optional[str], new: Optional[str]) -> Optional[str]:
+    """Reducer: replace workspace_path with new value, or keep existing if new is None."""
+    return new if new is not None else existing
+
+
+def replace_server_url(existing: Optional[str], new: Optional[str]) -> Optional[str]:
+    """Reducer: replace server_url with new value, or keep existing if new is None."""
+    return new if new is not None else existing
+
+
 class State(ExtTypedDict):
     input: str
     plan: Annotated[Optional[Plan], replace_plan]
@@ -80,3 +91,8 @@ class State(ExtTypedDict):
     steps_executed: Annotated[int, sum_steps_executed]
     consecutive_identical_replans: Annotated[int, replace_consecutive_identical_replans]
     last_replan_context: Annotated[Optional[list], replace_last_replan_context]
+    # Coding-agent workspace — set once by setup_workspace_node, threaded
+    # through state so every subsequent node knows the project root.
+    workspace_path: Annotated[Optional[str], replace_workspace_path]
+    # URL of a running dev server, set by start_server_node.
+    server_url: Annotated[Optional[str], replace_server_url]

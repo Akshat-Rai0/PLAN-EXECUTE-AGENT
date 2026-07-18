@@ -38,6 +38,8 @@ def main():
         "plan": None,
         "replan_count": 0,
         "consecutive_identical_replans": 0,
+        "workspace_path": None,
+        "server_url": None,
     }
     
     # Invoke the graph with required config
@@ -88,6 +90,15 @@ def main():
             print(plan.final_answer)
         else:
             print("(No synthesized final answer was produced for this run.)")
+
+        # Surface coding-agent artifacts if present
+        workspace = result.get("workspace_path")
+        server_url = result.get("server_url")
+        if workspace:
+            print(f"\n📁 Project Workspace: {workspace}")
+        if server_url:
+            print(f"\n🌐 App running at:     {server_url}")
+            print(f"   Open in browser:    {server_url}")
 
         # Save to file
         output_dir = os.path.join(grandparent_dir, "plans")
