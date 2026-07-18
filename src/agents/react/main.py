@@ -1,7 +1,5 @@
 import sys
 import os
-import json
-from datetime import datetime
 
 # When running directly, add parent directories to path for imports
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -12,6 +10,7 @@ sys.path.insert(0, grandparent_dir)
 # Now use absolute imports
 from src.agents.react.state import ReactState
 from src.agents.react.graph import build_react_graph
+from src.agents.plan_execute.output_store import persist_react_run_artifacts
 
 
 def main():
@@ -77,34 +76,14 @@ def main():
     print(f"- Total iterations (LLM calls): {result['iterations']}")
     print("=" * 80)
     
-    # Save result to JSON
-    output_dir = os.path.join(grandparent_dir, "plans")
-    os.makedirs(output_dir, exist_ok=True)
-    
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"react_result_{timestamp}.json"
-    filepath = os.path.join(output_dir, filename)
-    
-    # Convert turns to dict for JSON serialization
-    result_data = {
-        "goal": goal,
-        "final_answer": result.get("final_answer"),
-        "iterations": result["iterations"],
-        "history": [
-            {
-                "thought": turn.thought,
-                "action": turn.action,
-                "action_input": turn.action_input,
-                "observation": turn.observation
-            }
-            for turn in result["history"]
-        ]
-    }
-    
-    with open(filepath, 'w') as f:
-        json.dump(result_data, f, indent=2)
-    
-    print(f"\n💾 Result saved to: {filepath}")
+    artifact_dir = persist_react_run_artifacts(
+        repo_root=os.path.dirname(grandparent_dir),
+        goal=goal,
+        final_answer=result.get("final_answer"),
+        iterations=result["iterations"],
+        history=result["history"],
+    )
+    print(f"\n📦 Agent output saved to: {artifact_dir}")
 
 
 if __name__ == "__main__":

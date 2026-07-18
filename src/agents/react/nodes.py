@@ -4,19 +4,40 @@ from src.tools.registry import tavily_search, today_date
 from langchain_core.messages import HumanMessage, SystemMessage
 from src.agents.plan_execute.llm import get_llm
 
+MAX_HISTORY_TURNS_IN_PROMPT = 6
+MAX_HISTORY_CHARS_IN_PROMPT = 9_000
+MAX_TURN_FIELD_CHARS = 1_500
+
+
+def _truncate(value: str, limit: int = MAX_TURN_FIELD_CHARS) -> str:
+    if len(value) <= limit:
+        return value
+    return f"{value[:limit - 80]}\n... [truncated] ...\n{value[-60:]}"
+
 
 def _render_history(history: list[Turn]) -> str:
-    """Render completed turns (where observation is not None) for the prompt."""
-    rendered = []
-    for turn in history:
-        if turn.observation is not None:
-            rendered.append(
-                f"Thought: {turn.thought}\n"
-                f"Action: {turn.action}\n"
-                f"Action Input: {turn.action_input}\n"
-                f"Observation: {turn.observation}\n\n"
-            )
-    return "".join(rendered)
+    """Render a bounded recent history, avoiding quadratic prompt growth."""
+    completed = [turn for turn in history if turn.observation is not None]
+    recent = completed[-MAX_HISTORY_TURNS_IN_PROMPT:]
+    rendered_reversed = []
+    used = 0
+    # Add newest turns first so a size cap never drops the current context in
+    # favour of older observations.
+    for turn in reversed(recent):
+        rendered = (
+            f"Thought: {_truncate(turn.thought)}\n"
+            f"Action: {turn.action}\n"
+            f"Action Input: {_truncate(turn.action_input)}\n"
+            f"Observation: {_truncate(turn.observation)}\n\n"
+        )
+        if used + len(rendered) > MAX_HISTORY_CHARS_IN_PROMPT:
+            break
+        rendered_reversed.append(rendered)
+        used += len(rendered)
+    history_text = "".join(reversed(rendered_reversed))
+    omitted = len(completed) - len(rendered_reversed)
+    prefix = f"[Earlier {omitted} turns omitted from prompt]\n\n" if omitted else ""
+    return prefix + history_text
 
 
 def _parse_react_response(content: str) -> tuple[str, str, str]:

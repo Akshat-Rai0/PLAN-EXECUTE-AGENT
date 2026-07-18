@@ -6,6 +6,8 @@ from .llm import get_llm
 from .state import Plan
 
 MAX_RETRIES = 2
+MAX_REPLAN_CONTEXT_CHARS = 12_000
+MAX_REPLAN_CONTEXT_ITEM_CHARS = 1_800
 
 PROMPT_TEMPLATE = """Role:
 You are a task planning assistant that breaks down complex goals into actionable steps.
@@ -68,6 +70,49 @@ Your previous response could not be parsed. Error:
 Return ONLY the raw JSON object. No markdown code fences. No explanation text before or after."""
 
 
+def _truncate_context_item(value: str, limit: int = MAX_REPLAN_CONTEXT_ITEM_CHARS) -> str:
+    """Keep both the conclusion and tail of a long tool result."""
+    if limit <= 0:
+        return ""
+    if len(value) <= limit:
+        return value
+    if limit < 80:
+        return value[:limit]
+    tail_size = min(300, limit // 4)
+    head_size = limit - tail_size
+    omitted = len(value) - limit
+    return f"{value[:head_size]}\n... [{omitted} characters omitted] ...\n{value[-tail_size:]}"
+
+
+def bound_replan_context(
+    context: list[str],
+    max_chars: int = MAX_REPLAN_CONTEXT_CHARS,
+) -> list[str]:
+    """Bound replan input so repeated tool output cannot grow prompts forever.
+
+    The plan and its full results remain available for final synthesis.  This
+    only compacts the *working* context sent to the planner/novelty checker.
+    """
+    bounded: list[str] = []
+    used = 0
+    for item in context:
+        compact = _truncate_context_item(item)
+        separator_size = 1 if bounded else 0
+        remaining = max_chars - used - separator_size
+        if remaining <= 0:
+            break
+        if len(compact) > remaining:
+            compact = _truncate_context_item(compact, remaining)
+        bounded.append(compact)
+        used += len(compact) + separator_size
+
+    if len(bounded) < len(context):
+        marker = f"[Replan context truncated: retained {len(bounded)} of {len(context)} step records]"
+        if used + len(marker) + 1 <= max_chars:
+            bounded.append(marker)
+    return bounded
+
+
 def _strip_markdown_fences(content: str) -> str:
     content = content.strip()
     if content.startswith("```"):
@@ -105,6 +150,9 @@ def breakdown_task(goal: str, context: list[str] = None) -> Plan:
     """
     llm = get_llm()
     if context:
+        # Defence in depth: callers besides replaner can use this public
+        # function, so never trust them to have already bounded the context.
+        context = bound_replan_context(context)
         context_str = "\n".join(context)
         prompt = PROMPT_TEMPLATE.format(goal=goal) + REPLAN_INSTRUCTIONS.format(context_str=context_str)
     else:

@@ -1,8 +1,9 @@
+import os
 import re
 from datetime import date
 
 from .state import State, StepStatus, Step, Plan
-from .tools import breakdown_task
+from .tools import breakdown_task, bound_replan_context
 from src.tools.registry import (
     tavily_search, today_date,
     shell_command_tool, write_file_tool, start_dev_server_tool,
@@ -26,6 +27,11 @@ _YEAR_PATTERN = re.compile(r"\b(19|20)\d{2}\b")
 # better. Short results (like a one-line date fact from reason_node) are safe
 # to fold in directly.
 _SHORT_RESULT_CHAR_LIMIT = 200
+
+
+def _search_relevance_validation_enabled() -> bool:
+    """Keep the costly second LLM search check opt-in for production runs."""
+    return os.getenv("VALIDATE_SEARCH_RELEVANCE", "false").lower() in {"1", "true", "yes"}
 
 
 def _extract_search_context(plan, current_step) -> str:
@@ -302,20 +308,27 @@ def tavily_search_node(state: State) -> dict:
         # tournament concluded". Without this check that case looked
         # identical to a genuinely useful result (status=DONE), so it flowed
         # straight into synthesis with no opportunity to replan.
-        is_relevant, reason = _check_search_relevance(current_step.task, plan.goal, result)
-        if is_relevant:
+        # Search relevance checking is useful for benchmark/quality runs but
+        # costs an additional model call for every successful search.  Keep it
+        # opt-in; normal interactive runs rely on the planner and replanner.
+        if not _search_relevance_validation_enabled():
             current_step.status = StepStatus.DONE
             current_step.result = result
         else:
-            current_step.status = StepStatus.FAILED
-            current_step.error = f"Search returned content, but it doesn't answer this step: {reason}"
-            # Keep the raw result too — even an "irrelevant" search can carry
-            # useful signal (e.g. a mention of "semi-finals" that hints at
-            # what to search for next), and the replanner's context-building
-            # step only looks at DONE steps' results, not FAILED ones' raw
-            # result field, so this is preserved for debugging/visibility
-            # without changing replan behavior.
-            current_step.result = result
+            is_relevant, reason = _check_search_relevance(current_step.task, plan.goal, result)
+            if is_relevant:
+                current_step.status = StepStatus.DONE
+                current_step.result = result
+            else:
+                current_step.status = StepStatus.FAILED
+                current_step.error = f"Search returned content, but it doesn't answer this step: {reason}"
+                # Keep the raw result too — even an "irrelevant" search can carry
+                # useful signal (e.g. a mention of "semi-finals" that hints at
+                # what to search for next), and the replanner's context-building
+                # step only looks at DONE steps' results, not FAILED ones' raw
+                # result field, so this is preserved for debugging/visibility
+                # without changing replan behavior.
+                current_step.result = result
     except Exception as e:
         current_step.status = StepStatus.FAILED
         current_step.error = str(e)
@@ -980,6 +993,11 @@ def _check_replan_novelty(previous_context: list[str], new_context: list[str]) -
     if not previous_context:
         # First replan always has new info by definition
         return True, "First replan - no previous context to compare"
+
+    # Avoid a model call for the common retry case where execution supplied
+    # exactly the same context as the prior replan.
+    if previous_context == new_context:
+        return False, "No new step results since the previous replan"
     
     previous_str = "\n".join(previous_context)
     new_str = "\n".join(new_context)
@@ -1091,6 +1109,10 @@ def replaner(state: State) -> dict:
         # that comparison was structurally guaranteed to find "no new info" every
         # single time, regardless of whether the replan was actually repetitive.
         # That caused premature termination after just one real replan cycle.
+        # Bound before novelty comparison as well as before planning. This
+        # makes identical large results comparable without another model call.
+        completed_results = bound_replan_context(completed_results)
+
         previous_context = state.get("last_replan_context")
         if previous_context is None:
             # No prior replan cycle to compare against yet (this is the first
@@ -1099,7 +1121,7 @@ def replaner(state: State) -> dict:
         else:
             has_new_info, novelty_reason = _check_replan_novelty(previous_context, completed_results)
 
-        # Generate a new plan based on the original goal and the results of completed steps
+        # Generate a new plan based on the original goal and the results of completed steps.
         new_plan = breakdown_task(plan.goal, context=completed_results)
 
         # Merge DONE steps back to preserve execution history and results for synthesis
@@ -1138,4 +1160,3 @@ def replaner(state: State) -> dict:
                 "consecutive_identical_replans": consecutive_count + 1,
                 "last_replan_context": completed_results,
             }
-
