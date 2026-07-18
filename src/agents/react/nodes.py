@@ -1,6 +1,13 @@
 import re
 from .state import Turn, ReactState
-from src.tools.registry import tavily_search, today_date
+from src.tools.registry import (
+    tavily_search,
+    today_date,
+    shell_command_tool,
+    write_file_tool,
+    start_dev_server_tool,
+)
+from src.sandbox.shell_runner import make_project_workspace
 from langchain_core.messages import HumanMessage, SystemMessage
 from src.agents.plan_execute.llm import get_llm
 
@@ -63,6 +70,11 @@ def _parse_react_response(content: str) -> tuple[str, str, str]:
 def react_step(state: ReactState) -> dict:
     goal = state["goal"]
     history = state.get("history", [])
+    iteration = len(history) + 1
+
+    print(f"\n{'='*80}")
+    print(f"🔄 Step {iteration}")
+    print(f"{'='*80}")
 
     # Build the prompt: goal + full history rendered as Thought/Action/Observation text
     history_text = _render_history(history)  # "Thought: ...\nAction: ...\nObservation: ...\n\n" repeated
@@ -78,7 +90,18 @@ def react_step(state: ReactState) -> dict:
 
 {history_text}
 
-Available actions: web_search(query), today_date(), final_answer(answer)
+Available actions:
+- web_search(query): Search the web for information using Tavily. Provide a search query string (plain text).
+- today_date(): Get today's date in YYYY-MM-DD format. No input needed.
+- set_workspace_path(): Create a workspace directory for file operations. No input needed. Must be called before shell_command, write_file, or start_dev_server.
+- shell_command(command): Run a shell command in the workspace. Provide the command as a PLAIN STRING. IMPORTANT: If your command has arguments (like "python hello_world.py" or "npm install"), you MUST use "bash -c 'your command'" format. Only base commands like 'python', 'npm', 'ls' are allowed directly. Requires workspace_path to be set via set_workspace_path.
+- write_file(path, content): Write a file to the workspace. Action Input must be JSON: {{"path": "relative/path/to/file", "content": "file content"}}. Requires workspace_path to be set via set_workspace_path.
+- start_dev_server(command, port): Start a development server. Action Input must be JSON: {{"command": "npm run dev", "port": 5173}}. Requires workspace_path to be set via set_workspace_path.
+- final_answer(answer): Provide the final answer to complete the task.
+
+Important patterns:
+- To run Python code: First use write_file to create a .py file, then use shell_command "bash -c 'python3 filename.py'" (note: use python3, not python)
+- To run commands with arguments: Always use "bash -c 'your command'" format
 
 What is your next Thought and Action? Respond in this exact format:
 Thought: <your reasoning>
@@ -89,11 +112,17 @@ Action Input: <input to the tool, or the final answer text if Action is final_an
     response = get_llm().invoke([system_message, human_message])
     thought, action, action_input = _parse_react_response(response.content)
 
+    print(f"💭 Thought: {thought}")
+    print(f"🎯 Action: {action}")
+    print(f"📝 Action Input: {action_input[:200]}{'...' if len(action_input) > 200 else ''}")
+
     if action == "final_answer":
+        print(f"✅ Final Answer: {action_input}")
         return {"final_answer": action_input, "iterations": 1}
 
     # If parsing failed, create a failed turn
     if not thought or not action:
+        print(f"❌ Parse Error: Could not extract Thought, Action, and Action Input from LLM response")
         turn = Turn(
             thought=response.content[:200] if response.content else "No thought generated",
             action="error",
@@ -103,12 +132,71 @@ Action Input: <input to the tool, or the final answer text if Action is final_an
         return {"history": [turn], "iterations": 1}
 
     # Execute the chosen tool — REUSE existing tools, don't reimplement
+    workspace_path = state.get("workspace_path")
+    
     if action == "web_search":
         observation = tavily_search(action_input)
     elif action == "today_date":
         observation = today_date()
+    elif action == "set_workspace_path":
+        # Create a workspace directory using the goal as a slug
+        import re
+        slug = "-".join(goal.lower().split()[:4])
+        slug = "".join(c if c.isalnum() or c == "-" else "-" for c in slug)[:40]
+        workspace_path = make_project_workspace(slug)
+        observation = f"Workspace created at: {workspace_path}"
+        # Return workspace_path in state update
+        turn = Turn(thought=thought, action=action, action_input=action_input, observation=observation)
+        return {"history": [turn], "iterations": 1, "workspace_path": workspace_path}
+    elif action == "shell_command":
+        if not workspace_path:
+            observation = "ERROR: workspace_path not set. Cannot run shell commands without a workspace. Use set_workspace_path first."
+        else:
+            # Handle case where LLM mistakenly sends JSON instead of plain string
+            command = action_input
+            if action_input.startswith("{"):
+                try:
+                    import json
+                    cmd_data = json.loads(action_input)
+                    command = cmd_data.get("command", action_input)
+                except json.JSONDecodeError:
+                    command = action_input
+            observation = shell_command_tool(command, workspace_path)
+    elif action == "write_file":
+        if not workspace_path:
+            observation = "ERROR: workspace_path not set. Cannot write files without a workspace. Use set_workspace_path first."
+        else:
+            # Parse action_input as JSON: {"path": "relative/path", "content": "file content"}
+            try:
+                import json
+                file_data = json.loads(action_input)
+                rel_path = file_data.get("path", "")
+                content = file_data.get("content", "")
+                if not rel_path:
+                    observation = "ERROR: write_file requires 'path' field in action_input JSON"
+                else:
+                    observation = write_file_tool(rel_path, content, workspace_path)
+            except json.JSONDecodeError:
+                observation = f"ERROR: write_file action_input must be valid JSON with 'path' and 'content' fields. Got: {action_input}"
+    elif action == "start_dev_server":
+        if not workspace_path:
+            observation = "ERROR: workspace_path not set. Cannot start dev server without a workspace. Use set_workspace_path first."
+        else:
+            # Parse action_input as JSON: {"command": "npm run dev", "port": 5173}
+            try:
+                import json
+                server_data = json.loads(action_input)
+                command = server_data.get("command", "npm run dev")
+                port = int(server_data.get("port", 5173))
+                observation = start_dev_server_tool(command, workspace_path, port)
+            except json.JSONDecodeError:
+                observation = f"ERROR: start_dev_server action_input must be valid JSON with 'command' and 'port' fields. Got: {action_input}"
+            except ValueError:
+                observation = f"ERROR: port must be a number. Got: {server_data.get('port')}"
     else:
         observation = f"Unknown action: {action}"
+
+    print(f"👁️  Observation: {observation[:300]}{'...' if len(observation) > 300 else ''}")
 
     turn = Turn(thought=thought, action=action, action_input=action_input, observation=observation)
     return {"history": [turn], "iterations": 1}

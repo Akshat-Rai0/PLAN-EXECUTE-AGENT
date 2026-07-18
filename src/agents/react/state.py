@@ -5,10 +5,10 @@ from pydantic import BaseModel
 from typing_extensions import TypedDict as ExtTypedDict
 from operator import add
 
-# Import the reducer from plan_execute
-from src.agents.plan_execute.state import sum_replan_count
+# Import the reducers from plan_execute
+from src.agents.plan_execute.state import sum_replan_count, replace_workspace_path
 
-MAX_REACT_ITERATIONS = 15
+MAX_REACT_ITERATIONS = 5
 
 class Turn(BaseModel):
     thought: str
@@ -21,3 +21,4 @@ class ReactState(TypedDict):
     history: Annotated[list[Turn], add]   # append-only, use operator.add as reducer
     final_answer: Optional[str]
     iterations: Annotated[int, sum_replan_count]  # reuse your existing accumulating reducer
+    workspace_path: Annotated[Optional[str], replace_workspace_path]  # coding-agent workspace

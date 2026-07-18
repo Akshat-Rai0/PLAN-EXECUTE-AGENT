@@ -38,7 +38,8 @@ def main():
         "goal": goal,
         "history": [],
         "final_answer": None,
-        "iterations": 0
+        "iterations": 0,
+        "workspace_path": None,
     }
     
     # Invoke the graph with required config
