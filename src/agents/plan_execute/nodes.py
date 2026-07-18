@@ -169,6 +169,11 @@ def plan_node(state: State) -> dict:
     """
     goal = state.get("input", "")
 
+    print(f"\n{'='*80}")
+    print(f"📋 Creating Plan")
+    print(f"{'='*80}")
+    print(f"Goal: {goal}")
+
     if _is_pure_date_query(goal):
         anchor_step = _make_date_anchor_step(next_id=1)
         plan = Plan(
@@ -176,6 +181,7 @@ def plan_node(state: State) -> dict:
             subtasks=[anchor_step],
             final_answer=anchor_step.result,
         )
+        print(f"✅ Pure date query - skipping planning")
         return {"plan": plan}
 
     plan = breakdown_task(goal)
@@ -186,6 +192,10 @@ def plan_node(state: State) -> dict:
         for i, step in enumerate(plan.subtasks, start=2):
             step.id = i
         plan.subtasks = [anchor_step] + plan.subtasks
+
+    print(f"✅ Plan created with {len(plan.subtasks)} steps:")
+    for step in plan.subtasks:
+        print(f"   Step {step.id}: {step.task} (tool: {step.tool_hint})")
 
     return {"plan": plan}
 
@@ -314,13 +324,18 @@ def tavily_search_node(state: State) -> dict:
         if not _search_relevance_validation_enabled():
             current_step.status = StepStatus.DONE
             current_step.result = result
+            print(f"✅ Search completed")
+            print(f"👁️  Result: {result[:300]}{'...' if len(result) > 300 else ''}")
         else:
             is_relevant, reason = _check_search_relevance(current_step.task, plan.goal, result)
             if is_relevant:
                 current_step.status = StepStatus.DONE
                 current_step.result = result
+                print(f"✅ Search completed (relevance validated)")
+                print(f"👁️  Result: {result[:300]}{'...' if len(result) > 300 else ''}")
             else:
                 current_step.status = StepStatus.FAILED
+                print(f"❌ Search result deemed irrelevant: {reason}")
                 current_step.error = f"Search returned content, but it doesn't answer this step: {reason}"
                 # Keep the raw result too — even an "irrelevant" search can carry
                 # useful signal (e.g. a mention of "semi-finals" that hints at
@@ -332,6 +347,7 @@ def tavily_search_node(state: State) -> dict:
     except Exception as e:
         current_step.status = StepStatus.FAILED
         current_step.error = str(e)
+        print(f"❌ Search error: {str(e)}")
 
     return {"plan": plan, "steps_executed": 1}
 
@@ -406,9 +422,12 @@ Instructions:
 
         current_step.status = StepStatus.DONE
         current_step.result = response.content
+        print(f"✅ Reasoning completed")
+        print(f"👁️  Result: {response.content[:300]}{'...' if len(response.content) > 300 else ''}")
     except Exception as e:
         current_step.status = StepStatus.FAILED
         current_step.error = str(e)
+        print(f"❌ Reasoning failed: {str(e)}")
 
     return {"plan": plan, "steps_executed": 1}
 
@@ -536,14 +555,18 @@ Instructions:
                 # Code executed successfully
                 current_step.status = StepStatus.DONE
                 current_step.result = result.stdout if result.stdout else "Code executed successfully with no output."
+                print(f"✅ Code executed successfully")
+                print(f"👁️  Result: {current_step.result[:300]}{'...' if len(current_step.result) > 300 else ''}")
                 return {"plan": plan, "steps_executed": 1}
             else:
                 # Code execution failed
                 last_error = result.error or result.stderr or "Unknown error"
+                print(f"❌ Code execution failed (attempt {attempt + 1}/{max_retries + 1}): {last_error[:200]}")
                 
                 # Check if this is a fixable error
                 if _is_fixable_error(last_error) and attempt < max_retries:
                     # Retry with error context
+                    print(f"🔄 Retrying with error context...")
                     continue
                 else:
                     # Either not fixable or out of retries. This step never
@@ -611,6 +634,7 @@ def setup_workspace_node(state: State) -> dict:
 
     current_step.status = StepStatus.DONE
     current_step.result = f"Project workspace created at: {workspace_path}"
+    print(f"✅ Workspace created: {workspace_path}")
 
     return {"plan": plan, "steps_executed": 1, "workspace_path": workspace_path}
 
@@ -695,13 +719,17 @@ Rules:
             current_step.status = StepStatus.FAILED
             current_step.error = result_str
             current_step.result = f"Command attempted: {command}\n{result_str}"
+            print(f"❌ Shell command failed: {result_str[:200]}")
         else:
             current_step.status = StepStatus.DONE
             current_step.result = f"$ {command}\n{result_str}"
+            print(f"✅ Shell command completed")
+            print(f"👁️  Result: {result_str[:300]}{'...' if len(result_str) > 300 else ''}")
 
     except Exception as e:
         current_step.status = StepStatus.FAILED
         current_step.error = f"shell_node error: {str(e)}"
+        print(f"❌ Shell command error: {str(e)}")
 
     return {"plan": plan, "steps_executed": 1}
 
@@ -784,16 +812,21 @@ Rules:
         if result_str.startswith("ERROR:"):
             current_step.status = StepStatus.FAILED
             current_step.error = result_str
+            print(f"❌ Write file failed: {result_str[:200]}")
         else:
             current_step.status = StepStatus.DONE
             current_step.result = f"{result_str}\nPath: {rel_path}"
+            print(f"✅ File written: {rel_path}")
+            print(f"👁️  Result: {result_str[:200]}")
 
     except json.JSONDecodeError as e:
         current_step.status = StepStatus.FAILED
         current_step.error = f"write_file_node: LLM returned invalid JSON: {e}"
+        print(f"❌ Write file JSON error: {e}")
     except Exception as e:
         current_step.status = StepStatus.FAILED
         current_step.error = f"write_file_node error: {str(e)}"
+        print(f"❌ Write file error: {str(e)}")
 
     return {"plan": plan, "steps_executed": 1}
 
@@ -875,6 +908,7 @@ No markdown fences — output only the raw JSON object."""
         if url_or_error.startswith("ERROR:"):
             current_step.status = StepStatus.FAILED
             current_step.error = url_or_error
+            print(f"❌ Dev server failed: {url_or_error[:200]}")
             return {"plan": plan, "steps_executed": 1}
 
         # Success — record the URL
@@ -883,14 +917,18 @@ No markdown fences — output only the raw JSON object."""
             f"✅ Dev server running at {url_or_error}\n"
             f"Command: {command}\nPort: {port}\nWorkspace: {workspace_path}"
         )
+        print(f"✅ Dev server started at {url_or_error}")
+        print(f"👁️  Command: {command}, Port: {port}")
         return {"plan": plan, "steps_executed": 1, "server_url": url_or_error}
 
     except json.JSONDecodeError as e:
         current_step.status = StepStatus.FAILED
         current_step.error = f"start_server_node: LLM returned invalid JSON: {e}"
+        print(f"❌ Dev server JSON error: {e}")
     except Exception as e:
         current_step.status = StepStatus.FAILED
         current_step.error = f"start_server_node error: {str(e)}"
+        print(f"❌ Dev server error: {str(e)}")
 
     return {"plan": plan, "steps_executed": 1}
 
@@ -916,6 +954,12 @@ def executor_node(state: State) -> dict:
 
     next_step.status = StepStatus.RUNNING
 
+    print(f"\n{'='*80}")
+    print(f"🔄 Executing Step {next_step.id}")
+    print(f"{'='*80}")
+    print(f"Task: {next_step.task}")
+    print(f"Tool: {next_step.tool_hint}")
+
     return {"plan": plan}
 
 
@@ -930,6 +974,10 @@ def synthesize_node(state: State) -> dict:
     plan = state["plan"]
     if plan is None:
         raise RuntimeError("synthesize_node called with no plan in state")
+
+    print(f"\n{'='*80}")
+    print(f"🧠 Synthesizing Final Answer")
+    print(f"{'='*80}")
 
     # Collect all step results
     step_results = []
@@ -1058,9 +1106,14 @@ def replaner(state: State) -> dict:
     if plan is None:
         raise RuntimeError("replaner called with no plan in state")
 
+    print(f"\n{'='*80}")
+    print(f"🔄 Replanning")
+    print(f"{'='*80}")
+
     # Check for consecutive identical replans - early termination
     consecutive_count = state.get("consecutive_identical_replans", 0)
     if consecutive_count >= MAX_CONSECUTIVE_IDENTICAL_REPLANS:
+        print(f"❌ Consecutive identical replan limit reached ({MAX_CONSECUTIVE_IDENTICAL_REPLANS})")
         # Mark all remaining PENDING/RUNNING steps as CANCELLED
         cancelled_steps = [s for s in plan.subtasks if s.status in (StepStatus.PENDING, StepStatus.RUNNING)]
         for step in cancelled_steps:
@@ -1076,6 +1129,7 @@ def replaner(state: State) -> dict:
     # replans, not just the delta from the last node call.
     current_replan_count = state.get("replan_count", 0)
     if current_replan_count >= MAX_REPLAN:
+        print(f"❌ Replan limit reached ({MAX_REPLAN})")
         # Mark all remaining PENDING/RUNNING steps as CANCELLED instead of FAILED
         cancelled_steps = [s for s in plan.subtasks if s.status in (StepStatus.PENDING, StepStatus.RUNNING)]
         for step in cancelled_steps:
@@ -1137,6 +1191,10 @@ def replaner(state: State) -> dict:
             next_id += 1
 
         new_plan.subtasks = done_steps + new_plan.subtasks
+
+        print(f"✅ New plan generated with {len(new_plan.subtasks)} steps")
+        if not has_new_info:
+            print(f"⚠️  No new information found (consecutive: {consecutive_count + 1})")
 
         # Return the delta only — do not mutate `state` directly. LangGraph applies
         # the registered reducers (see state.py) to whatever this dict returns;
