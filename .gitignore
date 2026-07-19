@@ -13,3 +13,4 @@ frontend/build/
 eval/results/*.json
 !eval/results/.gitkeep
 sandbox_runs/
+checkpoints.db
