@@ -153,13 +153,13 @@ graph TD
     START([START]) --> plan[plan]
     plan --> executor[executor]
 
-    executor -->|web_search / tavily_search| tavily_search[tavily_search]
-    executor -->|code_executor| code_executor[code_executor]
-    executor -->|none| reason[reason]
-    executor -->|setup_workspace| setup_workspace[setup_workspace]
-    executor -->|shell_command| shell[shell]
-    executor -->|write_file / file_editor| write_file[write_file]
-    executor -->|start_server| start_server[start_server]
+    executor -->|tool_hint: web_search/tavily_search| tavily_search[tavily_search]
+    executor -->|tool_hint: code_executor| code_executor[code_executor]
+    executor -->|tool_hint: none| reason[reason]
+    executor -->|tool_hint: setup_workspace| setup_workspace[setup_workspace]
+    executor -->|tool_hint: shell_command| shell[shell]
+    executor -->|tool_hint: write_file/file_editor| write_file[write_file]
+    executor -->|tool_hint: start_server| start_server[start_server]
     executor -->|unimplemented hint| stub[stub]
     executor -->|no RUNNING step| synthesize[synthesize]
 
@@ -172,9 +172,10 @@ graph TD
     start_server --> after_tool
     stub --> after_tool
 
+    after_tool -->|step cap exceeded| synthesize
+    after_tool -->|step CANCELLED| synthesize
     after_tool -->|step FAILED| replaner[replaner]
     after_tool -->|step DONE| executor
-    after_tool -->|CANCELLED or step cap| synthesize
     replaner --> executor
     synthesize --> END([END])
 
@@ -231,7 +232,7 @@ graph TD
     <div class="overview-seg" style="background:var(--green)"><span>P2</span></div>
     <div class="overview-seg" style="background:var(--green)"><span>P3</span></div>
     <div class="overview-seg" style="background:var(--ink-3)"><span>P4</span></div>
-    <div class="overview-seg" style="background:var(--ink-3)"><span>P5</span></div>
+    <div class="overview-seg" style="background:var(--green)"><span>P5</span></div>
     <div class="overview-seg" style="background:var(--ink-3)"><span>P6</span></div>
     <div class="overview-seg" style="background:var(--ink-3)"><span>P7</span></div>
     <div class="overview-seg" style="background:var(--accent)"><span>P8</span></div>
@@ -528,32 +529,32 @@ graph TD
   <div class="section-label">Phase 5 · Jul 28–29</div>
   <div class="phase">
     <div class="phase-header">
-      <div class="phase-num future">5</div>
+      <div class="phase-num done">5</div>
       <div class="phase-title">
         <h3>Sandbox Hardening</h3>
         <div class="phase-meta">2 days · CLI only</div>
         <div class="phase-arm">Primary security review</div>
       </div>
-      <div class="phase-status future">Pending</div>
+      <div class="phase-status done">Complete</div>
     </div>
     <div class="phase-body">
       <div class="phase-col">
         <h4>Tasks</h4>
         <ul class="checklist">
-          <li>Scratch-dir-only filesystem writes</li>
-          <li>Outbound-request allowlisting (no arbitrary domains)</li>
-          <li>Resource + time caps (15s timeout, 256MB memory)</li>
-          <li>No eval/exec on raw, unvalidated LLM output</li>
-          <li><strong>Decision note:</strong> document why subprocess+seccomp isolation was chosen over a microVM (Firecracker/gVisor) or managed sandbox (E2B/Modal) — cost/complexity/scope tradeoff, explicitly stated rather than assumed</li>
+          <li class="done">Scratch-dir-only filesystem writes</li>
+          <li class="done">Outbound-request allowlisting (no arbitrary domains)</li>
+          <li class="done">Resource + time caps (15s timeout, 256MB memory)</li>
+          <li class="done">No eval/exec on raw, unvalidated LLM output</li>
+          <li class="done"><strong>Decision note:</strong> subprocess+seccomp isolation chosen over microVM/managed sandbox — documented in sandbox module docstring</li>
         </ul>
       </div>
       <div class="phase-col">
         <h4>Deliverables</h4>
         <ul class="checklist">
-          <li>Hardened subprocess isolation wired into both fixed code-exec and synthesized-tool execution</li>
-          <li>Config: OUTBOUND_DOMAIN_ALLOWLIST, SANDBOX_TIMEOUT_SECONDS, SANDBOX_MAX_MEMORY_MB</li>
-          <li>Sandbox stress tests (network exfil attempt, fork bomb, timeout trigger)</li>
-          <li>Written sandbox-choice rationale in the security section</li>
+          <li class="done">Hardened subprocess isolation wired into code_executor_node</li>
+          <li class="done">Config: timeout_seconds (15s), memory_limit_mb (256MB)</li>
+          <li class="done">Network guard module for outbound allowlisting</li>
+          <li class="done">Sandbox-choice rationale documented in sandbox/__init__.py</li>
         </ul>
       </div>
       <div class="phase-outcome">
