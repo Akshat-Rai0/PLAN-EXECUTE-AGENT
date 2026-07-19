@@ -5,6 +5,8 @@ from pydantic import BaseModel, Field
 from typing_extensions import TypedDict as ExtTypedDict
 from operator import add
 
+from src.tools.risk_classifier import RiskLevel
+
 
 
 class StepStatus(str, Enum):
@@ -23,6 +25,7 @@ class Step(BaseModel):
     sensitive: bool = False
     result: Optional[str] = None
     error: Optional[str] = None
+    approval_required: bool = False  # Whether this step requires human approval
 
 
 class Plan(BaseModel):
@@ -84,6 +87,21 @@ def replace_server_url(existing: Optional[str], new: Optional[str]) -> Optional[
     return new if new is not None else existing
 
 
+def replace_pending_approval(existing: Optional[dict], new: Optional[dict]) -> Optional[dict]:
+    """Reducer: replace pending_approval with new value, or keep existing if new is None."""
+    return new if new is not None else existing
+
+
+def add_approval_event(existing: list[dict], new: list[dict]) -> list[dict]:
+    """Reducer: append approval events to the list."""
+    return existing + new
+
+
+def add_human_question(existing: list[dict], new: list[dict]) -> list[dict]:
+    """Reducer: append human questions to the list."""
+    return existing + new
+
+
 class State(ExtTypedDict):
     input: str
     plan: Annotated[Optional[Plan], replace_plan]
@@ -96,3 +114,7 @@ class State(ExtTypedDict):
     workspace_path: Annotated[Optional[str], replace_workspace_path]
     # URL of a running dev server, set by start_server_node.
     server_url: Annotated[Optional[str], replace_server_url]
+    # HITL fields
+    pending_approval: Annotated[Optional[dict], replace_pending_approval]
+    approval_events: Annotated[list[dict], add_approval_event]
+    human_questions: Annotated[list[dict], add_human_question]

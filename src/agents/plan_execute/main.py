@@ -12,6 +12,86 @@ sys.path.insert(0, grandparent_dir)
 from src.agents.plan_execute.state import State
 from src.agents.plan_execute.graph import build_graph
 from src.agents.plan_execute.output_store import persist_run_artifacts
+from langgraph.types import Command
+from langgraph.checkpoint.sqlite import SqliteSaver
+
+
+def handle_interrupt_cli(interrupt_data):
+    """
+    Handle interrupt from the graph by prompting the user for input.
+    
+    Args:
+        interrupt_data: The interrupt payload from the graph (Interrupt object or dict)
+        
+    Returns:
+        A dict with the user's decision/response
+    """
+    if interrupt_data is None:
+        return {"decision": "reject"}
+    
+    # Handle Interrupt object (has value attribute)
+    if hasattr(interrupt_data, 'value'):
+        payload = interrupt_data.value
+    elif isinstance(interrupt_data, (list, tuple)) and len(interrupt_data) > 0:
+        payload = interrupt_data[0]
+        if hasattr(payload, 'value'):
+            payload = payload.value
+    else:
+        payload = interrupt_data
+    
+    # Convert to dict if it's not already
+    if hasattr(payload, 'model_dump'):
+        payload = payload.model_dump()
+    elif not isinstance(payload, dict):
+        payload = {"value": str(payload)}
+    
+    interrupt_type = payload.get("type", "unknown")
+    
+    if interrupt_type == "command_approval":
+        # Handle command approval request
+        tool = payload.get("tool", "unknown")
+        step_id = payload.get("step_id", "?")
+        task = payload.get("task", "")
+        
+        print(f"\n{'='*80}")
+        print(f"🔒 APPROVAL REQUIRED (Step {step_id})")
+        print(f"{'='*80}")
+        print(f"Tool: {tool}")
+        print(f"Task: {task}")
+        print(f"Risk Level: HIGH")
+        print(f"{'='*80}")
+        
+        while True:
+            response = input("\n[A]pprove, [R]eject, [P]rovide alternative: ").strip().upper()
+            
+            if response == "A":
+                return {"decision": "approve"}
+            elif response == "R":
+                return {"decision": "reject"}
+            elif response == "P":
+                alternative = input("Enter alternative command/input: ").strip()
+                return {"decision": "alternative", "alternative_input": alternative}
+            else:
+                print("Invalid choice. Please enter A, R, or P.")
+    
+    elif interrupt_type == "human_question":
+        # Handle human question from LLM
+        question = payload.get("question", "")
+        step_id = payload.get("step_id", "?")
+        
+        print(f"\n{'='*80}")
+        print(f"❓ QUESTION FROM AGENT (Step {step_id})")
+        print(f"{'='*80}")
+        print(f"Question: {question}")
+        print(f"{'='*80}")
+        
+        response = input("\nYour answer: ").strip()
+        return {"human_response": response}
+    
+    else:
+        print(f"\n⚠️ Unknown interrupt type: {interrupt_type}")
+        return {"decision": "reject"}
+
 
 def main():
     """Main CLI entry point for plan generation."""
@@ -40,11 +120,31 @@ def main():
         "consecutive_identical_replans": 0,
         "workspace_path": None,
         "server_url": None,
+        "pending_approval": None,
+        "approval_events": [],
+        "human_questions": [],
     }
     
     # Invoke the graph with required config
     config = {"configurable": {"thread_id": "cli-thread"}}
-    result = graph.invoke(initial_state, config)
+    
+    # Use SQLite checkpointer with context manager
+    with SqliteSaver.from_conn_string("checkpoints.db") as checkpointer:
+        graph_with_checkpoint = graph.compile(checkpointer=checkpointer)
+        
+        # Interrupt-aware execution loop
+        result = graph_with_checkpoint.invoke(initial_state, config)
+        
+        while "__interrupt__" in result:
+            # Handle interrupt
+            interrupt_data = result["__interrupt__"]
+            print(f"\n⏸️ Execution paused - awaiting human input")
+            
+            response = handle_interrupt_cli(interrupt_data)
+            
+            # Resume with response
+            print(f"\n▶️ Resuming execution...")
+            result = graph_with_checkpoint.invoke(Command(resume=response), config)
     
     # Display the result
     print("✅ Execution Complete:")

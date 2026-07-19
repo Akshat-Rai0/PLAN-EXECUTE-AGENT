@@ -1,13 +1,15 @@
-from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.graph import END, START, StateGraph
 
 from .nodes import (
     plan_node, executor_node, tavily_search_node, synthesize_node,
     replaner, reason_node, code_executor_node,
     setup_workspace_node, shell_node, write_file_node, start_server_node,
+    approval_node, ask_human_node,
     MAX_TOTAL_STEPS,
 )
 from .state import State, StepStatus
+from src.tools.risk_classifier import classify_tool_risk, RiskLevel
 
 
 def _has_pending_steps(state: State) -> str:
@@ -52,6 +54,13 @@ def _route_to_tool(state: State) -> str:
         return "synthesize"
 
     tool_hint = running_step.tool_hint.lower()
+    risk_level = classify_tool_risk(tool_hint)
+    
+    # HIGH-risk tools route through approval_node first
+    if risk_level == RiskLevel.HIGH:
+        return "approval"
+    
+    # LOW-risk tools route directly to their tool nodes
     if tool_hint in ("web_search", "tavily_search"):
         return "tavily_search"
     if tool_hint == "code_executor":
@@ -69,6 +78,37 @@ def _route_to_tool(state: State) -> str:
 
     # Any other/unimplemented tool hint falls through to "stub" for now.
     return "stub"
+
+
+def _route_after_approval(state: State) -> str:
+    """
+    Route after approval_node: send to the appropriate tool node based on tool_hint.
+    This is called after human approval is granted to execute the actual tool.
+    """
+    plan = state["plan"]
+    if plan is None:
+        return "executor"
+    
+    running_step = next((s for s in plan.subtasks if s.status == StepStatus.RUNNING), None)
+    if not running_step:
+        return "executor"
+    
+    tool_hint = running_step.tool_hint.lower()
+    
+    # Route to the actual tool node
+    if tool_hint in ("web_search", "tavily_search"):
+        return "tavily_search"
+    if tool_hint == "code_executor":
+        return "code_executor"
+    if tool_hint == "shell_command":
+        return "shell"
+    if tool_hint in ("write_file", "file_editor"):
+        return "write_file"
+    if tool_hint == "start_server":
+        return "start_server"
+    
+    # Fallback
+    return "executor"
 
 
 def _route_after_tool(state: State) -> str:
@@ -124,6 +164,8 @@ def build_graph():
     graph.add_node("shell", shell_node)
     graph.add_node("write_file", write_file_node)
     graph.add_node("start_server", start_server_node)
+    graph.add_node("approval", approval_node)
+    graph.add_node("ask_human", ask_human_node)
     
     # Stub node for tools not yet implemented (e.g. file_editor).
     # NOTE: tool_hint == "none" no longer routes here — see reason_node, which
@@ -161,7 +203,22 @@ def build_graph():
             "shell": "shell",
             "write_file": "write_file",
             "start_server": "start_server",
+            "approval": "approval",
             "end": END,
+        },
+    )
+    
+    # After approval, route to the actual tool node
+    graph.add_conditional_edges(
+        "approval",
+        _route_after_approval,
+        {
+            "tavily_search": "tavily_search",
+            "code_executor": "code_executor",
+            "shell": "shell",
+            "write_file": "write_file",
+            "start_server": "start_server",
+            "executor": "executor",
         },
     )
     
@@ -216,5 +273,5 @@ def build_graph():
     # After synthesis, we're done
     graph.add_edge("synthesize", END)
 
-    checkpointer = InMemorySaver()
-    return graph.compile(checkpointer=checkpointer)
+    # Return uncompiled graph - will be compiled in main.py with checkpointer
+    return graph

@@ -12,6 +12,9 @@ from src.sandbox.shell_runner import make_project_workspace
 from langchain_core.messages import HumanMessage, SystemMessage
 from .llm import get_llm
 from src.sandbox.runner import run_in_sandbox
+from langgraph.checkpoint.sqlite import SqliteSaver
+from langgraph.types import interrupt
+from src.tools.risk_classifier import classify_tool_risk, RiskLevel
 
 # Matches a plausible 4-digit year (1900-2099). Used to pull a year mentioned
 # in a prior reasoning step (e.g. "The current year is 2026.") forward into a
@@ -32,6 +35,23 @@ _SHORT_RESULT_CHAR_LIMIT = 200
 def _search_relevance_validation_enabled() -> bool:
     """Keep the costly second LLM search check opt-in for production runs."""
     return os.getenv("VALIDATE_SEARCH_RELEVANCE", "false").lower() in {"1", "true", "yes"}
+
+
+def _log_approval(state: State, tool: str, details: str) -> dict:
+    """
+    Log LOW-risk tool execution without interrupting.
+    
+    This is called before LOW-risk tool execution to provide visibility
+    into what the agent is doing without requiring human approval.
+    """
+    approval_event = {
+        "tool": tool,
+        "risk_level": "LOW",
+        "details": details,
+        "timestamp": date.today().isoformat(),
+    }
+    print(f"⚠️ Executing LOW-risk operation: {tool} - {details[:100]}")
+    return {"approval_events": [approval_event]}
 
 
 def _extract_search_context(plan, current_step) -> str:
@@ -278,6 +298,9 @@ def tavily_search_node(state: State) -> dict:
     if current_step is None:
         raise RuntimeError("tavily_search_node called with no RUNNING step")
 
+    # Log LOW-risk operation
+    log_update = _log_approval(state, "tavily_search", current_step.task)
+
     try:
         # Extract search query from the task description, including goal context
         query = f"{plan.goal} — {current_step.task}"
@@ -349,7 +372,7 @@ def tavily_search_node(state: State) -> dict:
         current_step.error = str(e)
         print(f"❌ Search error: {str(e)}")
 
-    return {"plan": plan, "steps_executed": 1}
+    return {"plan": plan, "steps_executed": 1, **log_update}
 
 
 def reason_node(state: State) -> dict:
@@ -381,6 +404,9 @@ def reason_node(state: State) -> dict:
     current_step = next((s for s in plan.subtasks if s.status == StepStatus.RUNNING), None)
     if current_step is None:
         raise RuntimeError("reason_node called with no RUNNING step")
+
+    # Log LOW-risk operation
+    log_update = _log_approval(state, "reason", current_step.task)
 
     try:
         prior_context = []
@@ -429,7 +455,7 @@ Instructions:
         current_step.error = str(e)
         print(f"❌ Reasoning failed: {str(e)}")
 
-    return {"plan": plan, "steps_executed": 1}
+    return {"plan": plan, "steps_executed": 1, **log_update}
 
 
 # Exception types that are typically fixable with small code adjustments
@@ -626,6 +652,9 @@ def setup_workspace_node(state: State) -> dict:
     if current_step is None:
         raise RuntimeError("setup_workspace_node called with no RUNNING step")
 
+    # Log LOW-risk operation
+    log_update = _log_approval(state, "setup_workspace", current_step.task)
+
     # Derive a slug from the goal for a human-readable directory name
     slug = "-".join(plan.goal.lower().split()[:4])
     slug = "".join(c if c.isalnum() or c == "-" else "-" for c in slug)[:40]
@@ -636,7 +665,7 @@ def setup_workspace_node(state: State) -> dict:
     current_step.result = f"Project workspace created at: {workspace_path}"
     print(f"✅ Workspace created: {workspace_path}")
 
-    return {"plan": plan, "steps_executed": 1, "workspace_path": workspace_path}
+    return {"plan": plan, "steps_executed": 1, "workspace_path": workspace_path, **log_update}
 
 
 def _build_coding_context(plan, current_step) -> str:
@@ -931,6 +960,169 @@ No markdown fences — output only the raw JSON object."""
         print(f"❌ Dev server error: {str(e)}")
 
     return {"plan": plan, "steps_executed": 1}
+
+
+def ask_human_node(state: State) -> dict:
+    """
+    Handle LLM requests to ask the human a question.
+    
+    This node is called when the LLM wants to ask a human for clarification
+    or input. It triggers an interrupt to pause execution and wait for human input.
+    On resume, it returns the human's response to the LLM.
+    """
+    plan = state["plan"]
+    if plan is None:
+        raise RuntimeError("ask_human_node called with no plan in state")
+
+    current_step = next((s for s in plan.subtasks if s.status == StepStatus.RUNNING), None)
+    if current_step is None:
+        raise RuntimeError("ask_human_node called with no RUNNING step")
+
+    # Check if the step's result contains an ASK_HUMAN marker
+    if current_step.result and current_step.result.startswith("[ASK_HUMAN:"):
+        # Extract the question from the result
+        question = current_step.result.replace("[ASK_HUMAN: ", "").rstrip("]")
+        
+        # Trigger interrupt to get human response
+        question_payload = {
+            "type": "human_question",
+            "question": question,
+            "step_id": current_step.id,
+            "task": current_step.task,
+        }
+        
+        human_response = interrupt(question_payload)
+        
+        # Log the question and response
+        question_event = {
+            "step_id": current_step.id,
+            "question": question,
+            "response": human_response,
+            "timestamp": date.today().isoformat(),
+        }
+        
+        print(f"❓ Human question: {question}")
+        print(f"💬 Human response: {human_response}")
+        
+        # Return the human's response as the step result
+        current_step.result = human_response
+        current_step.status = StepStatus.DONE
+        
+        return {
+            "plan": plan,
+            "human_questions": [question_event],
+        }
+    else:
+        # No question to ask, just proceed
+        return {"plan": plan}
+
+
+def approval_node(state: State) -> dict:
+    """
+    Handle human-in-the-loop approval for HIGH-risk operations.
+
+    This node checks if a pending_approval exists in state. If so, it triggers
+    an interrupt to pause execution and wait for human input. On resume, it
+    processes the human's decision (approve/reject/alternative) and updates
+    the step status accordingly.
+
+    For HIGH-risk tools (shell_command, write_file, code_executor, start_server),
+    this node is called before the actual tool execution to ensure human oversight.
+    """
+    plan = state["plan"]
+    if plan is None:
+        raise RuntimeError("approval_node called with no plan in state")
+
+    current_step = next((s for s in plan.subtasks if s.status == StepStatus.RUNNING), None)
+    if current_step is None:
+        raise RuntimeError("approval_node called with no RUNNING step")
+
+    # Check if this step requires approval (HIGH-risk tool)
+    risk_level = classify_tool_risk(current_step.tool_hint)
+    
+    if risk_level != RiskLevel.HIGH:
+        # LOW-risk tools don't require approval - skip this node
+        return {"plan": plan}
+
+    # Trigger interrupt for HIGH-risk operations
+    approval_request = {
+        "type": "command_approval",
+        "tool": current_step.tool_hint,
+        "step_id": current_step.id,
+        "task": current_step.task,
+        "risk_level": "HIGH",
+    }
+    
+    # Call interrupt to pause execution and wait for human input
+    human_response = interrupt(approval_request)
+    
+    # Process human's response after resume
+    decision = human_response.get("decision", "reject")
+    
+    if decision == "approve":
+        # Human approved - proceed with tool execution
+        approval_event = {
+            "step_id": current_step.id,
+            "tool": current_step.tool_hint,
+            "decision": "approve",
+            "timestamp": date.today().isoformat(),
+        }
+        print(f"✅ Human approved: {current_step.tool_hint} for step {current_step.id}")
+        return {
+            "plan": plan,
+            "approval_events": [approval_event],
+        }
+    
+    elif decision == "reject":
+        # Human rejected - mark step as FAILED and route to replanner
+        current_step.status = StepStatus.FAILED
+        current_step.error = "Operation rejected by human"
+        approval_event = {
+            "step_id": current_step.id,
+            "tool": current_step.tool_hint,
+            "decision": "reject",
+            "timestamp": date.today().isoformat(),
+        }
+        print(f"❌ Human rejected: {current_step.tool_hint} for step {current_step.id}")
+        return {
+            "plan": plan,
+            "approval_events": [approval_event],
+        }
+    
+    elif decision == "alternative":
+        # Human provided alternative input - use it for tool execution
+        alternative_input = human_response.get("alternative_input", "")
+        # Store alternative in step result for the tool node to use
+        current_step.result = f"ALTERNATIVE_INPUT: {alternative_input}"
+        approval_event = {
+            "step_id": current_step.id,
+            "tool": current_step.tool_hint,
+            "decision": "alternative",
+            "alternative_input": alternative_input,
+            "timestamp": date.today().isoformat(),
+        }
+        print(f"🔄 Human provided alternative for step {current_step.id}: {alternative_input[:100]}")
+        return {
+            "plan": plan,
+            "approval_events": [approval_event],
+        }
+    
+    else:
+        # Unknown decision - treat as reject for safety
+        current_step.status = StepStatus.FAILED
+        current_step.error = f"Unknown approval decision: {decision}"
+        approval_event = {
+            "step_id": current_step.id,
+            "tool": current_step.tool_hint,
+            "decision": "reject",
+            "reason": f"Unknown decision: {decision}",
+            "timestamp": date.today().isoformat(),
+        }
+        print(f"❌ Unknown decision '{decision}' - treating as reject")
+        return {
+            "plan": plan,
+            "approval_events": [approval_event],
+        }
 
 
 def executor_node(state: State) -> dict:
