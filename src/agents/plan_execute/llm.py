@@ -24,7 +24,10 @@ def _build_groq():
     api_key = os.getenv("GROQ_API_KEY")
     if not api_key:
         raise ValueError("GROQ_API_KEY is not set in the environment variables.")
-    return ChatGroq(model=model, api_key=api_key, temperature=0)
+    # max_retries bounds how long a 429 can silently block the CLI — without
+    # this the SDK's default retry/backoff can run long enough that a rate
+    # limit wait looks indistinguishable from a genuine hang.
+    return ChatGroq(model=model, api_key=api_key, temperature=0, max_retries=2, timeout=30)
 
 @lru_cache(maxsize=1)
 def get_llm():
