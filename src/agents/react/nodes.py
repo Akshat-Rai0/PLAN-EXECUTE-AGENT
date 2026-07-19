@@ -49,14 +49,20 @@ def _render_history(history: list[Turn]) -> str:
 
 def _parse_react_response(content: str) -> tuple[str, str, str]:
     """Parse LLM response to extract Thought, Action, and Action Input.
-    
+
     Returns tuple of (thought, action, action_input).
     If parsing fails, returns ("", "", "") to indicate a failed turn.
+
+    Only the FIRST Thought/Action/Action Input triple is extracted. Models
+    occasionally emit a second "Thought: ... Action: ... Action Input: ..."
+    block in the same completion (e.g. narrating a planned follow-up action).
+    Without a stop condition, the original greedy `(.*)` with DOTALL would
+    swallow that entire second block into action_input, silently corrupting
+    the input passed to the tool and the persisted trace.
     """
-    # Try to match the pattern with colons
-    pattern = r"Thought:\s*(.*?)\s*Action:\s*(.*?)\s*Action Input:\s*(.*)"
+    pattern = r"Thought:\s*(.*?)\s*Action:\s*(.*?)\s*Action Input:\s*(.*?)(?=\n\s*Thought:|\Z)"
     match = re.search(pattern, content, re.DOTALL | re.IGNORECASE)
-    
+
     if match:
         thought = match.group(1).strip()
         action = match.group(2).strip()
