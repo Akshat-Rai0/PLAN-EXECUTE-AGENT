@@ -185,3 +185,24 @@ def start_dev_server_tool(command_str: str, workspace_path: str, port: int) -> s
         if result.get("stderr"):
             parts.append(f"stderr: {result['stderr'][:1000]}")
         return "\n".join(parts)
+
+
+def ask_human(question: str) -> str:
+    """
+    Ask the human a question and return their response.
+    
+    This is a placeholder function that triggers an interrupt in the graph
+    to pause execution and wait for human input. The actual interrupt handling
+    is done in the approval_node, which calls this function's logic via
+    the LangGraph interrupt mechanism.
+    
+    Args:
+        question: The question to ask the human
+        
+    Returns:
+        The human's response (this is handled via interrupt/resume in the graph)
+    """
+    # This function is called from nodes but the actual interrupt happens
+    # in the approval_node or a dedicated ask_human_node
+    # For now, return a placeholder - the real implementation uses interrupt()
+    return f"[ASK_HUMAN: {question}]"
