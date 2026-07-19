@@ -47,6 +47,30 @@ def _render_history(history: list[Turn]) -> str:
     return prefix + history_text
 
 
+_TRAILING_PARAGRAPH = re.compile(r"\n\s*\n.*\Z", re.DOTALL)
+
+
+def _trim_trailing_rambling(text: str) -> str:
+    """Cut off any paragraph(s) after the first blank line.
+
+    A clean action_input is expected to be a single value (a query, a
+    JSON blob, a command, an answer) — not followed by the model
+    continuing to reason after it has already stated its decision.
+    """
+    return _TRAILING_PARAGRAPH.sub("", text).strip()
+
+
+_VALID_ACTIONS = frozenset({
+    "final_answer",
+    "web_search",
+    "today_date",
+    "set_workspace_path",
+    "shell_command",
+    "write_file",
+    "start_dev_server",
+})
+
+
 def _parse_react_response(content: str) -> tuple[str, str, str]:
     """Parse LLM response to extract Thought, Action, and Action Input.
 
@@ -59,17 +83,49 @@ def _parse_react_response(content: str) -> tuple[str, str, str]:
     Without a stop condition, the original greedy `(.*)` with DOTALL would
     swallow that entire second block into action_input, silently corrupting
     the input passed to the tool and the persisted trace.
+
+    Models also sometimes wrap a *valid* block in unstructured rambling —
+    reasoning out loud before and/or after the real Thought/Action/Action
+    Input triple, occasionally even emitting a literal "Action: ..." as a
+    placeholder mid-thought rather than a real action name. That rambling
+    isn't a second clean block (the (?=\\n\\s*Thought:) stop condition above
+    doesn't fire), so it leaks into `action`/`action_input` verbatim,
+    producing bogus "Unknown action" turns or shipping stray prose straight
+    into a user-facing final_answer. To catch this: if the captured action
+    isn't one of the real action names, re-scan for the LAST occurrence of
+    a genuinely valid "Action: <name>" line in the content and re-anchor
+    the parse there instead of trusting the first (possibly bogus) match.
+    Trailing rambling paragraphs after the real action_input (separated by
+    a blank line) are also trimmed, since nothing downstream of a valid
+    action should still be "thinking out loud" once the decision is made.
     """
     pattern = r"Thought:\s*(.*?)\s*Action:\s*(.*?)\s*Action Input:\s*(.*?)(?=\n\s*Thought:|\Z)"
     match = re.search(pattern, content, re.DOTALL | re.IGNORECASE)
 
-    if match:
-        thought = match.group(1).strip()
-        action = match.group(2).strip()
-        action_input = match.group(3).strip()
-        return (thought, action, action_input)
-    
-    # If pattern doesn't match, return empty strings to indicate failure
+    if not match:
+        return ("", "", "")
+
+    thought = match.group(1).strip()
+    action = match.group(2).strip()
+    action_input = match.group(3).strip()
+
+    if action.lower() in _VALID_ACTIONS:
+        return (thought, action, _trim_trailing_rambling(action_input))
+
+    # First match wasn't a real action (rambling leaked into the Action
+    # capture). Look for the last valid "Action: <name>" line in the
+    # content instead — the model's actual, final decision tends to be
+    # the last clean one it states, with rambling before and after it.
+    valid_action_pattern = (
+        r"Action:\s*(" + "|".join(re.escape(a) for a in _VALID_ACTIONS) + r")\s*"
+        r"Action Input:\s*(.*?)(?=\n\s*Thought:|\n\s*Action:|\Z)"
+    )
+    valid_matches = list(re.finditer(valid_action_pattern, content, re.DOTALL | re.IGNORECASE))
+    if valid_matches:
+        last = valid_matches[-1]
+        return (thought, last.group(1).strip(), _trim_trailing_rambling(last.group(2).strip()))
+
+    # No recoverable valid action anywhere in the response.
     return ("", "", "")
 
 
