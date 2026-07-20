@@ -14,6 +14,10 @@ from src.agents.plan_execute.graph import build_graph
 from src.agents.plan_execute.output_store import persist_run_artifacts
 from langgraph.types import Command
 from langgraph.checkpoint.sqlite import SqliteSaver
+from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
+import sqlite3
+import uuid
+from contextlib import closing
 
 
 def handle_interrupt_cli(interrupt_data):
@@ -125,11 +129,36 @@ def main():
         "human_questions": [],
     }
     
-    # Invoke the graph with required config
-    config = {"configurable": {"thread_id": "cli-thread"}}
-    
-    # Use SQLite checkpointer with context manager
-    with SqliteSaver.from_conn_string("checkpoints.db") as checkpointer:
+    # Fresh thread_id per run — a hardcoded shared "cli-thread" would mean
+    # every invocation's checkpoint state (including any interrupt/resume
+    # history) accumulates in the SAME thread indefinitely, one run bleeding
+    # into the next inside the same checkpoints.db. That's a plausible
+    # contributor to state leaking between unrelated runs (e.g. an earlier
+    # run's dev server URL surfacing in a later, unrelated run's final
+    # answer — see agent_outputs/20260720-025303_.../ and .../025417_...
+    # for two observed instances). A new UUID-based thread_id per process
+    # invocation keeps each run's checkpoint history fully isolated.
+    config = {"configurable": {"thread_id": f"cli-{uuid.uuid4()}"}}
+
+    # State.plan is a custom Plan/StepStatus type (see state.py), which the
+    # SQLite checkpointer's default serializer doesn't know is safe to
+    # deserialize — it warns on every run:
+    #   "Deserializing unregistered type ... This will be blocked in a
+    #   future version." Explicitly allowlisting these two types (matching
+    # exactly what the warning names) silences the warning now and avoids
+    # a hard failure once LangGraph makes this the default behavior.
+    serializer = JsonPlusSerializer(
+        allowed_msgpack_modules=[
+            ("src.agents.plan_execute.state", "StepStatus"),
+            ("src.agents.plan_execute.state", "Plan"),
+        ]
+    )
+
+    # Use SQLite checkpointer with context manager. Constructed manually
+    # (rather than via SqliteSaver.from_conn_string, which hardcodes
+    # serde=None) so the custom serializer above is actually used.
+    with closing(sqlite3.connect("checkpoints.db", check_same_thread=False)) as conn:
+        checkpointer = SqliteSaver(conn, serde=serializer)
         graph_with_checkpoint = graph.compile(checkpointer=checkpointer)
         
         # Interrupt-aware execution loop
