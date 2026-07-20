@@ -196,9 +196,6 @@ def main():
         # stranded in the temporary sandbox workspace.
         workspace = result.get("workspace_path")
         server_url = result.get("server_url")
-        if server_url:
-            print(f"\n🌐 App running at:     {server_url}")
-            print(f"   Open in browser:    {server_url}")
 
         repo_root = os.path.dirname(grandparent_dir)
         artifact_dir = persist_run_artifacts(
