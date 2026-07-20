@@ -344,3 +344,95 @@ def write_file(relative_path: str, content: str, workspace_path: str) -> dict:
         }
     except OSError as e:
         return {"success": False, "error": f"Failed to write file: {e}"}
+
+
+def delete_path(relative_path: str, workspace_path: str) -> dict:
+    """
+    Delete a file or directory inside the workspace at `relative_path`.
+
+    This exists because 'rm' is deliberately excluded from ALLOWED_COMMANDS
+    (arbitrary shell deletion is a real security surface), but the agent
+    still has a legitimate, common need to clear files/directories inside
+    its own sandboxed workspace. Without this, the executor has no safe
+    path to satisfy a "delete X" step and the replanner thrashes trying
+    shell-command workarounds ('rm', 'rm -rf *', chained pip/rm commands,
+    even attempting to install a missing 'python' binary) that all hit the
+    same wall — see agent_outputs/20260720-025417_.../plan.json and
+    agent_outputs/20260720-121944_.../ for two reproduced instances of
+    this exact thrash pattern.
+
+    relative_path must be a relative path (no leading /) and must resolve
+    to somewhere inside workspace_path — same confinement check as
+    write_file. relative_path == "" or "." is allowed and clears every
+    file/directory directly inside the workspace root without deleting
+    the workspace directory itself, matching what "delete all files in
+    the project" actually means.
+
+    Uses pure Python os/shutil — never shells out — so this is not gated
+    by ALLOWED_COMMANDS and cannot be used to delete anything outside the
+    workspace regardless of what path string the LLM supplies.
+
+    Args:
+        relative_path: Path relative to workspace_path, or "" / "." to
+            clear the contents of the workspace root itself.
+        workspace_path: Absolute path to the project workspace.
+
+    Returns:
+        dict with keys: success (bool), deleted (list[str]), error (str|None).
+    """
+    if os.path.isabs(relative_path):
+        return {
+            "success": False,
+            "deleted": [],
+            "error": f"relative_path must be relative, not absolute: '{relative_path}'",
+        }
+
+    try:
+        base = Path(os.path.realpath(workspace_path))
+    except Exception as e:
+        return {"success": False, "deleted": [], "error": f"Path resolution error: {e}"}
+
+    clearing_root = relative_path in ("", ".")
+    target = base if clearing_root else base / relative_path
+
+    try:
+        resolved = Path(os.path.realpath(str(target)))
+    except Exception as e:
+        return {"success": False, "deleted": [], "error": f"Path resolution error: {e}"}
+
+    if not (resolved == base or str(resolved).startswith(str(base) + os.sep)):
+        return {
+            "success": False,
+            "deleted": [],
+            "error": (
+                f"Resolved path '{target}' escapes the workspace. "
+                "Path traversal (../../) is not allowed."
+            ),
+        }
+
+    if clearing_root:
+        if not base.exists():
+            return {"success": False, "deleted": [], "error": f"Workspace not found: {base}"}
+        deleted = []
+        try:
+            for child in base.iterdir():
+                deleted.append(child.name)
+                if child.is_dir() and not child.is_symlink():
+                    shutil.rmtree(child)
+                else:
+                    child.unlink()
+            return {"success": True, "deleted": deleted, "error": None}
+        except OSError as e:
+            return {"success": False, "deleted": deleted, "error": f"Failed to clear workspace: {e}"}
+
+    if not resolved.exists():
+        return {"success": False, "deleted": [], "error": f"Path not found: {relative_path}"}
+
+    try:
+        if resolved.is_dir() and not resolved.is_symlink():
+            shutil.rmtree(resolved)
+        else:
+            resolved.unlink()
+        return {"success": True, "deleted": [relative_path], "error": None}
+    except OSError as e:
+        return {"success": False, "deleted": [], "error": f"Failed to delete '{relative_path}': {e}"}
