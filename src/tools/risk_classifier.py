@@ -20,6 +20,7 @@ HIGH_RISK_TOOLS = {
     "shell_command",      # Can execute arbitrary commands
     "write_file",         # Can write arbitrary files
     "file_editor",        # Can write arbitrary files
+    "delete_file",        # Destructive — deletes files/directories in the workspace
     "code_executor",      # Can execute arbitrary Python code
     "start_server",       # Can start network services
 }
