@@ -56,6 +56,9 @@ def handle_interrupt_cli(interrupt_data):
         tool = payload.get("tool", "unknown")
         step_id = payload.get("step_id", "?")
         task = payload.get("task", "")
+        command = payload.get("command")
+        path = payload.get("path")
+        file_path = payload.get("file_path")
         
         print(f"\n{'='*80}")
         print(f"🔒 APPROVAL REQUIRED (Step {step_id})")
@@ -63,7 +66,22 @@ def handle_interrupt_cli(interrupt_data):
         print(f"Tool: {tool}")
         print(f"Task: {task}")
         print(f"Risk Level: HIGH")
-        print(f"{'='*80}")
+        
+        if command:
+            print(f"\nCommand to execute:")
+            print(f"{command}")
+        elif file_path:
+            print(f"\nCommand to execute:")
+            print(f'write_file_tool(path="{file_path}", content="<generated content>")')
+        elif path is not None:
+            if path:
+                print(f"\nCommand to execute:")
+                print(f'delete_file_tool(path="{path}")')
+            else:
+                print(f"\nCommand to execute:")
+                print(f'delete_file_tool(path="<workspace>", recursive=True)')
+        
+        print(f"\n{'='*80}")
         
         while True:
             response = input("\n[A]pprove, [R]eject, [P]rovide alternative: ").strip().upper()
