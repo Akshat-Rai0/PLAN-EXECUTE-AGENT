@@ -537,6 +537,10 @@ Instructions:
 - Print your final answer/result to stdout using print() — this is how the result will be captured.
 - Keep the code simple and focused on the specific task.
 - If you need to import modules, use standard library modules only (no external packages unless you're certain they're available).
+- CRITICAL: Do NOT use input() for user input — the execution environment does not support interactive input. Instead:
+  * If the task requires a specific input value, hardcode it in the script
+  * If the task mentions taking input as a command-line argument, use sys.argv[1:] to read arguments
+  * For example, if the task says "take n as input", use: import sys; n = int(sys.argv[1]) if len(sys.argv) > 1 else 10
 - Do not include markdown code fences — output only the raw Python code."""
 
         llm = get_llm()

@@ -91,6 +91,7 @@ def run_in_sandbox(
     allowed_domains: Optional[list[str]] = None,
     output_schema: Optional[Type[BaseModel]] = None,
     python_executable: Optional[str] = None,
+    args: Optional[list[str]] = None,
 ) -> SandboxResult:
     """
     Run `code` (a string of Python source) in an isolated subprocess.
@@ -115,6 +116,8 @@ def run_in_sandbox(
             output that doesn't match the schema is still SandboxResult(success=False).
         python_executable: Override the interpreter used to run the script.
             Defaults to the current interpreter (sys.executable-equivalent).
+        args: Optional list of command-line arguments to pass to the script.
+            These will be available as sys.argv[1:] in the executed code.
 
     Returns:
         SandboxResult — see models.py for field semantics.
@@ -147,8 +150,11 @@ def run_in_sandbox(
 
         start = time.monotonic()
         try:
+            cmd = [python_executable, script_path]
+            if args:
+                cmd.extend(args)
             proc = subprocess.run(
-                [python_executable, script_path],
+                cmd,
                 cwd=scratch_dir,
                 capture_output=True,
                 text=True,
