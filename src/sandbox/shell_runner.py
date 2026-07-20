@@ -186,6 +186,20 @@ def run_shell_command(
         )
 
     binary = tokens[0]
+
+    # Normalize bare 'python' -> 'python3'. 'python' is kept in ALLOWED_COMMANDS
+    # (LLM-generated commands frequently use it) but on modern macOS/Linux only
+    # 'python3' actually exists as an executable — 'python' passes the allowlist
+    # check below and then fails at spawn time with "Executable not found:
+    # 'python'". Rewriting here means the allowlist, the spawned subprocess,
+    # and the resulting `command=` field on ShellResult are all consistent,
+    # rather than silently swapping the binary only at spawn time while still
+    # reporting the original (misleading) command string on failure.
+    if binary == "python":
+        binary = "python3"
+        tokens[0] = "python3"
+        command = shlex.join(tokens)
+
     allowlist = allowed_commands if allowed_commands is not None else ALLOWED_COMMANDS
 
     # --- Allowlist check ---
