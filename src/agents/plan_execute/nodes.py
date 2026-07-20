@@ -520,6 +520,61 @@ def code_executor_node(state: State) -> dict:
         context_block = "\n\n".join(prior_context) if prior_context else "(no prior step results)"
         today = date.today().isoformat()
 
+        # Determine whether this step needs concrete command-line argument
+        # values (e.g. "take n as input" -> the script reads sys.argv[1]).
+        # Without this, the generated code has nowhere to actually get a
+        # real value from — run_in_sandbox() supports an `args` list, but
+        # someone has to decide what goes in it. We ask the LLM the same
+        # way approval_node pre-generates commands/paths: a small, focused
+        # call before the main code-generation call.
+        script_args: list[str] = []
+        try:
+            args_prompt = f"""Overall goal: "{plan.goal}"
+
+Step to complete: {current_step.task}
+
+Prior step results so far:
+{context_block}
+
+This step's Python script will be run non-interactively — it cannot call input().
+If it needs, it should read values from sys.argv (command-line arguments) instead.
+
+Decide what command-line argument values (if any) this script needs, based on
+the step description and prior results. For example, if the step says "print
+the first 20 Fibonacci numbers", the script needs one argument: "20".
+
+Rules:
+- Output a JSON object with exactly one key: "args"
+- "args" is a list of strings — the command-line argument values, in order.
+- If the step doesn't need any input values (e.g. it's self-contained), output {{"args": []}}.
+- No markdown fences around the JSON. Output only the raw JSON object."""
+
+            args_llm = get_llm()
+            args_response = args_llm.invoke([
+                SystemMessage(content="You output only a raw JSON object with an 'args' key, no markdown."),
+                HumanMessage(content=args_prompt),
+            ])
+            raw_args = args_response.content.strip()
+            if raw_args.startswith("```"):
+                lines = raw_args.split("\n")
+                raw_args = "\n".join(line for line in lines if not line.startswith("```")).strip()
+            import json
+            args_data = json.loads(raw_args)
+            script_args = [str(a) for a in args_data.get("args", [])]
+        except Exception as e:
+            # Fall back to no args rather than failing the whole step —
+            # the generated code still has its own hardcoded-default
+            # fallback per the prompt instructions below.
+            print(f"⚠️ Failed to determine script args, proceeding with none: {e}")
+            script_args = []
+
+        args_note = (
+            f"This script will be invoked with sys.argv[1:] = {script_args!r}. "
+            f"Read the needed value(s) from sys.argv at those positions."
+            if script_args
+            else "This script will be invoked with no command-line arguments."
+        )
+
         code_generation_prompt = f"""Today's date is {today}.
 
 Overall goal: "{plan.goal}"
@@ -538,9 +593,8 @@ Instructions:
 - Keep the code simple and focused on the specific task.
 - If you need to import modules, use standard library modules only (no external packages unless you're certain they're available).
 - CRITICAL: Do NOT use input() for user input — the execution environment does not support interactive input. Instead:
-  * If the task requires a specific input value, hardcode it in the script
-  * If the task mentions taking input as a command-line argument, use sys.argv[1:] to read arguments
-  * For example, if the task says "take n as input", use: import sys; n = int(sys.argv[1]) if len(sys.argv) > 1 else 10
+  * {args_note}
+  * If the task mentions taking a value as input, read it via sys.argv (e.g. `import sys; n = int(sys.argv[1]) if len(sys.argv) > 1 else 10`), keeping a sensible hardcoded default as a fallback in case no argument is passed.
 - Do not include markdown code fences — output only the raw Python code."""
 
         llm = get_llm()
@@ -579,6 +633,7 @@ Instructions:
                 generated_code,
                 timeout_seconds=15,
                 memory_limit_mb=256,
+                args=script_args,
             )
             
             if result.success:
