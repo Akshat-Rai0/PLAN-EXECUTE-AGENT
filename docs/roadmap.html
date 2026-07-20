@@ -160,8 +160,13 @@ graph TD
     executor -->|tool_hint: shell_command| shell[shell]
     executor -->|tool_hint: write_file/file_editor| write_file[write_file]
     executor -->|tool_hint: start_server| start_server[start_server]
+    executor -->|tool_hint: delete_file| delete_file[delete_file]
     executor -->|unimplemented hint| stub[stub]
     executor -->|no RUNNING step| synthesize[synthesize]
+
+    executor -->|HIGH-risk tool| approval[approval]
+    approval -->|approved| executor
+    approval -->|rejected| replaner[replaner]
 
     tavily_search --> after_tool{post-tool routing}
     code_executor --> after_tool
@@ -170,11 +175,12 @@ graph TD
     shell --> after_tool
     write_file --> after_tool
     start_server --> after_tool
+    delete_file --> after_tool
     stub --> after_tool
 
     after_tool -->|step cap exceeded| synthesize
     after_tool -->|step CANCELLED| synthesize
-    after_tool -->|step FAILED| replaner[replaner]
+    after_tool -->|step FAILED| replaner
     after_tool -->|step DONE| executor
     replaner --> executor
     synthesize --> END([END])
@@ -182,6 +188,7 @@ graph TD
     style START fill:#e1f5ff
     style plan fill:#fff4e1
     style executor fill:#ffe1f5
+    style approval fill:#ffe8e8
     style tavily_search fill:#e1ffe1
     style code_executor fill:#e1ffe1
     style reason fill:#fff4e1
@@ -189,6 +196,7 @@ graph TD
     style shell fill:#e1ffe1
     style write_file fill:#e1ffe1
     style start_server fill:#e1ffe1
+    style delete_file fill:#e1ffe1
     style after_tool fill:#fff4e1
     style stub fill:#f5e1ff
     style replaner fill:#ffe1e1
@@ -233,9 +241,9 @@ graph TD
     <div class="overview-seg" style="background:var(--green)"><span>P3</span></div>
     <div class="overview-seg" style="background:var(--ink-3)"><span>P4</span></div>
     <div class="overview-seg" style="background:var(--green)"><span>P5</span></div>
-    <div class="overview-seg" style="background:var(--ink-3)"><span>P6</span></div>
+    <div class="overview-seg" style="background:var(--green)"><span>P6</span></div>
     <div class="overview-seg" style="background:var(--ink-3)"><span>P7</span></div>
-    <div class="overview-seg" style="background:var(--accent)"><span>P8</span></div>
+    <div class="overview-seg" style="background:var(--ink-3)"><span>P8</span></div>
     <div class="overview-seg" style="background:var(--ink-3)"><span>P9</span></div>
   </div>
   <div class="callout">
@@ -585,31 +593,31 @@ graph TD
   <div class="section-label">Phase 6 · Jul 30–31</div>
   <div class="phase">
     <div class="phase-header">
-      <div class="phase-num future">6</div>
+      <div class="phase-num done">6</div>
       <div class="phase-title">
         <h3>Human-in-the-Loop Approval Gates</h3>
         <div class="phase-meta">2 days · CLI only</div>
         <div class="phase-arm">Building toward Arm 3</div>
       </div>
-      <div class="phase-status future">Pending</div>
+      <div class="phase-status done">Complete</div>
     </div>
     <div class="phase-body">
       <div class="phase-col">
         <h4>Tasks</h4>
         <ul class="checklist">
-          <li>Sensitivity classification: synthesized-tool execution OR irreversible action (booking/payment/send)</li>
-          <li>LangGraph interrupt/resume wiring on top of the Phase 0 checkpointer</li>
-          <li>Approve/reject CLI prompt; rejection routes to replanner, not a hard stop</li>
-          <li><strong>Gate shows the actual generated source</strong> for synthesized-tool calls, not just the step description — a human approving synthesized code should see the code</li>
+          <li class="done">Sensitivity classification: synthesized-tool execution OR irreversible action (booking/payment/send)</li>
+          <li class="done">LangGraph interrupt/resume wiring on top of the Phase 0 checkpointer</li>
+          <li class="done">Approve/reject CLI prompt; rejection routes to replanner, not a hard stop</li>
+          <li class="done"><strong>Gate shows the actual generated source</strong> for synthesized-tool calls, not just the step description — a human approving synthesized code should see the code</li>
         </ul>
       </div>
       <div class="phase-col">
         <h4>Deliverables</h4>
         <ul class="checklist">
-          <li>Sensitivity classifier</li>
-          <li>Interrupt/resume gate with checkpoint persistence</li>
-          <li>CLI approval prompt (with code diff for synthesized tools)</li>
-          <li>Approval-event audit log</li>
+          <li class="done">Sensitivity classifier</li>
+          <li class="done">Interrupt/resume gate with checkpoint persistence</li>
+          <li class="done">CLI approval prompt (with code diff for synthesized tools)</li>
+          <li class="done">Approval-event audit log</li>
         </ul>
       </div>
       <div class="phase-outcome">
