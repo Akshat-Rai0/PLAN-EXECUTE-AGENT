@@ -18,3 +18,5 @@ agent_output/workspaces/
 agent_outputs/*/workspace/
 checkpoints.db-shm
 checkpoints.db
+# Added by code-review-graph
+.code-review-graph/
