@@ -120,10 +120,13 @@ def test_web_search_routes_to_tavily():
     assert result_tavily == "tavily_search", f"Expected 'tavily_search' for tavily_search, got '{result_tavily}'"
 
 
-def test_unknown_hints_route_to_stub():
+def test_unknown_hints_route_to_approval():
     """
-    Test that unknown tool hints route to stub_node.
-    file_editor is now a known hint (routes to write_file), so removed from this list.
+    Test that unknown tool hints route to approval_node first.
+    classify_tool_risk() defaults unrecognized tool_hints to HIGH risk for
+    safety, so they must pass through human approval before ever reaching
+    stub_node (or any tool node). file_editor is now a known hint (routes
+    to write_file), so removed from this list.
     """
     unknown_hints = ["database", "api_call", "some_future_tool"]
 
@@ -137,19 +140,24 @@ def test_unknown_hints_route_to_stub():
         state: State = {"input": "test", "plan": plan}
 
         result = _route_to_tool(state)
-        assert result == "stub", f"Expected 'stub' for hint '{hint}', got '{result}'"
+        assert result == "approval", f"Expected 'approval' for unknown hint '{hint}', got '{result}'"
 
 
 def test_coding_tool_hints_route_correctly():
     """
     Test that the new coding-agent tool hints route to the correct nodes.
+    setup_workspace is LOW-risk and routes directly. shell_command, write_file,
+    file_editor, and start_server are all HIGH-risk (see risk_classifier.py)
+    and must route to approval_node first — the approval node forwards to the
+    real tool node only after a human decision, so _route_to_tool itself
+    should return "approval" for these, not the terminal node name.
     """
     cases = [
         ("setup_workspace", "setup_workspace"),
-        ("shell_command", "shell"),
-        ("write_file", "write_file"),
-        ("file_editor", "write_file"),   # file_editor is an alias for write_file
-        ("start_server", "start_server"),
+        ("shell_command", "approval"),
+        ("write_file", "approval"),
+        ("file_editor", "approval"),   # file_editor is an alias for write_file
+        ("start_server", "approval"),
     ]
 
     for hint, expected_route in cases:
@@ -168,9 +176,12 @@ def test_coding_tool_hints_route_correctly():
 
 
 
-def test_code_executor_routes_to_code_executor_node():
+def test_code_executor_routes_to_approval():
     """
-    Test that code_executor hint routes to code_executor_node (not stub).
+    Test that code_executor hint routes to approval_node (not stub, and not
+    directly to code_executor_node). code_executor is HIGH-risk since it can
+    execute arbitrary Python code, so it must pass through human approval
+    first; approval_node forwards to code_executor_node only after approval.
     """
     plan = Plan(
         goal="test goal",
@@ -181,7 +192,7 @@ def test_code_executor_routes_to_code_executor_node():
     state: State = {"input": "test", "plan": plan}
     
     result = _route_to_tool(state)
-    assert result == "code_executor", f"Expected 'code_executor' for code_executor hint, got '{result}'"
+    assert result == "approval", f"Expected 'approval' for code_executor hint, got '{result}'"
 
 
 def test_route_after_tool_failed_step():

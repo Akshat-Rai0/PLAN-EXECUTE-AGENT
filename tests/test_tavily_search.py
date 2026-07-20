@@ -9,7 +9,7 @@ def test_tavily_search_fifa_world_cup_through_graph():
     """Test Tavily search with FIFA World Cup query through the full graph flow."""
     query = "Who won the most recent FIFA World Cup match and highlight important moments"
     
-    graph = build_graph()
+    graph = build_graph().compile()
     
     initial_state: State = {
         "input": query,
@@ -58,7 +58,7 @@ def test_tavily_search_basic_through_graph():
     """Test basic Tavily search functionality through the graph flow."""
     query = "What is the capital of France?"
     
-    graph = build_graph()
+    graph = build_graph().compile()
     
     initial_state: State = {
         "input": query,
@@ -95,7 +95,7 @@ def test_tavily_search_complex_query_through_graph():
     """Test Tavily search with complex multi-part query through the graph flow."""
     query = "Latest developments in artificial intelligence and machine learning in 2024"
     
-    graph = build_graph()
+    graph = build_graph().compile()
     
     initial_state: State = {
         "input": query,

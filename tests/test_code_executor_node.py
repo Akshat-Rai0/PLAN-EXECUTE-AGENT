@@ -129,7 +129,10 @@ def test_code_executor_node_with_logical_error_no_retry():
         
         result = code_executor_node(state)
         
-        assert result["plan"].subtasks[0].status == StepStatus.DONE
+        # Unfixable errors mark the step FAILED (not DONE) so
+        # _route_after_tool sends it to the replanner instead of letting a
+        # buried error message masquerade as a completed result.
+        assert result["plan"].subtasks[0].status == StepStatus.FAILED
         assert "Code execution failed" in result["plan"].subtasks[0].result
         assert "ValueError" in result["plan"].subtasks[0].result
         assert mock_llm.invoke.call_count == 1  # Should NOT have retried
@@ -300,7 +303,10 @@ def test_code_executor_node_max_retries_exceeded():
         
         result = code_executor_node(state)
         
-        assert result["plan"].subtasks[0].status == StepStatus.DONE
+        # Retries exhausted with no success marks the step FAILED (not DONE)
+        # so the replanner engages instead of a buried error being read as
+        # a legitimate result.
+        assert result["plan"].subtasks[0].status == StepStatus.FAILED
         assert "Code execution failed" in result["plan"].subtasks[0].result
         assert "NameError" in result["plan"].subtasks[0].result
         assert mock_llm.invoke.call_count == 3  # Initial + 2 retries

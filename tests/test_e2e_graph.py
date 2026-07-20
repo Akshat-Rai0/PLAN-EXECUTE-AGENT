@@ -43,7 +43,7 @@ def test_successful_3_step_execution():
                     mock_llm.invoke.return_value = mock_synthesis_response
                     mock_get_llm.return_value = mock_llm
                     
-                    graph = build_graph()
+                    graph = build_graph().compile()
                     initial_state: State = {
                         "input": "test goal",
                         "plan": None
@@ -126,7 +126,7 @@ def test_failed_replan_success_cycle():
                     mock_llm.invoke.return_value = mock_synthesis_response
                     mock_get_llm.return_value = mock_llm
                     
-                    graph = build_graph()
+                    graph = build_graph().compile()
                     initial_state: State = {
                         "input": "test goal",
                         "plan": None
@@ -184,7 +184,7 @@ def test_e2e_with_reason_node():
                     mock_llm.invoke.return_value = mock_response
                     mock_get_llm.return_value = mock_llm
                     
-                    graph = build_graph()
+                    graph = build_graph().compile()
                     initial_state: State = {
                         "input": "test goal",
                         "plan": None
@@ -293,7 +293,7 @@ def test_e2e_tool_hint_none_mid_plan():
                     mock_llm.invoke.side_effect = llm_side_effect
                     mock_get_llm.return_value = mock_llm
                     
-                    graph = build_graph()
+                    graph = build_graph().compile()
                     initial_state: State = {
                         "input": "test goal",
                         "plan": None
