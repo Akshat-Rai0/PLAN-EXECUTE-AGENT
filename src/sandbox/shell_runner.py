@@ -42,7 +42,8 @@ from pydantic import BaseModel
 # ---------------------------------------------------------------------------
 
 # Base directory for all agent-managed project workspaces.
-WORKSPACE_BASE = Path(tempfile.gettempdir()) / "agent-workspaces"
+# Use a dedicated folder in the project root instead of temp directory
+WORKSPACE_BASE = Path(__file__).parent.parent.parent / "agent_output" / "workspaces"
 
 # Commands the agent is allowed to run. Checked against argv[0] only.
 # Extend carefully — every entry here is a potential privilege-escalation
