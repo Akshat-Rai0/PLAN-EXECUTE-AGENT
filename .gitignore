@@ -14,3 +14,6 @@ eval/results/*.json
 !eval/results/.gitkeep
 sandbox_runs/
 checkpoints.db
+agent_output/workspaces/
+agent_outputs/*/workspace/
+checkpoints.db
