@@ -57,6 +57,11 @@ def test_code_executor_node_with_fixable_error_auto_retry():
     )
     state: State = {"input": "test", "plan": plan}
     
+    # Args-determination call happens first, before any code-gen attempts.
+    # This step is self-contained (no input value needed), so return empty args.
+    args_response = MagicMock()
+    args_response.content = '{"args": []}'
+
     # First attempt: missing import
     first_llm_response = MagicMock()
     first_llm_response.content = "print(math.sqrt(4))"
@@ -85,7 +90,7 @@ def test_code_executor_node_with_fixable_error_auto_retry():
     with patch('src.agents.plan_execute.nodes.get_llm') as mock_get_llm, \
          patch('src.agents.plan_execute.nodes.run_in_sandbox') as mock_run_sandbox:
         mock_llm = MagicMock()
-        mock_llm.invoke.side_effect = [first_llm_response, second_llm_response]
+        mock_llm.invoke.side_effect = [args_response, first_llm_response, second_llm_response]
         mock_get_llm.return_value = mock_llm
         mock_run_sandbox.side_effect = [first_sandbox_result, second_sandbox_result]
         
@@ -93,7 +98,7 @@ def test_code_executor_node_with_fixable_error_auto_retry():
         
         assert result["plan"].subtasks[0].status == StepStatus.DONE
         assert result["plan"].subtasks[0].result == "2.0"
-        assert mock_llm.invoke.call_count == 2  # Should have retried
+        assert mock_llm.invoke.call_count == 3  # 1 args-determination call + 2 code-gen calls (initial + 1 retry)
 
 
 def test_code_executor_node_with_logical_error_no_retry():
@@ -135,7 +140,7 @@ def test_code_executor_node_with_logical_error_no_retry():
         assert result["plan"].subtasks[0].status == StepStatus.FAILED
         assert "Code execution failed" in result["plan"].subtasks[0].result
         assert "ValueError" in result["plan"].subtasks[0].result
-        assert mock_llm.invoke.call_count == 1  # Should NOT have retried
+        assert mock_llm.invoke.call_count == 2  # 1 args-determination call + 1 code-gen call (no retry)
 
 
 def test_code_executor_node_prior_context_included():
@@ -309,4 +314,4 @@ def test_code_executor_node_max_retries_exceeded():
         assert result["plan"].subtasks[0].status == StepStatus.FAILED
         assert "Code execution failed" in result["plan"].subtasks[0].result
         assert "NameError" in result["plan"].subtasks[0].result
-        assert mock_llm.invoke.call_count == 3  # Initial + 2 retries
+        assert mock_llm.invoke.call_count == 4  # 1 args-determination call + 3 code-gen calls (initial + 2 retries)
