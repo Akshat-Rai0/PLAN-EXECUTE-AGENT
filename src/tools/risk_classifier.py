@@ -30,6 +30,7 @@ LOW_RISK_TOOLS = {
     "web_search",         # Read-only web search
     "today_date",         # System date read
     "reason",             # Pure LLM reasoning
+    "none",               # Pure LLM reasoning (alternative tool_hint)
     "setup_workspace",    # Directory creation only (limited scope)
 }
 
