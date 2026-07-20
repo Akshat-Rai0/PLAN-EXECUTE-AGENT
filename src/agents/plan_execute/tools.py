@@ -48,7 +48,12 @@ Notes:
     "code_executor"    - write and execute a Python script
     "setup_workspace"  - create a project directory (use as FIRST step of any app/coding task)
     "shell_command"    - run a CLI command (npm init, npm install, npx create-vite, mkdir, git, etc.)
+                          NOTE: 'rm' is NOT available via shell_command for safety reasons.
+                          Use "delete_file" instead for any deletion — never plan a shell_command
+                          step that deletes files.
     "write_file"       - write or edit a source code file inside the project workspace
+    "delete_file"      - delete a file or directory inside the project workspace, or clear
+                          everything in the workspace (e.g. "delete all files in the project")
     "start_server"     - start a dev server (use as LAST step of app-building tasks)
     "none"             - pure reasoning, no external tool
 - "status": always "PENDING"
@@ -60,6 +65,9 @@ For app/coding tasks, always follow this step order:
   3. write_file (write/edit source files, one step per logical file group)
   4. shell_command (npm install or pip install)
   5. start_server (npm run dev, python3 -m http.server, uvicorn, etc.)
+
+If the goal requires deleting or clearing files, always use "delete_file" — never
+"shell_command" with rm, since rm is blocked and will always fail.
 """
 
 RETRY_SUFFIX = """

@@ -4,7 +4,7 @@ from langgraph.graph import END, START, StateGraph
 from .nodes import (
     plan_node, executor_node, tavily_search_node, synthesize_node,
     replaner, reason_node, code_executor_node,
-    setup_workspace_node, shell_node, write_file_node, start_server_node,
+    setup_workspace_node, shell_node, write_file_node, delete_file_node, start_server_node,
     approval_node, ask_human_node,
     MAX_TOTAL_STEPS,
 )
@@ -73,6 +73,8 @@ def _route_to_tool(state: State) -> str:
         return "shell"
     if tool_hint in ("write_file", "file_editor"):
         return "write_file"
+    if tool_hint == "delete_file":
+        return "delete_file"
     if tool_hint == "start_server":
         return "start_server"
 
@@ -104,6 +106,8 @@ def _route_after_approval(state: State) -> str:
         return "shell"
     if tool_hint in ("write_file", "file_editor"):
         return "write_file"
+    if tool_hint == "delete_file":
+        return "delete_file"
     if tool_hint == "start_server":
         return "start_server"
     
@@ -163,6 +167,7 @@ def build_graph():
     graph.add_node("setup_workspace", setup_workspace_node)
     graph.add_node("shell", shell_node)
     graph.add_node("write_file", write_file_node)
+    graph.add_node("delete_file", delete_file_node)
     graph.add_node("start_server", start_server_node)
     graph.add_node("approval", approval_node)
     graph.add_node("ask_human", ask_human_node)
@@ -202,6 +207,7 @@ def build_graph():
             "setup_workspace": "setup_workspace",
             "shell": "shell",
             "write_file": "write_file",
+            "delete_file": "delete_file",
             "start_server": "start_server",
             "approval": "approval",
             "end": END,
@@ -217,6 +223,7 @@ def build_graph():
             "code_executor": "code_executor",
             "shell": "shell",
             "write_file": "write_file",
+            "delete_file": "delete_file",
             "start_server": "start_server",
             "executor": "executor",
         },
@@ -265,6 +272,7 @@ def build_graph():
     graph.add_conditional_edges("setup_workspace", _route_after_tool, _coding_routing)
     graph.add_conditional_edges("shell", _route_after_tool, _coding_routing)
     graph.add_conditional_edges("write_file", _route_after_tool, _coding_routing)
+    graph.add_conditional_edges("delete_file", _route_after_tool, _coding_routing)
     graph.add_conditional_edges("start_server", _route_after_tool, _coding_routing)
     
     # After replaning, route back to executor to run the new plan

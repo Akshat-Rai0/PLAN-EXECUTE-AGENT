@@ -3,7 +3,7 @@ from dotenv import load_dotenv
 import os
 import re
 
-from src.sandbox.shell_runner import run_shell_command, write_file as sandbox_write_file, ALLOWED_COMMANDS
+from src.sandbox.shell_runner import run_shell_command, write_file as sandbox_write_file, delete_path as sandbox_delete_path, ALLOWED_COMMANDS
 from src.sandbox.server_manager import start_dev_server
 
 load_dotenv()
@@ -161,6 +161,38 @@ def write_file_tool(relative_path: str, content: str, workspace_path: str) -> st
     result = sandbox_write_file(relative_path, content, workspace_path)
     if result["success"]:
         return f"Wrote {result['bytes_written']} bytes to {relative_path}"
+    else:
+        return f"ERROR: {result['error']}"
+
+
+def delete_file_tool(relative_path: str, workspace_path: str) -> str:
+    """
+    Delete a file or directory inside the workspace at `relative_path`.
+
+    Use "" or "." for relative_path to clear everything inside the
+    workspace root (e.g. for a "delete all files in the project" step)
+    without deleting the workspace directory itself.
+
+    This is the safe alternative to shell 'rm' — 'rm' is intentionally
+    excluded from ALLOWED_COMMANDS, so this tool exists specifically so
+    steps like "delete all files" have a legitimate path to succeed
+    instead of the replanner repeatedly retrying blocked shell commands.
+
+    Args:
+        relative_path: Path relative to workspace root, or "" / "." to
+            clear the workspace root's contents.
+        workspace_path: Absolute path to the project workspace.
+
+    Returns:
+        Confirmation string listing what was deleted on success, or
+        "ERROR: <message>" on failure.
+    """
+    result = sandbox_delete_path(relative_path, workspace_path)
+    if result["success"]:
+        deleted = result["deleted"]
+        if not deleted:
+            return "Nothing to delete — workspace was already empty."
+        return f"Deleted {len(deleted)} item(s): {', '.join(deleted)}"
     else:
         return f"ERROR: {result['error']}"
 

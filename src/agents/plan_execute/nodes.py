@@ -6,7 +6,7 @@ from .state import State, StepStatus, Step, Plan
 from .tools import breakdown_task, bound_replan_context
 from src.tools.registry import (
     tavily_search, today_date,
-    shell_command_tool, write_file_tool, start_dev_server_tool,
+    shell_command_tool, write_file_tool, delete_file_tool, start_dev_server_tool,
 )
 from src.sandbox.shell_runner import make_project_workspace
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -856,6 +856,103 @@ Rules:
         current_step.status = StepStatus.FAILED
         current_step.error = f"write_file_node error: {str(e)}"
         print(f"❌ Write file error: {str(e)}")
+
+    return {"plan": plan, "steps_executed": 1}
+
+
+def delete_file_node(state: State) -> dict:
+    """
+    Delete a file, directory, or clear the workspace (tool_hint='delete_file').
+
+    Exists so steps like "delete all files in the project" have a real,
+    safe path to succeed. Without this node, the executor's only option
+    was shell_command with 'rm', which is intentionally blocked by
+    ALLOWED_COMMANDS — every such step previously failed and forced a
+    replan, and the replanner had no better alternative to reach for,
+    so it thrashed through several blocked variants (rm, rm -rf *, a
+    python+shutil one-liner that also failed since the sandbox's python
+    binary isn't 'python') before hitting the replan cap and giving up.
+    See agent_outputs/20260720-025417_.../plan.json and
+    agent_outputs/20260720-121944_.../ for two reproduced instances.
+
+    The LLM only needs to specify WHICH path to clear, not generate any
+    content — much simpler than write_file_node.
+    """
+    plan = state["plan"]
+    if plan is None:
+        raise RuntimeError("delete_file_node called with no plan in state")
+
+    current_step = next((s for s in plan.subtasks if s.status == StepStatus.RUNNING), None)
+    if current_step is None:
+        raise RuntimeError("delete_file_node called with no RUNNING step")
+
+    workspace_path = state.get("workspace_path") or ""
+    if not workspace_path:
+        current_step.status = StepStatus.FAILED
+        current_step.error = (
+            "delete_file_node: no workspace_path in state. "
+            "Ensure a setup_workspace step runs before any delete_file step."
+        )
+        return {"plan": plan, "steps_executed": 1}
+
+    context_block = _build_coding_context(plan, current_step)
+    today = date.today().isoformat()
+
+    delete_prompt = f"""You are determining what to delete for one step of a software task.
+
+Today's date: {today}
+Overall goal: "{plan.goal}"
+Project workspace directory: {workspace_path}
+
+Step to complete: {current_step.task}
+
+Prior steps and results:
+{context_block}
+
+Rules:
+- Output a JSON object with exactly one key: "path"
+- "path" is a file or directory path relative to the workspace root (e.g. "old_notes.txt", "src/legacy/").
+- If the step means clearing everything in the workspace (e.g. "delete all files"), use "" as the path.
+- No markdown fences around the JSON. Output only the raw JSON object."""
+
+    llm = get_llm()
+    messages = [
+        SystemMessage(content="You output only a raw JSON object with a 'path' key, no markdown."),
+        HumanMessage(content=delete_prompt),
+    ]
+
+    try:
+        import json
+
+        response = llm.invoke(messages)
+        raw = response.content.strip()
+
+        if raw.startswith("```"):
+            lines = raw.split("\n")
+            raw = "\n".join(line for line in lines if not line.startswith("```")).strip()
+
+        data = json.loads(raw)
+        rel_path = data.get("path", "")
+
+        result_str = delete_file_tool(rel_path, workspace_path)
+
+        if result_str.startswith("ERROR:"):
+            current_step.status = StepStatus.FAILED
+            current_step.error = result_str
+            print(f"❌ Delete failed: {result_str[:200]}")
+        else:
+            current_step.status = StepStatus.DONE
+            current_step.result = result_str
+            print(f"✅ {result_str}")
+
+    except json.JSONDecodeError as e:
+        current_step.status = StepStatus.FAILED
+        current_step.error = f"delete_file_node: LLM returned invalid JSON: {e}"
+        print(f"❌ Delete JSON error: {e}")
+    except Exception as e:
+        current_step.status = StepStatus.FAILED
+        current_step.error = f"delete_file_node error: {str(e)}"
+        print(f"❌ Delete error: {str(e)}")
 
     return {"plan": plan, "steps_executed": 1}
 
