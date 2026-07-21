@@ -3,7 +3,7 @@ from langgraph.graph import END, START, StateGraph
 
 from .nodes import (
     plan_node, executor_node, tavily_search_node, synthesize_node,
-    replaner, reason_node, code_executor_node,
+    replaner, reason_node, code_executor_node, synthesize_tool_node,
     setup_workspace_node, shell_node, write_file_node, delete_file_node, start_server_node,
     approval_node, ask_human_node,
     MAX_TOTAL_STEPS,
@@ -32,7 +32,15 @@ def _route_to_tool(state: State) -> str:
         "reason" if tool_hint is "none" — a pure-reasoning step, now handled
             by reason_node with a real LLM call instead of being silently
             no-op'd by stub_node
-        "stub" for any other/unimplemented tool hint (e.g. "file_editor") — still a placeholder
+        "synthesize_tool" for any other/unrecognized tool hint (e.g. a
+            capability the planner named that has no fixed tool) — routes
+            to dynamic tool synthesis (see src/synthesis/). NOTE the naming
+            collision with "synthesize" below: that one means FINAL-ANSWER
+            synthesis (combining step results into a response), this one
+            means TOOL synthesis (generating new callable code). Same word,
+            two unrelated concepts — kept distinct in routing strings
+            specifically to avoid conflating them, even though the English
+            word is shared.
         "synthesize" only once no RUNNING step remains (all steps DONE/FAILED).
             This is the sole trigger for global synthesis now. Previously,
             tool_hint == "none" on ANY running step (not just a final one)
@@ -78,8 +86,10 @@ def _route_to_tool(state: State) -> str:
     if tool_hint == "start_server":
         return "start_server"
 
-    # Any other/unimplemented tool hint falls through to "stub" for now.
-    return "stub"
+    # Any other/unrecognized tool hint means no fixed tool matches — route
+    # to synthesis rather than the dead-end stub (which used to mark these
+    # steps DONE with a placeholder, silently pretending success).
+    return "synthesize_tool"
 
 
 def _route_after_approval(state: State) -> str:
@@ -111,8 +121,12 @@ def _route_after_approval(state: State) -> str:
     if tool_hint == "start_server":
         return "start_server"
     
-    # Fallback
-    return "executor"
+    # Any other/unrecognized tool_hint means synthesis was the route taken
+    # to get here (see _route_to_tool) — send it on to synthesize_tool now
+    # that approval is granted, rather than falling back to "executor"
+    # (which would loop back to step-selection instead of actually running
+    # the synthesis pipeline the human just approved).
+    return "synthesize_tool"
 
 
 def _route_after_tool(state: State) -> str:
@@ -161,6 +175,7 @@ def build_graph():
     graph.add_node("executor", executor_node)
     graph.add_node("tavily_search", tavily_search_node)
     graph.add_node("code_executor", code_executor_node)
+    graph.add_node("synthesize_tool", synthesize_tool_node)
     graph.add_node("reason", reason_node)
     graph.add_node("synthesize", synthesize_node)
     graph.add_node("replaner", replaner)
@@ -172,7 +187,10 @@ def build_graph():
     graph.add_node("approval", approval_node)
     graph.add_node("ask_human", ask_human_node)
     
-    # Stub node for tools not yet implemented (e.g. file_editor).
+    # Stub node kept registered for backward-compat (in case anything still
+    # references "stub" directly) but is no longer reachable via normal
+    # _route_to_tool/_route_after_approval routing — unrecognized tool_hints
+    # now route to synthesize_tool instead (see src/synthesis/).
     # NOTE: tool_hint == "none" no longer routes here — see reason_node, which
     # gives those steps a real LLM call instead of a silent no-op.
     # NOTE: tool_hint == "code_executor" now routes to code_executor_node.
@@ -201,6 +219,7 @@ def build_graph():
         {
             "tavily_search": "tavily_search",
             "code_executor": "code_executor",
+            "synthesize_tool": "synthesize_tool",
             "reason": "reason",
             "synthesize": "synthesize",
             "stub": "stub",
@@ -221,6 +240,7 @@ def build_graph():
         {
             "tavily_search": "tavily_search",
             "code_executor": "code_executor",
+            "synthesize_tool": "synthesize_tool",
             "shell": "shell",
             "write_file": "write_file",
             "delete_file": "delete_file",
@@ -241,6 +261,15 @@ def build_graph():
     )
     graph.add_conditional_edges(
         "code_executor",
+        _route_after_tool,
+        {
+            "replaner": "replaner",
+            "executor": "executor",
+            "synthesize": "synthesize",
+        },
+    )
+    graph.add_conditional_edges(
+        "synthesize_tool",
         _route_after_tool,
         {
             "replaner": "replaner",

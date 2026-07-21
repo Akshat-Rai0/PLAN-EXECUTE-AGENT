@@ -15,20 +15,15 @@ from src.sandbox.runner import run_in_sandbox
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.types import interrupt
 from src.tools.risk_classifier import classify_tool_risk, RiskLevel
+from src.synthesis.codegen import declare_schema, generate_function_code
+from src.synthesis.validator import validate_synthesized_function
+from src.synthesis.registry import default_registry
+from src.synthesis.schema import SynthesizedTool
 
-# Matches a plausible 4-digit year (1900-2099). Used to pull a year mentioned
-# in a prior reasoning step (e.g. "The current year is 2026.") forward into a
-# later search query, since search relevance depends heavily on the query
-# text itself — a correct fact determined in an earlier step does nothing for
-# retrieval quality unless it's actually present in the words being searched.
+
 _YEAR_PATTERN = re.compile(r"\b(19|20)\d{2}\b")
 
-# Above this length, a prior step's result is almost certainly a raw scraped
-# search result (noisy, long, full of boilerplate) rather than a short
-# reasoning-step conclusion. We don't want to feed that kind of text into a
-# new search query — long, noisy queries tend to return WORSE results, not
-# better. Short results (like a one-line date fact from reason_node) are safe
-# to fold in directly.
+
 _SHORT_RESULT_CHAR_LIMIT = 200
 
 
@@ -739,7 +734,122 @@ def _build_coding_context(plan, current_step) -> str:
     return "\n\n".join(prior) if prior else "(no prior step results)"
 
 
-def shell_node(state: State) -> dict:
+def synthesize_tool_node(state: State) -> dict:
+    """
+    Handle a step whose tool_hint matched no fixed tool (tool_hint='synthesize_tool').
+
+    Previously these steps fell through to stub_node, which marked the step
+    DONE with a placeholder message — silently pretending success when
+    nothing actually happened. This node gives them a real path: check if a
+    matching capability was already synthesized earlier in this run (reuse
+    it directly, no new LLM calls), and if not, run the full synthesis
+    pipeline (declare schema -> generate code -> validate in sandbox ->
+    register) with retry-on-validation-failure, matching the same
+    generate/validate/retry shape code_executor_node already uses.
+
+    On success the step is marked DONE and the synthesized tool is invoked
+    immediately to actually complete the step (not just registered for
+    hypothetical future use — the step that triggered synthesis still needs
+    its own result). On failure after exhausting retries, the step is
+    marked FAILED and the existing replanner takes it from there — no new
+    failure-handling logic needed, matching every other node in this file.
+
+    See src/synthesis/__init__.py module docstring for the full pipeline
+    rationale and the motivating temperature-conversion trace.
+    """
+    plan = state["plan"]
+    if plan is None:
+        raise RuntimeError("synthesize_tool_node called with no plan in state")
+
+    current_step = next((s for s in plan.subtasks if s.status == StepStatus.RUNNING), None)
+    if current_step is None:
+        raise RuntimeError("synthesize_tool_node called with no RUNNING step")
+
+    context_block = _build_coding_context(plan, current_step)
+    llm = get_llm()
+
+    # --- Step 1: declare the schema (or reuse if we've synthesized this
+    # exact capability already earlier in the run) ---
+    try:
+        schema = declare_schema(plan.goal, current_step.task, context_block, llm)
+    except Exception as e:
+        current_step.status = StepStatus.FAILED
+        current_step.error = f"synthesize_tool_node: failed to declare schema: {e}"
+        print(f"❌ Synthesis schema declaration failed: {e}")
+        return {"plan": plan, "steps_executed": 1}
+
+    existing = default_registry.get(schema.capability_name)
+    if existing is not None:
+        # Reuse: run the already-validated function against a FRESH input
+        # relevant to this step (schema.example_input from THIS declaration
+        # call reflects what THIS step actually needs, even though the
+        # underlying capability/code is shared with an earlier step).
+        result = validate_synthesized_function(existing.source_code, schema)
+        default_registry.mark_used(schema.capability_name)
+        if result.success:
+            current_step.status = StepStatus.DONE
+            current_step.result = (
+                f"[reused synthesized tool: {schema.capability_name}] {result.output}"
+            )
+            print(f"✅ Reused synthesized tool '{schema.capability_name}' (used {existing.times_used}x)")
+        else:
+            # The reused tool didn't handle this step's specific input —
+            # fall through to synthesizing a fresh one below rather than
+            # failing outright, since the capability name matching doesn't
+            # guarantee the exact same input shape across different steps.
+            print(f"⚠️ Reused tool '{schema.capability_name}' failed on this step's input, re-synthesizing: {result.error}")
+            existing = None
+
+    if existing is None:
+        # --- Steps 2-4: generate, validate, retry on failure ---
+        max_retries = 2
+        last_error = None
+        generated_code = None
+        validation_result = None
+
+        for attempt in range(max_retries + 1):
+            try:
+                generated_code = generate_function_code(schema, llm, previous_error=last_error)
+            except Exception as e:
+                last_error = f"Code generation call failed: {e}"
+                continue
+
+            validation_result = validate_synthesized_function(generated_code, schema)
+            if validation_result.success:
+                break
+            last_error = validation_result.error
+
+        if validation_result is None or not validation_result.success:
+            current_step.status = StepStatus.FAILED
+            current_step.error = (
+                f"synthesize_tool_node: '{schema.capability_name}' failed validation "
+                f"after {max_retries + 1} attempts: {last_error}"
+            )
+            print(f"❌ Synthesis failed after {max_retries + 1} attempts: {last_error}")
+            return {"plan": plan, "steps_executed": 1}
+
+        # --- Step 5: register ---
+        tool = SynthesizedTool(
+            capability_name=schema.capability_name,
+            description=schema.description,
+            input_description=schema.input_description,
+            output_description=schema.output_description,
+            source_code=generated_code,
+            example_input=schema.example_input,
+            example_output=validation_result.output,
+        )
+        default_registry.register(tool)
+        default_registry.mark_used(schema.capability_name)
+
+        current_step.status = StepStatus.DONE
+        current_step.result = f"[synthesized new tool: {schema.capability_name}] {validation_result.output}"
+        print(f"✅ Synthesized and registered new tool '{schema.capability_name}'")
+        print(f"   {schema.description}")
+
+    return {"plan": plan, "steps_executed": 1}
+
+
+
     """
     Execute a shell command step (tool_hint='shell_command').
 
@@ -1368,6 +1478,43 @@ Rules:
             print(f"⚠️ Failed to generate file path for approval: {e}")
             file_path_to_show = "(file path generation failed)"
 
+    elif current_step.tool_hint not in (
+        "web_search", "tavily_search", "code_executor", "none",
+        "setup_workspace", "shell_command", "start_server",
+    ) and current_step.tool_hint not in ("write_file", "file_editor", "delete_file"):
+        # Unrecognized tool_hint -> synthesis will handle this step (see
+        # graph.py routing). Preview via declare_schema ONLY (not the full
+        # generate+validate pipeline) — running full synthesis here just to
+        # preview it would mean paying for codegen+sandbox validation TWICE
+        # (once to show, once for real in synthesize_tool_node) and risks
+        # showing the human one generated function while a DIFFERENT one
+        # (from a second, independent LLM call) actually executes — exactly
+        # the command/execution mismatch the pre-generation pattern elsewhere
+        # in this function exists to prevent. The schema declaration alone
+        # (capability name, description, I/O shapes) is cheap, deterministic
+        # enough to be a fair preview, and gives a human real signal on what
+        # kind of code is about to be generated and run.
+        try:
+            from src.synthesis.codegen import declare_schema
+            import json as _json
+
+            context_block = _build_coding_context(plan, current_step)
+            llm = get_llm()
+            schema = declare_schema(plan.goal, current_step.task, context_block, llm)
+            synthesis_preview_to_show = (
+                f"Will synthesize a new tool: {schema.capability_name}\n"
+                f"  {schema.description}\n"
+                f"  Input: {schema.input_description}\n"
+                f"  Output: {schema.output_description}"
+            )
+            # Cache the declared schema so synthesize_tool_node reuses THIS
+            # exact declaration instead of calling declare_schema again —
+            # same reuse pattern as _PENDING_COMMAND/_PENDING_FILE_PATH above.
+            current_step.result = f"_PENDING_SCHEMA: {_json.dumps(schema.model_dump())}"
+        except Exception as e:
+            print(f"⚠️ Failed to preview synthesis for approval: {e}")
+            synthesis_preview_to_show = "(synthesis preview generation failed)"
+
     # Trigger interrupt for HIGH-risk operations
     approval_request = {
         "type": "command_approval",
@@ -1378,6 +1525,7 @@ Rules:
         "command": command_to_show,
         "path": path_to_show,
         "file_path": file_path_to_show,
+        "synthesis_preview": synthesis_preview_to_show,
         "workspace_path": workspace_path,
     }
     

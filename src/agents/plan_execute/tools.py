@@ -59,6 +59,12 @@ Notes:
 - "status": always "PENDING"
 - "sensitive": true only if human confirmation should be required before this step runs
 
+For most one-off computation (unit conversions, data transforms, calculations), prefer
+"code_executor" — it already handles arbitrary Python computation directly. Only use a
+tool_hint outside this list if the step genuinely needs a capability none of these cover
+(e.g. calling a specific external API with its own auth/schema); an unrecognized tool_hint
+will automatically trigger dynamic tool synthesis rather than failing the step.
+
 For app/coding tasks, always follow this step order:
   1. setup_workspace (create the project directory)
   2. shell_command (scaffold, e.g. npx create-vite@latest . --template react)
