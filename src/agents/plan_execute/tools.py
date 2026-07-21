@@ -78,7 +78,7 @@ repeated logic — a single one-off calculation should still just use "code_exec
 
 For app/coding tasks, always follow this step order:
   1. setup_workspace (create the project directory)
-  2. shell_command (scaffold, e.g. npx create-vite@latest . --template react)
+  2. shell_command (scaffold, e.g. npx create-vite@latest . --template react -- --skip-linter)
   3. write_file (write/edit source files, one step per logical file group)
   4. shell_command (npm install or pip install)
   5. start_server (npm run dev, python3 -m http.server, uvicorn, etc.)

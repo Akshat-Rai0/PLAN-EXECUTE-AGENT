@@ -216,12 +216,37 @@ class DevServer:
             pass
 
         self.stop()
+        if stderr_output.strip() or stdout_output.strip():
+            error_message = (
+                f"Server did not open port {self.port} within {timeout_for_ready}s. "
+                "See stderr/stdout below for what the process printed before it was stopped."
+            )
+        else:
+            # No output at all after `timeout_for_ready` seconds is itself a
+            # signal, not an absence of one: the process was alive (it never
+            # hit the early-exit branch above) and printed nothing — this is
+            # the pattern seen when Vite (or another dev server) actually
+            # started successfully but bound to a loopback address/interface
+            # this check didn't detect as open in time, rather than a real
+            # startup crash. Say this explicitly instead of pointing at logs
+            # that don't exist, since a misleading "check the logs" message
+            # has previously sent the replanner down unproductive diagnostic
+            # loops (inspecting package.json, npm-debug.log, etc.) when there
+            # was no log to find.
+            error_message = (
+                f"Server did not open port {self.port} within {timeout_for_ready}s, "
+                "and the process produced no stderr/stdout output in that time. "
+                "This usually means the server actually started fine but is "
+                "listening on an interface/address this check didn't detect — "
+                "for example IPv6-only binding on some machines — rather than "
+                "a real startup failure. Try opening http://localhost:"
+                f"{self.port}/ directly, or restart with an explicit "
+                f"--host flag (e.g. 'npm run dev -- --host 127.0.0.1') to "
+                "force IPv4 binding."
+            )
         return {
             "success": False,
-            "error": (
-                f"Server did not open port {self.port} within {timeout_for_ready}s. "
-                "Check the server logs for startup errors."
-            ),
+            "error": error_message,
             "stderr": stderr_output,
             "stdout": stdout_output,
         }
@@ -257,14 +282,29 @@ class DevServer:
         self.process = None
 
     def _is_port_open(self) -> bool:
-        """Return True if localhost:<self.port> accepts a TCP connection."""
-        try:
-            with socket.create_connection(
-                ("localhost", self.port), timeout=PORT_CHECK_TIMEOUT_SECONDS
-            ):
-                return True
-        except OSError:
-            return False
+        """
+        Return True if the port accepts a TCP connection on EITHER IPv4 or
+        IPv6 loopback.
+
+        Only probing 127.0.0.1 (IPv4) is not sufficient: some dev servers —
+        Vite included, depending on Node version and the host machine's
+        network stack — bind to the IPv6 loopback address (::1) instead of
+        or in addition to IPv4. On a machine where that happens, the server
+        starts successfully and is genuinely reachable at
+        http://localhost:<port>/ in a browser, but an IPv4-only probe here
+        would report the port as never having opened, timing out this whole
+        check and reporting a false failure even though nothing is actually
+        wrong with the server.
+        """
+        for host in ("127.0.0.1", "::1"):
+            try:
+                with socket.create_connection(
+                    (host, self.port), timeout=PORT_CHECK_TIMEOUT_SECONDS
+                ):
+                    return True
+            except OSError:
+                continue
+        return False
 
     def is_running(self) -> bool:
         """Return True if the server process is alive."""
