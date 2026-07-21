@@ -92,6 +92,7 @@ def run_in_sandbox(
     output_schema: Optional[Type[BaseModel]] = None,
     python_executable: Optional[str] = None,
     args: Optional[list[str]] = None,
+    cwd: Optional[str] = None,
 ) -> SandboxResult:
     """
     Run `code` (a string of Python source) in an isolated subprocess.
@@ -118,6 +119,15 @@ def run_in_sandbox(
             Defaults to the current interpreter (sys.executable-equivalent).
         args: Optional list of command-line arguments to pass to the script.
             These will be available as sys.argv[1:] in the executed code.
+        cwd: Directory the script actually runs from — e.g. a project
+            workspace created by setup_workspace. The script.py file itself
+            is always written to and executed from an internal scratch dir
+            (kept out of the caller's control for isolation), but the
+            *process* is launched with this as its working directory, so
+            relative file paths inside the generated code (open("foo.txt"),
+            etc.) resolve against the real workspace instead of the scratch
+            dir. Defaults to the scratch dir itself when not provided,
+            preserving old behavior for callers that don't pass it.
 
     Returns:
         SandboxResult — see models.py for field semantics.
@@ -155,7 +165,7 @@ def run_in_sandbox(
                 cmd.extend(args)
             proc = subprocess.run(
                 cmd,
-                cwd=scratch_dir,
+                cwd=(cwd or scratch_dir),
                 capture_output=True,
                 text=True,
                 timeout=timeout_seconds,

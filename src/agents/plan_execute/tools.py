@@ -65,6 +65,17 @@ tool_hint outside this list if the step genuinely needs a capability none of the
 (e.g. calling a specific external API with its own auth/schema); an unrecognized tool_hint
 will automatically trigger dynamic tool synthesis rather than failing the step.
 
+Exception to the above: if the goal requires applying the SAME transformation or
+computation logic to more than one piece of input (e.g. "convert this list from F to C,
+then convert this second list the same way", or any goal that repeats an identical
+calculation across multiple inputs), give the FIRST occurrence of that logic an
+unrecognized, descriptive tool_hint (e.g. "convert_fahrenheit_to_celsius") instead of
+"code_executor". This routes it through dynamic tool synthesis, which builds a reusable
+tool once; give every LATER step that needs the same logic that exact same tool_hint
+string, so the synthesized tool is reused instead of the logic being regenerated and
+re-executed from scratch via code_executor for each input. Only do this for genuinely
+repeated logic — a single one-off calculation should still just use "code_executor".
+
 For app/coding tasks, always follow this step order:
   1. setup_workspace (create the project directory)
   2. shell_command (scaffold, e.g. npx create-vite@latest . --template react)
