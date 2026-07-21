@@ -70,6 +70,28 @@ ALLOWED_COMMANDS = {
     "pwd",
 }
 
+# --- BACKLOG (not implemented) --------------------------------------------
+# If a scaffolder is encountered with no non-interactive escape hatch (i.e.
+# stdin=DEVNULL + explicit flags in the command-gen prompt aren't enough),
+# the next step up is NOT a full PTY-based interactive session. Instead:
+#   1. Run the command normally (with stdin=DEVNULL as today).
+#   2. If it fails/times out, scan the captured stdout+stderr against a
+#      small, curated table of KNOWN prompt signatures per known tool
+#      (Vite's, npm's, git's — not generic regex over arbitrary CLIs).
+#   3. If a signature matches, surface the question+options via the
+#      existing ask_human_node interrupt mechanism.
+#   4. On resume, RE-RUN the command from scratch with the human's answer
+#      passed via `input=` to subprocess.run (NOT piped to the dead
+#      process — it already exited by the time you can inspect its output).
+#      This means retry is only safe for idempotent/re-runnable commands;
+#      partial-write scaffolders may need a clean-workspace check first.
+# Deliberately not building this now: the actual failure case in practice
+# (create-vite's linter prompt) is fully solved by stdin=DEVNULL plus an
+# explicit flag in the command-generation prompt, with no new runtime
+# machinery or dependencies. Revisit only if a real tool is hit that has
+# no non-interactive flag at all.
+# -----------------------------------------------------------------------
+
 DEFAULT_QUICK_TIMEOUT = 30    # seconds — for ls, mkdir, cat, etc.
 DEFAULT_INSTALL_TIMEOUT = 180  # seconds — for npm install, pip install, etc.
 
@@ -255,6 +277,18 @@ def run_shell_command(
             text=True,
             timeout=timeout_seconds,
             env=env,
+            # Without this, the child inherits our stdin. If it's a live TTY
+            # (as in an interactive CLI session), a tool like `npx create-vite`
+            # that emits an interactive prompt (e.g. "Which linter to use?")
+            # sees what looks like an interactive session and tries to read
+            # an answer from it — but nothing is actually there to answer,
+            # so it either stalls until timeout_seconds or, if the prompt
+            # library itself detects the EOF/non-answer, self-cancels only
+            # after wasting real wall-clock time waiting. Closing stdin makes
+            # this deterministic: the child sees EOF immediately and either
+            # falls back to a non-interactive default or fails fast with a
+            # clear error, instead of stalling on a shared TTY.
+            stdin=subprocess.DEVNULL,
         )
     except subprocess.TimeoutExpired as e:
         duration = time.monotonic() - start

@@ -1,5 +1,6 @@
 import os
 import re
+import shlex
 from datetime import date
 
 from .state import State, StepStatus, Step, Plan
@@ -916,7 +917,12 @@ Rules:
 - Output ONLY the raw shell command, nothing else. No explanation, no markdown.
 - The command will run with cwd={workspace_path}, so paths relative to that are fine.
 - Use non-interactive flags where available (e.g. npm --yes, npx --yes).
-- For npx create-vite, use: npx --yes create-vite@latest . --template react
+- For npx create-vite, use exactly: npx --yes create-vite@latest . --template react -- --skip-linter
+  (NOTE: `--yes` alone does NOT suppress create-vite's linter/tooling prompt —
+  as of recent create-vite versions this is a separate prompt gated behind
+  its own flag, not the top-level --yes. Omitting `-- --skip-linter` will
+  cause the command to hang or self-cancel waiting for interactive input
+  that can never arrive in this environment.)
 - Do NOT use shell operators (&&, ||, ;, |, $()) — output ONE command only.
 - Do NOT use sudo."""
 
@@ -939,6 +945,54 @@ Rules:
                 command = "\n".join(
                     line for line in lines if not line.startswith("```")
                 ).strip()
+
+        # --- Guard: refuse to run long-running server commands here ---
+        # shell_command_tool / run_shell_command blocks until the process
+        # exits (that's correct for one-shot commands like npm install).
+        # A dev server never exits on its own, so routing one here — via a
+        # planner or replanner mistake — hangs the whole graph indefinitely
+        # instead of failing. This has happened in practice (replanner
+        # generating "npm run dev" as a shell_command "diagnostic" step
+        # after a start_server failure). Catch it here as a deterministic
+        # backstop in addition to the prompt-level guidance in
+        # REPLAN_INSTRUCTIONS, since an LLM instruction is best-effort and
+        # this failure mode hangs the CLI rather than just producing a
+        # wrong answer — worth the extra certainty of a code-level check.
+        #
+        # IMPORTANT: match against tokenized words, not a raw substring
+        # search on the whole command string. A substring check on "vite"
+        # false-positives on "create-vite" (a normal one-shot scaffold
+        # command, not a server start) — tokenizing avoids that class of
+        # false positive entirely.
+        try:
+            command_tokens = [t.lower() for t in shlex.split(command)]
+        except ValueError:
+            command_tokens = command.lower().split()
+
+        looks_like_server_start = (
+            "vite" in command_tokens
+            or "dev" in command_tokens  # e.g. "npm run dev", "next dev"
+            or "start" in command_tokens  # e.g. "npm start"
+            or "runserver" in command_tokens
+            or "uvicorn" in command_tokens
+            or ("-m" in command_tokens and "http.server" in command_tokens)
+            or ("flask" in command_tokens and "run" in command_tokens)
+        ) and not any(t in command_tokens for t in ("install", "build", "--version", "-v"))
+
+        if looks_like_server_start:
+            current_step.status = StepStatus.FAILED
+            current_step.error = (
+                f"REFUSED: '{command}' looks like a command that starts a "
+                "long-running dev server. shell_command cannot run this — it "
+                "blocks until the process exits, and a dev server never "
+                "exits on its own, so this would hang indefinitely. Use "
+                "tool_hint 'start_server' instead, which runs the process "
+                "correctly (non-blocking, with a port-open timeout and "
+                "stderr capture)."
+            )
+            current_step.result = f"Command attempted (refused): {command}"
+            print(f"❌ Shell command refused (looks like server start): {command}")
+            return {"plan": plan, "steps_executed": 1}
 
         result_str = shell_command_tool(command, workspace_path)
 
@@ -1406,7 +1460,12 @@ Rules:
 - Output ONLY the raw shell command, nothing else. No explanation, no markdown.
 - The command will run with cwd={workspace_path}, so paths relative to that are fine.
 - Use non-interactive flags where available (e.g. npm --yes, npx --yes).
-- For npx create-vite, use: npx --yes create-vite@latest . --template react
+- For npx create-vite, use exactly: npx --yes create-vite@latest . --template react -- --skip-linter
+  (NOTE: `--yes` alone does NOT suppress create-vite's linter/tooling prompt —
+  as of recent create-vite versions this is a separate prompt gated behind
+  its own flag, not the top-level --yes. Omitting `-- --skip-linter` will
+  cause the command to hang or self-cancel waiting for interactive input
+  that can never arrive in this environment.)
 - Do NOT use shell operators (&&, ||, ;, |, $()) — output ONE command only.
 - Do NOT use sudo."""
 
