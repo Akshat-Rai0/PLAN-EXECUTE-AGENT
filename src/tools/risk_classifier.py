@@ -22,6 +22,9 @@ HIGH_RISK_TOOLS = {
     "file_editor",        # Can write arbitrary files
     "delete_file",        # Destructive — deletes files/directories in the workspace
     "code_executor",      # Can execute arbitrary Python code
+    "synthesize_tool",    # Generates AND executes new Python code at runtime — same
+                           # execution risk as code_executor, plus the code itself
+                           # hasn't been reviewed by anyone until this exact approval
     "start_server",       # Can start network services
 }
 
