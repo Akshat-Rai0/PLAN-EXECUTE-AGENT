@@ -239,11 +239,11 @@ graph TD
     <div class="overview-seg" style="background:var(--green)"><span>P1</span></div>
     <div class="overview-seg" style="background:var(--green)"><span>P2</span></div>
     <div class="overview-seg" style="background:var(--green)"><span>P3</span></div>
-    <div class="overview-seg" style="background:var(--ink-3)"><span>P4</span></div>
+    <div class="overview-seg" style="background:var(--amber)"><span>P4</span></div>
     <div class="overview-seg" style="background:var(--green)"><span>P5</span></div>
     <div class="overview-seg" style="background:var(--green)"><span>P6</span></div>
     <div class="overview-seg" style="background:var(--ink-3)"><span>P7</span></div>
-    <div class="overview-seg" style="background:var(--ink-3)"><span>P8</span></div>
+    <div class="overview-seg" style="background:var(--amber)"><span>P8</span></div>
     <div class="overview-seg" style="background:var(--ink-3)"><span>P9</span></div>
   </div>
   <div class="callout">
@@ -479,31 +479,31 @@ graph TD
   <div class="section-label">Phase 4 · Jul 25–27</div>
   <div class="phase">
     <div class="phase-header">
-      <div class="phase-num future">4</div>
+      <div class="phase-num active">4</div>
       <div class="phase-title">
         <h3>Dynamic Tool Synthesis</h3>
         <div class="phase-meta">3 days · CLI only</div>
         <div class="phase-arm">Building toward Arm 3</div>
       </div>
-      <div class="phase-status future">Pending</div>
+      <div class="phase-status active">In Progress</div>
     </div>
     <div class="phase-body">
       <div class="phase-col">
         <h4>Tasks</h4>
         <ul class="checklist">
-          <li>Missing-tool detection in executor (no registry match)</li>
-          <li>Codegen prompt: LLM writes a Python function against a declared I/O schema</li>
-          <li>Run generated code in the (unhardened-for-now) sandbox, validate output</li>
-          <li>On success, register as a reusable tool keyed by task signature</li>
-          <li><strong>Cross-run tool registry</strong> — persist successful synthesized tools beyond a single goal_run so later goals reuse them instead of re-synthesizing</li>
-          <li><strong>LLM-call budget cap</strong> per goal_run, separate from the step-count cap, so a runaway replan/synthesis-retry loop can't burn unbounded calls before the step cap catches it</li>
+          <li class="done">Missing-tool detection in executor (no registry match)</li>
+          <li class="done">Codegen prompt: LLM writes a Python function against a declared I/O schema</li>
+          <li class="done">Run generated code in the (unhardened-for-now) sandbox, validate output</li>
+          <li class="done">On success, register as a reusable tool keyed by task signature</li>
+          <li>Cross-run tool registry — persist successful synthesized tools beyond a single goal_run so later goals reuse them instead of re-synthesizing</li>
+          <li>LLM-call budget cap per goal_run, separate from the step-count cap, so a runaway replan/synthesis-retry loop can't burn unbounded calls before the step cap catches it</li>
         </ul>
       </div>
       <div class="phase-col">
         <h4>Deliverables</h4>
         <ul class="checklist">
-          <li>Synthesizer node with declared input/output schema</li>
-          <li>Pydantic output validation gate</li>
+          <li class="done">Synthesizer node with declared input/output schema</li>
+          <li class="done">Pydantic output validation gate</li>
           <li>Persistent, versioned synthesized-tool registry (cross-run)</li>
           <li>LLM-call counter + configurable budget cap</li>
         </ul>
@@ -655,7 +655,7 @@ graph TD
         <div class="phase-meta">4 days · CLI only</div>
         <div class="phase-arm">Arm 3 complete at end of this phase</div>
       </div>
-      <div class="phase-status future">Pending</div>
+      <div class="phase-status future">Not Started</div>
     </div>
     <div class="phase-body">
       <div class="phase-col">
@@ -737,7 +737,7 @@ graph TD
       <div class="phase-col">
         <h4>Deliverables</h4>
         <ul class="checklist">
-          <li>Standalone ReAct baseline agent (Arm 1)</li>
+          <li class="done">Standalone ReAct baseline agent (Arm 1)</li>
           <li>20-goal golden dataset with annotations</li>
           <li>LLM-judge eval pipeline</li>
           <li>Three-arm ablation results (Arm 1 vs 2 vs 3)</li>
