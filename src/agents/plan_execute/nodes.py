@@ -310,6 +310,22 @@ def tavily_search_node(state: State) -> dict:
         if search_context:
             query = f"{query} {search_context}"
 
+        # Tavily rejects queries over 400 chars outright. A long goal string
+        # combined with a long step task can exceed that easily — and
+        # without capping here, a replan that only rewords the step task
+        # (while the goal stays just as long) produces an equally-long query
+        # every time, which the replan-identical-limit guard then
+        # misreads as "no progress" and gives up rather than the query
+        # ever actually getting short enough to succeed.
+        # current_step.task and search_context are the specific, load-bearing
+        # part of the query; plan.goal is broader framing that's useful but
+        # droppable first when something has to give.
+        TAVILY_MAX_QUERY_CHARS = 400
+        if len(query) > TAVILY_MAX_QUERY_CHARS:
+            query = f"{current_step.task} {search_context}".strip() if search_context else current_step.task
+            if len(query) > TAVILY_MAX_QUERY_CHARS:
+                query = query[:TAVILY_MAX_QUERY_CHARS].rstrip()
+
         # Determine search depth based on step type
         # Use "basic" for status-check queries, "advanced" for detailed searches
         task_lower = current_step.task.lower()
@@ -780,7 +796,7 @@ def synthesize_tool_node(state: State) -> dict:
     # --- Step 1: declare the schema (or reuse if we've synthesized this
     # exact capability already earlier in the run) ---
     try:
-        schema = declare_schema(plan.goal, current_step.task, context_block, llm)
+        schema = declare_schema(plan.goal, current_step.task, context_block, llm, registry=default_registry)
     except Exception as e:
         current_step.status = StepStatus.FAILED
         current_step.error = f"synthesize_tool_node: failed to declare schema: {e}"
@@ -1510,7 +1526,7 @@ Rules:
 
             context_block = _build_coding_context(plan, current_step)
             llm = get_llm()
-            schema = declare_schema(plan.goal, current_step.task, context_block, llm)
+            schema = declare_schema(plan.goal, current_step.task, context_block, llm, registry=default_registry)
             synthesis_preview_to_show = (
                 f"Will synthesize a new tool: {schema.capability_name}\n"
                 f"  {schema.description}\n"

@@ -33,7 +33,7 @@ def _strip_markdown_fences(text: str) -> str:
     return text
 
 
-def declare_schema(goal: str, step_task: str, context_block: str, llm) -> SynthesisSchema:
+def declare_schema(goal: str, step_task: str, context_block: str, llm, registry=None) -> SynthesisSchema:
     """
     First call: ask the LLM to declare the I/O contract for the missing
     capability, BEFORE any code is written. Raises if the LLM's response
@@ -42,14 +42,38 @@ def declare_schema(goal: str, step_task: str, context_block: str, llm) -> Synthe
     other JSON-parsing LLM call in this codebase (write_file_node,
     delete_file_node, approval_node's pre-generation all follow this
     fail-the-step-not-the-process convention).
+
+    `registry` (if provided) is consulted so the LLM can recognize when an
+    already-synthesized tool covers this step's need and return that EXACT
+    capability_name, rather than inventing a fresh, differently-worded name
+    every time similar-but-not-identically-phrased steps show up. Without
+    this, synthesize_tool_node's reuse-lookup (keyed on capability_name)
+    never fires in practice, because declare_schema had no way to know a
+    matching capability already existed — see the temperature-conversion
+    trace in this module's docstring for the motivating failure.
     """
-    prompt = f"""You are declaring the contract for a new reusable tool needed to complete one step of a task. No existing tool matches this need.
+    existing_capabilities_block = "(none synthesized yet this run)"
+    if registry is not None:
+        existing = registry.list_all()
+        if existing:
+            lines = []
+            for name, tool in existing.items():
+                lines.append(
+                    f'- "{name}": {tool.description} '
+                    f"(input: {tool.input_description}; output: {tool.output_description})"
+                )
+            existing_capabilities_block = "\n".join(lines)
+
+    prompt = f"""You are declaring the contract for a new reusable tool needed to complete one step of a task. No FIXED tool (search, file I/O, shell, etc.) matches this need.
 
 Overall goal: "{goal}"
 Step that needs this new capability: {step_task}
 
 Prior steps and results:
 {context_block}
+
+Already-synthesized capabilities from earlier in this run (reuse one of these if it fits):
+{existing_capabilities_block}
 
 Declare a JSON object with exactly these keys:
 - "capability_name": a short snake_case identifier, e.g. "convert_temperature_units" or "fetch_exchange_rate"
@@ -59,6 +83,8 @@ Declare a JSON object with exactly these keys:
 - "example_input": a concrete example input object matching input_description — this will be used to test the generated function
 
 Rules:
+- IMPORTANT: If one of the already-synthesized capabilities listed above already does what this step needs, set "capability_name" to that EXACT existing name (character-for-character), and keep "description"/"input_description"/"output_description" consistent with what that existing tool already does — do not invent a new, differently-worded name for the same underlying capability just because this step's wording differs.
+- Only declare a genuinely NEW capability_name if none of the existing ones cover this step's need.
 - The capability should be genuinely reusable — general enough that a similarly-phrased future step could use it too, not hyper-specific to this exact step's wording.
 - Keep the input/output shapes simple: flat JSON objects with string/number/bool/list values, no nested custom types.
 - No markdown fences. Output only the raw JSON object."""
