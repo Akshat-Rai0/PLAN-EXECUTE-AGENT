@@ -118,6 +118,16 @@ class DevServer:
                 env=env,
                 # New process group so SIGTERM hits only this tree, not the agent
                 start_new_session=True,
+                # Without this the child inherits our stdin. Some dev servers
+                # (Vite included) prompt interactively if the requested port
+                # is already in use — e.g. "Port 5173 is in use, try another
+                # one? (Y/n)" — and will sit waiting on stdin for an answer
+                # that can never come in this environment, silently eating
+                # the full timeout_for_ready window before we report a
+                # generic "port never opened" error with no indication why.
+                # Closing stdin makes the server see EOF immediately, so a
+                # well-behaved one fails fast with a real error instead.
+                stdin=subprocess.DEVNULL,
             )
         except FileNotFoundError as e:
             return {
@@ -162,7 +172,49 @@ class DevServer:
 
             time.sleep(READY_POLL_INTERVAL_SECONDS)
 
-        # Timeout — kill the process and report failure
+        # Timeout — capture whatever output the process produced before we
+        # kill it. Previously this branch hardcoded stderr="", which meant
+        # every timeout failure reported only "check the server logs" with
+        # no logs actually surfaced — leaving the replanner (and the human
+        # at the approval gate) unable to tell a real startup error (e.g.
+        # "Cannot find module", a port conflict, a missing env var) apart
+        # from a merely-slow-starting server.
+        #
+        # Must read BEFORE calling stop() — stop() nulls self.process once
+        # the child is killed, so the pipe handles are unreachable after.
+        # The process is still running at this point (we only got here by
+        # falling out of the polling loop, not via the early-exit branch
+        # above), so a plain blocking .read() would hang forever waiting
+        # for EOF. Make each pipe's fd non-blocking first so read() returns
+        # immediately with whatever is currently buffered, even if the
+        # process is still alive and the pipe hasn't closed.
+        stderr_output = ""
+        stdout_output = ""
+        try:
+            import fcntl
+
+            for stream, attr in ((self.process.stderr, "stderr"), (self.process.stdout, "stdout")):
+                if stream is None:
+                    continue
+                fd = stream.fileno()
+                flags = fcntl.fcntl(fd, fcntl.F_GETFL)
+                fcntl.fcntl(fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
+                try:
+                    chunk = stream.read()
+                except (BlockingIOError, TypeError):
+                    chunk = b""
+                if chunk:
+                    text = chunk.decode("utf-8", errors="replace")
+                    if attr == "stderr":
+                        stderr_output = text
+                    else:
+                        stdout_output = text
+        except Exception:
+            # Best-effort — if this fails for any reason (e.g. non-POSIX
+            # platform, already-closed pipe), fall back to empty strings
+            # rather than let output-capture itself break the timeout path.
+            pass
+
         self.stop()
         return {
             "success": False,
@@ -170,7 +222,8 @@ class DevServer:
                 f"Server did not open port {self.port} within {timeout_for_ready}s. "
                 "Check the server logs for startup errors."
             ),
-            "stderr": "",
+            "stderr": stderr_output,
+            "stdout": stdout_output,
         }
 
     def stop(self) -> None:
@@ -207,7 +260,7 @@ class DevServer:
         """Return True if localhost:<self.port> accepts a TCP connection."""
         try:
             with socket.create_connection(
-                ("127.0.0.1", self.port), timeout=PORT_CHECK_TIMEOUT_SECONDS
+                ("localhost", self.port), timeout=PORT_CHECK_TIMEOUT_SECONDS
             ):
                 return True
         except OSError:
