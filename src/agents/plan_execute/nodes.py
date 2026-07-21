@@ -849,7 +849,7 @@ def synthesize_tool_node(state: State) -> dict:
     return {"plan": plan, "steps_executed": 1}
 
 
-
+def shell_node(state: State) -> dict:
     """
     Execute a shell command step (tool_hint='shell_command').
 
@@ -1360,6 +1360,7 @@ def approval_node(state: State) -> dict:
     file_content_to_show = None
     code_to_show = None
     port_to_show = None
+    synthesis_preview_to_show = None
 
     workspace_path = state.get("workspace_path") or ""
 
