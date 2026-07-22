@@ -55,6 +55,8 @@ Notes:
     "delete_file"      - delete a file or directory inside the project workspace, or clear
                           everything in the workspace (e.g. "delete all files in the project")
     "start_server"     - start a dev server (use as LAST step of app-building tasks)
+    "browser_use"      - browser automation for form filling, data extraction, and multi-step
+                          web workflows (requires human approval due to HIGH-risk classification)
     "none"             - pure reasoning, no external tool
 - "status": always "PENDING"
 - "sensitive": true only if human confirmation should be required before this step runs

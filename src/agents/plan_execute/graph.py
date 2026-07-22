@@ -5,7 +5,7 @@ from .nodes import (
     plan_node, executor_node, tavily_search_node, synthesize_node,
     replaner, reason_node, code_executor_node, synthesize_tool_node,
     setup_workspace_node, shell_node, write_file_node, delete_file_node, start_server_node,
-    approval_node, ask_human_node,
+    approval_node, ask_human_node, browser_use_node,
     MAX_TOTAL_STEPS,
 )
 from .state import State, StepStatus
@@ -85,6 +85,8 @@ def _route_to_tool(state: State) -> str:
         return "delete_file"
     if tool_hint == "start_server":
         return "start_server"
+    if tool_hint == "browser_use":
+        return "browser_use"
 
     # Any other/unrecognized tool hint means no fixed tool matches — route
     # to synthesis rather than the dead-end stub (which used to mark these
@@ -120,6 +122,8 @@ def _route_after_approval(state: State) -> str:
         return "delete_file"
     if tool_hint == "start_server":
         return "start_server"
+    if tool_hint == "browser_use":
+        return "browser_use"
     
     # Any other/unrecognized tool_hint means synthesis was the route taken
     # to get here (see _route_to_tool) — send it on to synthesize_tool now
@@ -184,6 +188,7 @@ def build_graph():
     graph.add_node("write_file", write_file_node)
     graph.add_node("delete_file", delete_file_node)
     graph.add_node("start_server", start_server_node)
+    graph.add_node("browser_use", browser_use_node)
     graph.add_node("approval", approval_node)
     graph.add_node("ask_human", ask_human_node)
     
@@ -228,6 +233,7 @@ def build_graph():
             "write_file": "write_file",
             "delete_file": "delete_file",
             "start_server": "start_server",
+            "browser_use": "browser_use",
             "approval": "approval",
             "end": END,
         },
@@ -245,6 +251,7 @@ def build_graph():
             "write_file": "write_file",
             "delete_file": "delete_file",
             "start_server": "start_server",
+            "browser_use": "browser_use",
             "executor": "executor",
         },
     )
@@ -303,6 +310,7 @@ def build_graph():
     graph.add_conditional_edges("write_file", _route_after_tool, _coding_routing)
     graph.add_conditional_edges("delete_file", _route_after_tool, _coding_routing)
     graph.add_conditional_edges("start_server", _route_after_tool, _coding_routing)
+    graph.add_conditional_edges("browser_use", _route_after_tool, _coding_routing)
     
     # After replaning, route back to executor to run the new plan
     graph.add_edge("replaner", "executor")

@@ -8,6 +8,7 @@ from .tools import breakdown_task, bound_replan_context
 from src.tools.registry import (
     tavily_search, today_date,
     shell_command_tool, write_file_tool, delete_file_tool, start_dev_server_tool,
+    browser_use_tool,
 )
 from src.sandbox.shell_runner import make_project_workspace
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -1971,3 +1972,50 @@ def replaner(state: State) -> dict:
                 "consecutive_identical_replans": consecutive_count + 1,
                 "last_replan_context": completed_results,
             }
+
+
+def browser_use_node(state: State) -> dict:
+    """
+    Execute a browser automation task using browser-use library (tool_hint='browser_use').
+    
+    This node uses the browser-use library with Groq LLM to perform browser automation
+    tasks like form filling, data extraction, and multi-step web workflows.
+    """
+    plan = state["plan"]
+    if plan is None:
+        raise RuntimeError("browser_use_node called with no plan in state")
+
+    current_step = next((s for s in plan.subtasks if s.status == StepStatus.RUNNING), None)
+    if current_step is None:
+        raise RuntimeError("browser_use_node called with no RUNNING step")
+
+    # Get browser mode from environment (headless or headed)
+    browser_mode = os.getenv("BROWSER_MODE", "headless").lower()
+    headless = browser_mode == "headless"
+
+    print(f"\n{'='*80}")
+    print(f"🌐 Browser Automation")
+    print(f"{'='*80}")
+    print(f"Task: {current_step.task}")
+    print(f"Mode: {'headless' if headless else 'headed'}")
+
+    try:
+        # Call browser_use_tool with the step's task
+        result = browser_use_tool(current_step.task, headless=headless)
+
+        if result.startswith("ERROR:"):
+            current_step.status = StepStatus.FAILED
+            current_step.error = result
+            print(f"❌ Browser automation failed: {result[:300]}")
+        else:
+            current_step.status = StepStatus.DONE
+            current_step.result = result
+            print(f"✅ Browser automation completed")
+            print(f"👁️  Result: {result[:300]}{'...' if len(result) > 300 else ''}")
+
+    except Exception as e:
+        current_step.status = StepStatus.FAILED
+        current_step.error = f"browser_use_node error: {str(e)}"
+        print(f"❌ Browser automation error: {str(e)}")
+
+    return {"plan": plan, "steps_executed": 1}

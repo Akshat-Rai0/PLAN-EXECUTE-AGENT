@@ -238,3 +238,167 @@ def ask_human(question: str) -> str:
     # in the approval_node or a dedicated ask_human_node
     # For now, return a placeholder - the real implementation uses interrupt()
     return f"[ASK_HUMAN: {question}]"
+
+
+# ---------------------------------------------------------------------------
+# Browser automation tool
+# ---------------------------------------------------------------------------
+
+def browser_use_tool(task: str, headless: bool = True) -> str:
+    """
+    Execute a browser automation task using the browser-use library with Groq LLM.
+    
+    This function creates a browser-use Agent configured with Groq's LLM,
+    executes the specified task (form filling, data extraction, navigation, etc.),
+    and returns the results including actions taken and extracted data.
+    
+    Args:
+        task: The browser automation task description (e.g., "fill out the contact form on example.com")
+        headless: Whether to run browser in headless mode (True) or headed mode (False)
+    
+    Returns:
+        A string containing the agent's result including actions performed and any extracted data,
+        or an error message if the task fails.
+    """
+    try:
+        from browser_use import Agent
+        import asyncio
+        
+        # Get Groq API key from environment
+        groq_api_key = os.getenv("GROQ_API_KEY")
+        if not groq_api_key:
+            return "ERROR: GROQ_API_KEY not found in environment variables"
+        
+        # Get Groq model from environment, default to a reasonable model
+        groq_model = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+        
+        # Create a simple LLM wrapper that browser-use expects
+        # browser-use expects an object with provider, model_name attributes and invoke/ainvoke methods
+        class SimpleLLM:
+            def __init__(self, api_key, model):
+                self.provider = "openai"
+                self.api_key = api_key
+                self.model = model
+                self.model_name = model  # browser-use expects model_name
+                self.base_url = "https://api.groq.com/openai/v1"
+                
+            def invoke(self, messages):
+                from openai import OpenAI
+                client = OpenAI(
+                    api_key=self.api_key,
+                    base_url=self.base_url,
+                )
+                
+                # Convert langchain messages to OpenAI format
+                openai_messages = []
+                for msg in messages:
+                    # Check message type by class
+                    msg_type = getattr(msg, 'type', None)
+                    if msg_type is None:
+                        # Fallback to checking class name
+                        msg_class = msg.__class__.__name__
+                        if 'Human' in msg_class:
+                            msg_type = "human"
+                        elif 'System' in msg_class:
+                            msg_type = "system"
+                        elif 'AI' in msg_class:
+                            msg_type = "ai"
+                        else:
+                            msg_type = "human"  # default
+                    
+                    # Extract content as string
+                    content = str(msg.content) if not isinstance(msg.content, str) else msg.content
+                    
+                    if msg_type == "human":
+                        openai_messages.append({"role": "user", "content": content})
+                    elif msg_type == "system":
+                        openai_messages.append({"role": "system", "content": content})
+                    elif msg_type == "ai":
+                        openai_messages.append({"role": "assistant", "content": content})
+                
+                response = client.chat.completions.create(
+                    model=self.model,
+                    messages=openai_messages,
+                    temperature=0.0,
+                )
+                
+                # Return in langchain format
+                from langchain_core.messages import AIMessage
+                return AIMessage(content=response.choices[0].message.content)
+                
+            async def ainvoke(self, *args, **kwargs):
+                from openai import AsyncOpenAI
+                client = AsyncOpenAI(
+                    api_key=self.api_key,
+                    base_url=self.base_url,
+                )
+                
+                # Extract messages from args (first arg after self)
+                messages = args[0] if args else kwargs.get('messages', [])
+                
+                # Convert langchain messages to OpenAI format
+                openai_messages = []
+                for msg in messages:
+                    # Check message type by class
+                    msg_type = getattr(msg, 'type', None)
+                    if msg_type is None:
+                        # Fallback to checking class name
+                        msg_class = msg.__class__.__name__
+                        if 'Human' in msg_class:
+                            msg_type = "human"
+                        elif 'System' in msg_class:
+                            msg_type = "system"
+                        elif 'AI' in msg_class:
+                            msg_type = "ai"
+                        else:
+                            msg_type = "human"  # default
+                    
+                    # Extract content as string
+                    content = str(msg.content) if not isinstance(msg.content, str) else msg.content
+                    
+                    if msg_type == "human":
+                        openai_messages.append({"role": "user", "content": content})
+                    elif msg_type == "system":
+                        openai_messages.append({"role": "system", "content": content})
+                    elif msg_type == "ai":
+                        openai_messages.append({"role": "assistant", "content": content})
+                
+                response = await client.chat.completions.create(
+                    model=self.model,
+                    messages=openai_messages,
+                    temperature=0.0,
+                )
+                
+                # Return in langchain format
+                from langchain_core.messages import AIMessage
+                return AIMessage(content=response.choices[0].message.content)
+        
+        llm = SimpleLLM(api_key=groq_api_key, model=groq_model)
+        
+        # Create browser-use agent
+        agent = Agent(
+            task=task,
+            llm=llm,
+        )
+        
+        # Run the agent asynchronously
+        result = asyncio.run(agent.run())
+        
+        # Extract and format the result
+        if hasattr(result, 'final_result'):
+            output = result.final_result
+        elif isinstance(result, list) and len(result) > 0:
+            # browser-use returns a list of steps/results
+            output = "\n".join([str(step) for step in result])
+        else:
+            output = str(result)
+        
+        return f"Browser automation completed successfully.\n\nTask: {task}\n\nResult:\n{output}"
+        
+    except ImportError as e:
+        return f"ERROR: Failed to import browser-use library: {e}. Ensure browser-use is installed: pip install browser-use"
+    except AttributeError as e:
+        # Handle the specific ChatGroq attribute error
+        return f"ERROR: Browser automation LLM configuration error: {str(e)}. The browser-use library may require a specific LLM interface."
+    except Exception as e:
+        return f"ERROR: Browser automation failed: {str(e)}"
