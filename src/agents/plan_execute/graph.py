@@ -5,7 +5,7 @@ from .nodes import (
     plan_node, executor_node, tavily_search_node, synthesize_node,
     replaner, reason_node, code_executor_node, synthesize_tool_node,
     setup_workspace_node, shell_node, write_file_node, delete_file_node, start_server_node,
-    approval_node, ask_human_node,
+    approval_node, ask_human_node, browser_node,
     MAX_TOTAL_STEPS,
 )
 from .state import State, StepStatus
@@ -69,6 +69,8 @@ def _route_to_tool(state: State) -> str:
         return "approval"
     
     # LOW-risk tools route directly to their tool nodes
+    if tool_hint == "browser":
+        return "browser"
     if tool_hint in ("web_search", "tavily_search"):
         return "tavily_search"
     if tool_hint == "code_executor":
@@ -108,6 +110,8 @@ def _route_after_approval(state: State) -> str:
     tool_hint = running_step.tool_hint.lower()
     
     # Route to the actual tool node
+    if tool_hint == "browser":
+        return "browser"
     if tool_hint in ("web_search", "tavily_search"):
         return "tavily_search"
     if tool_hint == "code_executor":
@@ -186,6 +190,7 @@ def build_graph():
     graph.add_node("start_server", start_server_node)
     graph.add_node("approval", approval_node)
     graph.add_node("ask_human", ask_human_node)
+    graph.add_node("browser", browser_node)
     
     # Stub node kept registered for backward-compat (in case anything still
     # references "stub" directly) but is no longer reachable via normal
@@ -217,6 +222,7 @@ def build_graph():
         "executor",
         _route_to_tool,
         {
+            "browser": "browser",
             "tavily_search": "tavily_search",
             "code_executor": "code_executor",
             "synthesize_tool": "synthesize_tool",
@@ -238,6 +244,7 @@ def build_graph():
         "approval",
         _route_after_approval,
         {
+            "browser": "browser",
             "tavily_search": "tavily_search",
             "code_executor": "code_executor",
             "synthesize_tool": "synthesize_tool",
@@ -250,6 +257,15 @@ def build_graph():
     )
     
     # After tool execution, conditionally route to replaner, executor, or synthesize
+    graph.add_conditional_edges(
+        "browser",
+        _route_after_tool,
+        {
+            "replaner": "replaner",
+            "executor": "executor",
+            "synthesize": "synthesize",
+        },
+    )
     graph.add_conditional_edges(
         "tavily_search",
         _route_after_tool,
