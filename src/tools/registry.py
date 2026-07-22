@@ -244,161 +244,163 @@ def ask_human(question: str) -> str:
 # Browser automation tool
 # ---------------------------------------------------------------------------
 
-def browser_use_tool(task: str, headless: bool = True) -> str:
+def browser_use_tool(task: str, headless: bool = True, timeout_seconds: float = 120.0) -> str:
     """
     Execute a browser automation task using the browser-use library with Groq LLM.
-    
-    This function creates a browser-use Agent configured with Groq's LLM,
-    executes the specified task (form filling, data extraction, navigation, etc.),
-    and returns the results including actions taken and extracted data.
-    
+
+    This function creates a browser-use Agent configured with Groq's native
+    ChatGroq wrapper (browser_use.llm.ChatGroq — NOT a hand-rolled adapter,
+    see note below), executes the specified task (form filling, data
+    extraction, navigation, etc.), and returns the results including actions
+    taken and extracted data.
+
     Args:
-        task: The browser automation task description (e.g., "fill out the contact form on example.com")
-        headless: Whether to run browser in headless mode (True) or headed mode (False)
-    
+        task: The browser automation task description (e.g., "fill out the
+            contact form on example.com").
+        headless: Whether to run the browser in headless mode (True, no
+            visible window) or headed mode (False, visible window — useful
+            for debugging).
+        timeout_seconds: Hard wall-clock cap on the entire browser-use run.
+            Without this, a stuck agent.run() call blocks the whole
+            LangGraph node — and therefore the whole CLI process —
+            indefinitely with zero progress output, which is
+            indistinguishable from a genuine hang. This was the actual
+            root cause of a real "opens a browser, then no progress"
+            report: the previous hand-rolled LLM wrapper below returned
+            objects browser-use's internal agent loop couldn't parse into
+            an action, causing it to retry/stall silently rather than
+            raising a clean, catchable error.
+
     Returns:
-        A string containing the agent's result including actions performed and any extracted data,
-        or an error message if the task fails.
+        A string containing the agent's result including actions performed
+        and any extracted data, an ERROR string on failure, or a TIMEOUT
+        string if the run exceeded timeout_seconds without completing.
     """
     try:
-        from browser_use import Agent
+        # Defensive backstop for the same extension-download bug the
+        # explicit enable_default_extensions=False below already handles
+        # via BrowserProfile — set this BEFORE importing/using browser_use
+        # in case any other internal code path reads browser-use's own
+        # global CONFIG default rather than the specific BrowserProfile
+        # instance constructed further down. Belt-and-suspenders: the
+        # BrowserProfile kwarg is the primary fix (confirmed to work),
+        # this env var is a backstop, not required for the fix to work.
+        os.environ.setdefault("BROWSER_USE_DISABLE_EXTENSIONS", "1")
+
+        from browser_use import Agent, BrowserProfile
+        from browser_use.llm import ChatGroq
         import asyncio
-        
-        # Get Groq API key from environment
+
         groq_api_key = os.getenv("GROQ_API_KEY")
         if not groq_api_key:
             return "ERROR: GROQ_API_KEY not found in environment variables"
-        
-        # Get Groq model from environment, default to a reasonable model
+
         groq_model = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
-        
-        # Create a simple LLM wrapper that browser-use expects
-        # browser-use expects an object with provider, model_name attributes and invoke/ainvoke methods
-        class SimpleLLM:
-            def __init__(self, api_key, model):
-                self.provider = "openai"
-                self.api_key = api_key
-                self.model = model
-                self.model_name = model  # browser-use expects model_name
-                self.base_url = "https://api.groq.com/openai/v1"
-                
-            def invoke(self, messages):
-                from openai import OpenAI
-                client = OpenAI(
-                    api_key=self.api_key,
-                    base_url=self.base_url,
-                )
-                
-                # Convert langchain messages to OpenAI format
-                openai_messages = []
-                for msg in messages:
-                    # Check message type by class
-                    msg_type = getattr(msg, 'type', None)
-                    if msg_type is None:
-                        # Fallback to checking class name
-                        msg_class = msg.__class__.__name__
-                        if 'Human' in msg_class:
-                            msg_type = "human"
-                        elif 'System' in msg_class:
-                            msg_type = "system"
-                        elif 'AI' in msg_class:
-                            msg_type = "ai"
-                        else:
-                            msg_type = "human"  # default
-                    
-                    # Extract content as string
-                    content = str(msg.content) if not isinstance(msg.content, str) else msg.content
-                    
-                    if msg_type == "human":
-                        openai_messages.append({"role": "user", "content": content})
-                    elif msg_type == "system":
-                        openai_messages.append({"role": "system", "content": content})
-                    elif msg_type == "ai":
-                        openai_messages.append({"role": "assistant", "content": content})
-                
-                response = client.chat.completions.create(
-                    model=self.model,
-                    messages=openai_messages,
-                    temperature=0.0,
-                )
-                
-                # Return in langchain format
-                from langchain_core.messages import AIMessage
-                return AIMessage(content=response.choices[0].message.content)
-                
-            async def ainvoke(self, *args, **kwargs):
-                from openai import AsyncOpenAI
-                client = AsyncOpenAI(
-                    api_key=self.api_key,
-                    base_url=self.base_url,
-                )
-                
-                # Extract messages from args (first arg after self)
-                messages = args[0] if args else kwargs.get('messages', [])
-                
-                # Convert langchain messages to OpenAI format
-                openai_messages = []
-                for msg in messages:
-                    # Check message type by class
-                    msg_type = getattr(msg, 'type', None)
-                    if msg_type is None:
-                        # Fallback to checking class name
-                        msg_class = msg.__class__.__name__
-                        if 'Human' in msg_class:
-                            msg_type = "human"
-                        elif 'System' in msg_class:
-                            msg_type = "system"
-                        elif 'AI' in msg_class:
-                            msg_type = "ai"
-                        else:
-                            msg_type = "human"  # default
-                    
-                    # Extract content as string
-                    content = str(msg.content) if not isinstance(msg.content, str) else msg.content
-                    
-                    if msg_type == "human":
-                        openai_messages.append({"role": "user", "content": content})
-                    elif msg_type == "system":
-                        openai_messages.append({"role": "system", "content": content})
-                    elif msg_type == "ai":
-                        openai_messages.append({"role": "assistant", "content": content})
-                
-                response = await client.chat.completions.create(
-                    model=self.model,
-                    messages=openai_messages,
-                    temperature=0.0,
-                )
-                
-                # Return in langchain format
-                from langchain_core.messages import AIMessage
-                return AIMessage(content=response.choices[0].message.content)
-        
-        llm = SimpleLLM(api_key=groq_api_key, model=groq_model)
-        
-        # Create browser-use agent
+
+        # Use browser-use's OWN native ChatGroq wrapper (browser_use.llm.ChatGroq),
+        # not a hand-rolled adapter. browser-use's BaseChatModel interface
+        # requires an async ainvoke(messages, output_format=...) method that
+        # returns a ChatInvokeCompletion object — the library uses this for
+        # STRUCTURED output (it asks the LLM to select a specific action
+        # schema on every step). A bare chat-completions wrapper that
+        # returns a plain AIMessage does not satisfy this contract; the
+        # previous implementation's SimpleLLM class had the wrong ainvoke
+        # signature entirely (no output_format parameter, wrong return
+        # type), which is the most likely reason browser-use's internal
+        # agent loop never made forward progress — it never lets an
+        # exception surface, it just can't parse what comes back and keeps
+        # trying. browser-use ships this wrapper specifically so callers
+        # don't need to hand-write one; verified present in browser-use
+        # 0.13.6's public API (browser_use.llm.ChatGroq).
+        llm = ChatGroq(
+            model=groq_model,
+            api_key=groq_api_key,
+            timeout=60,       # per-LLM-call timeout, distinct from the
+                               # overall run timeout below
+            max_retries=2,
+        )
+
+        # headless lives on BrowserProfile, not on Agent directly — the
+        # previous implementation accepted a headless parameter but never
+        # passed it anywhere, so browser-use fell back to its own default
+        # (effectively headed / auto-detected), which is why a visible
+        # Chrome window opened even though headless=True was the caller's
+        # intent.
+        # Disable browser-use's default extensions (uBlock Origin, cookie
+        # handler, URL cleaner). This works around a real bug in
+        # browser-use 0.13.6 itself: BrowserProfile._download_extension()
+        # calls urllib.request.urlopen(url) with NO timeout at all, and
+        # it's a plain synchronous blocking call (not wrapped in
+        # loop.run_in_executor or similar) invoked while building Chrome's
+        # launch args — i.e. inside the async agent.run() path, but not
+        # itself async. Verified experimentally (not assumed): a blocking
+        # call with no internal awaits, run directly inside an async
+        # function, freezes the ENTIRE event loop — asyncio.wait_for's
+        # timeout (see below) literally cannot interrupt it, because the
+        # timeout mechanism itself depends on the event loop getting
+        # control back at an await point, which never happens here. If
+        # the extension download stalls (slow network, blocked/filtered
+        # domain, DNS issue — all plausible in a sandboxed/CI/headless
+        # environment), the whole process hangs with the timeout below
+        # never firing. This exact symptom was reproduced from a real run
+        # (log showed "Downloading uBlock Origin Lite extension..." with
+        # no further output). These extensions are non-essential for
+        # scripted automation tasks, so disabling them sidesteps the bug
+        # entirely rather than trying to work around a genuinely
+        # un-interruptible blocking call from the outside.
+        browser_profile = BrowserProfile(headless=headless, enable_default_extensions=False)
+
         agent = Agent(
             task=task,
             llm=llm,
+            browser_profile=browser_profile,
         )
-        
-        # Run the agent asynchronously
-        result = asyncio.run(agent.run())
-        
-        # Extract and format the result
-        if hasattr(result, 'final_result'):
+
+        # Hard timeout around the whole run. Without this, a stuck
+        # agent.run() blocks this LangGraph node (and therefore the whole
+        # CLI process) forever with no progress output — exactly the
+        # symptom reported ("browser opens, then no progress"). This does
+        # NOT fix a slow-but-working run; it turns a silent, indefinite
+        # hang into a clear, actionable failure the replanner can react to.
+        try:
+            result = asyncio.run(asyncio.wait_for(agent.run(), timeout=timeout_seconds))
+        except asyncio.TimeoutError:
+            return (
+                f"ERROR: Browser automation timed out after {timeout_seconds}s "
+                f"with no result. Task: {task!r}. This usually means the "
+                "agent's internal loop got stuck (e.g. couldn't find a way "
+                "to progress on the page, or hit a state it couldn't parse) "
+                "rather than the page itself being slow to load."
+            )
+
+        # Extract and format the result. browser-use's AgentHistoryList
+        # (what agent.run() returns) exposes final_result() as a METHOD,
+        # not an attribute — calling it without parens on a real run would
+        # return the bound method object itself, not the actual result
+        # text, silently producing a useless "Result:
+        # <bound method ...>" output instead of a real error.
+        if hasattr(result, "final_result") and callable(getattr(result, "final_result")):
+            output = result.final_result()
+        elif hasattr(result, "final_result"):
             output = result.final_result
         elif isinstance(result, list) and len(result) > 0:
-            # browser-use returns a list of steps/results
-            output = "\n".join([str(step) for step in result])
+            output = "\n".join(str(step) for step in result)
         else:
             output = str(result)
-        
+
+        if not output or not str(output).strip():
+            return (
+                f"ERROR: Browser automation completed without error but "
+                f"produced no extractable result. Task: {task!r}. The run "
+                "may have finished on an intermediate page rather than "
+                "completing the task — check the task description is "
+                "specific enough (e.g. 'report the title of the #1 post', "
+                "not just 'go to the site')."
+            )
+
         return f"Browser automation completed successfully.\n\nTask: {task}\n\nResult:\n{output}"
-        
+
     except ImportError as e:
         return f"ERROR: Failed to import browser-use library: {e}. Ensure browser-use is installed: pip install browser-use"
-    except AttributeError as e:
-        # Handle the specific ChatGroq attribute error
-        return f"ERROR: Browser automation LLM configuration error: {str(e)}. The browser-use library may require a specific LLM interface."
     except Exception as e:
-        return f"ERROR: Browser automation failed: {str(e)}"
+        return f"ERROR: Browser automation failed: {type(e).__name__}: {e}"

@@ -1993,15 +1993,29 @@ def browser_use_node(state: State) -> dict:
     browser_mode = os.getenv("BROWSER_MODE", "headless").lower()
     headless = browser_mode == "headless"
 
+    # Configurable so a person debugging a stuck run can raise this without
+    # editing code, and so it can be lowered for eval/CI runs where a fast
+    # failure is preferable to a long wait.
+    timeout_seconds = float(os.getenv("BROWSER_USE_TIMEOUT_SECONDS", "120"))
+
     print(f"\n{'='*80}")
     print(f"🌐 Browser Automation")
     print(f"{'='*80}")
     print(f"Task: {current_step.task}")
     print(f"Mode: {'headless' if headless else 'headed'}")
+    # This call blocks synchronously until it completes, fails, or times
+    # out — there is no intermediate progress output from inside
+    # browser_use_tool itself. Printing this line before the call is the
+    # only thing that currently distinguishes "still running normally,
+    # just slow" from "silently hung with no timeout" while it's in
+    # progress; the timeout in browser_use_tool ensures it eventually
+    # reports one or the other instead of hanging indefinitely.
+    print(f"Timeout: {timeout_seconds:.0f}s (set BROWSER_USE_TIMEOUT_SECONDS to change)")
+    print(f"⏳ Running — no further output until this step completes or times out...")
 
     try:
         # Call browser_use_tool with the step's task
-        result = browser_use_tool(current_step.task, headless=headless)
+        result = browser_use_tool(current_step.task, headless=headless, timeout_seconds=timeout_seconds)
 
         if result.startswith("ERROR:"):
             current_step.status = StepStatus.FAILED
@@ -2015,7 +2029,7 @@ def browser_use_node(state: State) -> dict:
 
     except Exception as e:
         current_step.status = StepStatus.FAILED
-        current_step.error = f"browser_use_node error: {str(e)}"
+        current_step.error = f"browser_use_node error: {type(e).__name__}: {str(e)}"
         print(f"❌ Browser automation error: {str(e)}")
 
     return {"plan": plan, "steps_executed": 1}
