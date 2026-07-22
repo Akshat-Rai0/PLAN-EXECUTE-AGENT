@@ -354,6 +354,14 @@ def browser_use_tool(task: str, headless: bool = True, timeout_seconds: float = 
             task=task,
             llm=llm,
             browser_profile=browser_profile,
+            use_vision=False,
+            # Groq free-tier TPM cap (8000) is hit because browser-use's
+            # per-step request grows as it accumulates prior steps' state
+            # and actions into the conversation history, on top of the
+            # current page's DOM serialization. Bound both sides:
+            max_history_items=6,               # browser-use requires None or >5; 6 is the smallest legal value
+            max_clickable_elements_length=8000,  # hard cap on serialized DOM chars sent to the LLM
+            include_attributes=["title", "alt", "aria-label", "placeholder"],  # trim noisy default attrs
         )
 
         # Hard timeout around the whole run. Without this, a stuck
