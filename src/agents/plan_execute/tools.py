@@ -44,7 +44,6 @@ Return ONLY a valid JSON object with this exact structure, no markdown fences, n
 
 Notes:
 - "tool_hint": suggest a tool from this list:
-    "browser"          - use a web browser to navigate pages, click, type, and extract info
     "web_search"       - search the web for information
     "code_executor"    - write and execute a Python script
     "setup_workspace"  - create a project directory (use as FIRST step of any app/coding task)

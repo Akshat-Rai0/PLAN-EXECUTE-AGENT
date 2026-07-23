@@ -29,7 +29,6 @@ HIGH_RISK_TOOLS = {
 }
 
 LOW_RISK_TOOLS = {
-    "browser",            # Read-only or mostly read-only automated browser
     "tavily_search",      # Read-only web search
     "web_search",         # Read-only web search
     "today_date",         # System date read

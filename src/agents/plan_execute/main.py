@@ -175,33 +175,23 @@ def main():
     # Use SQLite checkpointer with context manager. Constructed manually
     # (rather than via SqliteSaver.from_conn_string, which hardcodes
     # serde=None) so the custom serializer above is actually used.
-    from src.browser.session_registry import close_session
-
-    try:
-        with closing(sqlite3.connect("checkpoints.db", check_same_thread=False)) as conn:
-            checkpointer = SqliteSaver(conn, serde=serializer)
-            graph_with_checkpoint = graph.compile(checkpointer=checkpointer)
+    with closing(sqlite3.connect("checkpoints.db", check_same_thread=False)) as conn:
+        checkpointer = SqliteSaver(conn, serde=serializer)
+        graph_with_checkpoint = graph.compile(checkpointer=checkpointer)
+        
+        # Interrupt-aware execution loop
+        result = graph_with_checkpoint.invoke(initial_state, config)
+        
+        while "__interrupt__" in result:
+            # Handle interrupt
+            interrupt_data = result["__interrupt__"]
+            print(f"\n⏸️ Execution paused - awaiting human input")
             
-            # Interrupt-aware execution loop
-            result = graph_with_checkpoint.invoke(initial_state, config)
+            response = handle_interrupt_cli(interrupt_data)
             
-            while "__interrupt__" in result:
-                # Handle interrupt
-                interrupt_data = result["__interrupt__"]
-                print(f"\n⏸️ Execution paused - awaiting human input")
-                
-                response = handle_interrupt_cli(interrupt_data)
-            
-                # Resume with response
-                print(f"\n▶️ Resuming execution...")
-                result = graph_with_checkpoint.invoke(Command(resume=response), config)
-    finally:
-        # The browser session for this run (if a browser step ever created
-        # one) is process-scoped, not part of checkpointed State -- close it
-        # here once, whether the run finished normally, was interrupted and
-        # never resumed, or raised. Steps within the run above intentionally
-        # do NOT close it themselves so they can reuse the same session.
-        close_session(config["configurable"]["thread_id"])
+            # Resume with response
+            print(f"\n▶️ Resuming execution...")
+            result = graph_with_checkpoint.invoke(Command(resume=response), config)
     
     # Display the result
     print("✅ Execution Complete:")
