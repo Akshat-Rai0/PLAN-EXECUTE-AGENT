@@ -12,3 +12,4 @@ httpx>=0.27.0
 tavily-python>=0.3.0
 typing-extensions>=4.0.0
 langgraph-checkpoint-sqlite>=2.0.0
+browser-use>=0.13.6
