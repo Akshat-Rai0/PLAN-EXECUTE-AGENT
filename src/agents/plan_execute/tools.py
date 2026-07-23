@@ -45,6 +45,7 @@ Return ONLY a valid JSON object with this exact structure, no markdown fences, n
 Notes:
 - "tool_hint": suggest a tool from this list:
     "web_search"       - search the web for information
+    "use_browser"      - automate browser interactions (web scraping, form filling, navigation, etc.)
     "code_executor"    - write and execute a Python script
     "setup_workspace"  - create a project directory (use as FIRST step of any app/coding task)
     "shell_command"    - run a CLI command (npm init, npm install, npx create-vite, mkdir, git, etc.)

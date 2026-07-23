@@ -1,6 +1,7 @@
 import os
 import re
 import shlex
+import asyncio
 from datetime import date
 
 from .state import State, StepStatus, Step, Plan
@@ -1348,6 +1349,134 @@ No markdown fences — output only the raw JSON object."""
         print(f"❌ Dev server error: {str(e)}")
 
     return {"plan": plan, "steps_executed": 1}
+
+
+def use_browser_node(state: State) -> dict:
+    """
+    Execute a browser automation task using browser-use (tool_hint='use_browser').
+
+    This node uses the browser_use library to automate browser interactions for
+    a wide variety of web-based tasks. It takes the current step's task as the
+    browser task and executes it using an Agent with the configured LLM.
+
+    Supported task types include:
+    - Web scraping and data extraction (e.g., "find the top HN post", "extract product prices")
+    - Form filling and submission (e.g., "fill out a contact form", "submit a job application")
+    - Navigation and browsing (e.g., "navigate to a specific page", "find a particular article")
+    - Content interaction (e.g., "click on a button", "scroll through results")
+    - Information gathering (e.g., "find contact information", "get current stock prices")
+    - Multi-step workflows (e.g., "login to a site and download a report")
+    - Testing and validation (e.g., "check if a feature works", "verify page content")
+
+    The browser_use library requires:
+    - An LLM instance (configured via OPENROUTER_API_KEY)
+    - A task string (from the current step)
+    - Optional: BROWSER_USE_MODEL environment variable to customize the model
+
+    Configuration:
+    - OPENROUTER_API_KEY: Required API key for the LLM provider
+    - BROWSER_USE_MODEL: Optional model name (defaults to nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free)
+    """
+    plan = state["plan"]
+    if plan is None:
+        raise RuntimeError("use_browser_node called with no plan in state")
+
+    current_step = next((s for s in plan.subtasks if s.status == StepStatus.RUNNING), None)
+    if current_step is None:
+        raise RuntimeError("use_browser_node called with no RUNNING step")
+
+    # Log LOW-risk operation
+    log_update = _log_approval(state, "use_browser", current_step.task)
+
+    try:
+        # Import browser_use here to avoid import errors if not installed
+        try:
+            from browser_use import Agent
+            from browser_use.llm import ChatOpenRouter
+        except ImportError:
+            current_step.status = StepStatus.FAILED
+            current_step.error = (
+                "browser-use library not installed. "
+                "Install it with: pip install browser-use>=0.13.6"
+            )
+            print(f"❌ Browser automation failed: browser-use not installed")
+            return {"plan": plan, "steps_executed": 1}
+
+        # Get the LLM configuration
+        import os
+        from dotenv import load_dotenv
+        load_dotenv()
+
+        # Check for OpenRouter API key (used in browser_automation reference)
+        openrouter_key = os.getenv("OPENROUTER_API_KEY")
+        if not openrouter_key:
+            # Fall back to using the same LLM as other nodes
+            # We'll need to adapt the LLM interface for browser_use
+            current_step.status = StepStatus.FAILED
+            current_step.error = (
+                "OPENROUTER_API_KEY not found in environment. "
+                "Browser automation currently requires OpenRouter API key."
+            )
+            print(f"❌ Browser automation failed: OPENROUTER_API_KEY missing")
+            return {"plan": plan, "steps_executed": 1}
+
+        # Configure the browser-use LLM with OpenRouter
+        # Using the same model as in browser_automation reference
+        model = os.getenv("BROWSER_USE_MODEL", "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free")
+        browser_llm = ChatOpenRouter(model=model, api_key=openrouter_key)
+
+        # Create the agent with the current step's task
+        agent = Agent(
+            task=current_step.task,
+            llm=browser_llm,
+        )
+
+        # Run the browser automation (async, so we need to run it in an event loop)
+        loop = asyncio.get_event_loop()
+        history = None
+        try:
+            if loop.is_running():
+                # If there's already a running loop, we need to create a new one
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, agent.run())
+                    history = future.result()
+            else:
+                history = loop.run_until_complete(agent.run())
+        except Exception as e:
+            current_step.status = StepStatus.FAILED
+            current_step.error = f"Browser automation execution failed: {str(e)}"
+            print(f"❌ Browser automation execution error: {str(e)}")
+            return {"plan": plan, "steps_executed": 1, **log_update}
+
+        # Get the final result
+        if history is None:
+            current_step.status = StepStatus.FAILED
+            current_step.error = "Browser automation returned no history/result"
+            print(f"❌ Browser automation failed: no history returned")
+            return {"plan": plan, "steps_executed": 1, **log_update}
+
+        try:
+            result = history.final_result()
+            if not result:
+                result = "Browser automation completed but returned no result"
+        except Exception as e:
+            current_step.status = StepStatus.FAILED
+            current_step.error = f"Failed to extract result from browser history: {str(e)}"
+            print(f"❌ Failed to extract result: {str(e)}")
+            return {"plan": plan, "steps_executed": 1, **log_update}
+
+        current_step.status = StepStatus.DONE
+        current_step.result = result
+        print(f"✅ Browser automation completed")
+        print(f"👁️  Result: {result[:300]}{'...' if len(result) > 300 else ''}")
+
+    except Exception as e:
+        current_step.status = StepStatus.FAILED
+        current_step.error = f"use_browser_node error: {str(e)}"
+        print(f"❌ Browser automation error: {str(e)}")
+
+    return {"plan": plan, "steps_executed": 1, **log_update}
 
 
 def ask_human_node(state: State) -> dict:
