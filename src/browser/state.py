@@ -1,6 +1,4 @@
 import os
-import json
-from typing import Dict, Any
 from src.models.browser_models import BrowserState, BrowserAction
 
 class StateManager:

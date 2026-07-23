@@ -17,17 +17,29 @@ class BrowserExecutor:
             headless = True
         elif env_headless in ["false", "0"]:
             headless = False
-            
-        self.playwright = sync_playwright().start()
-        self.browser = self.playwright.chromium.launch(headless=headless)
-        self.context = self.browser.new_context()
-        
-        self.session_manager = SessionManager(self.context)
-        self.state_manager = StateManager()
-        self.selector_manager = SelectorManager()
-        self.extractor = DOMExtractor(self.selector_manager)
-        
-        self.controller = BrowserController(self.session_manager.get_current_page())
+
+        # Initialize attributes up front so close() is always safe to call,
+        # even if construction fails partway through.
+        self.playwright = None
+        self.browser = None
+        self.context = None
+        self.session_manager = None
+
+        try:
+            self.playwright = sync_playwright().start()
+            self.browser = self.playwright.chromium.launch(headless=headless)
+            self.context = self.browser.new_context()
+
+            self.session_manager = SessionManager(self.context)
+            self.state_manager = StateManager()
+            self.selector_manager = SelectorManager()
+            self.extractor = DOMExtractor(self.selector_manager)
+
+            self.controller = BrowserController(self.session_manager.get_current_page())
+        except Exception:
+            # Clean up whatever did get created, then re-raise the original error.
+            self.close()
+            raise
         
     def execute(self, action: BrowserAction) -> str:
         """
@@ -44,6 +56,8 @@ class BrowserExecutor:
         act_type = action.action.lower()
         
         if act_type == ActionType.GOTO:
+            if not action.value:
+                return "Error: 'goto' requires a 'value' containing the URL to navigate to. Do not include 'target' for goto."
             self.selector_manager.clear() # New page
             self.controller.goto(action.value)
             self.state_manager.record_visit(action.value)
@@ -110,6 +124,22 @@ class BrowserExecutor:
         return compressed
         
     def close(self):
-        self.session_manager.close()
-        self.browser.close()
-        self.playwright.stop()
+        """
+        Safe to call even if __init__ failed partway through (e.g. Playwright
+        or the browser launch raised before every attribute was set).
+        """
+        if self.session_manager is not None:
+            try:
+                self.session_manager.close()
+            except Exception:
+                pass
+        if self.browser is not None:
+            try:
+                self.browser.close()
+            except Exception:
+                pass
+        if self.playwright is not None:
+            try:
+                self.playwright.stop()
+            except Exception:
+                pass

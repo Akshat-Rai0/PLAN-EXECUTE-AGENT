@@ -1,5 +1,5 @@
 from playwright.sync_api import BrowserContext, Page
-from typing import List, Optional
+from typing import List
 
 class SessionManager:
     def __init__(self, context: BrowserContext):

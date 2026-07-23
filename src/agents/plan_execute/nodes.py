@@ -15,6 +15,7 @@ from .llm import get_llm
 from src.sandbox.runner import run_in_sandbox
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.types import interrupt
+from langchain_core.runnables import RunnableConfig
 from src.tools.risk_classifier import classify_tool_risk, RiskLevel
 from src.synthesis.codegen import declare_schema, generate_function_code
 from src.synthesis.validator import validate_synthesized_function
@@ -1972,9 +1973,15 @@ def replaner(state: State) -> dict:
                 "last_replan_context": completed_results,
             }
 
-def browser_node(state: State) -> dict:
+def browser_node(state: State, config: RunnableConfig = None) -> dict:
     """
     Execute a browser step using BrowserExecutor.
+
+    The browser session is reused across steps within the same goal run
+    (keyed by thread_id) rather than being created and torn down on every
+    single step -- otherwise every browser step restarts from about:blank
+    and throws away navigation progress made by earlier steps in the same
+    run. See src/browser/session_registry.py for the session lifecycle.
     """
     plan = state["plan"]
     if plan is None:
@@ -1985,13 +1992,25 @@ def browser_node(state: State) -> dict:
 
     log_update = _log_approval(state, "browser", current_step.task)
 
-    from src.executor.browser_executor import BrowserExecutor
     from src.models.browser_models import BrowserAction
+    from src.browser.compressor import DOMCompressor
+    from src.browser.session_registry import get_or_create_session, close_session
     import json
-    
-    executor = BrowserExecutor()
+
+    thread_id = None
+    if config is not None:
+        thread_id = (config.get("configurable") or {}).get("thread_id")
+    if not thread_id:
+        # Should not happen in normal graph invocation (main.py always sets
+        # a thread_id), but fall back to a private, non-reused session
+        # rather than crashing the step.
+        thread_id = f"_no_thread_id_{id(state)}"
+
+    executor = get_or_create_session(thread_id)
     try:
-        # Get initial state
+        # Get current state (does not navigate away -- just reads whatever
+        # page this session is already on, which may be a page a prior
+        # step left it on).
         compressed_state = executor.execute(BrowserAction(action="wait", value="0"))
         
         system_prompt = """You are a web browsing agent. Your goal is to complete the given Step Task.
@@ -1999,11 +2018,41 @@ You will see the Current Page State (a compressed view of the page).
 Decide the next action to take to progress toward the Step Task.
 Output a valid JSON with 'action', and optionally 'target' (integer ID) and 'value' (string).
 Valid actions: goto, click, type, select, check, upload, scroll, wait, extract, finish.
+
+Per-action fields:
+- goto: requires 'value' (the URL). Never include 'target' for goto.
+- click, select, check, upload: require 'target' (the integer element ID shown in brackets).
+- type: requires 'target' and 'value' (the text to type).
+- scroll: optional 'value' ("up" or "down", defaults to "down"). No 'target'.
+- wait: optional 'value' (seconds, defaults to 2). No 'target'.
+- finish: no other fields needed.
+
+If the Current Page State shows [INTERSTITIAL PAGE DETECTED], do not call 'goto' again on the
+same URL -- issue a 'wait' instead, and if it still hasn't cleared after a couple of waits, 'finish'.
+
+CHECK COMPLETION BEFORE ACTING: before choosing an action, compare the Current Page State to the
+Step Task. If the Step Task only asks you to open/navigate to a site (e.g. "navigate to X",
+"open the Y website") and the Current Page State's URL/Title already show you are on that site,
+the task is already complete -- output {"action": "finish"} immediately. Do not re-issue 'goto'
+to a URL you have already successfully reached. Only take further actions (click, scroll, extract)
+if the Step Task explicitly requires finding, reading, or interacting with something beyond arrival.
+
+If you 'goto' a URL and the resulting page's URL is DIFFERENT from the one you requested (the site
+redirected or rewrote it, e.g. you asked for /problemset/all but landed on /problemset/), that URL
+does not work as a direct destination -- do not repeat the same goto. Instead, look at the links
+in the Current Page State and 'click' one that leads toward your goal, or 'finish' if you cannot
+find a way forward.
+
 IMPORTANT: When you have successfully completed the Step Task, output {"action": "finish"} to stop.
-Do not repeat the same action if it doesn't change the state."""
+Do not repeat the exact same action twice in a row if it didn't change the state."""
         llm = get_llm()
         
         max_steps = 15
+        max_identical_repeats = 3
+        max_identical_waits = 4
+        last_action_signature = None
+        repeat_count = 0
+        wait_repeat_count = 0
         for _ in range(max_steps):
             print(f"DEBUG DOM: {compressed_state[:300]}")
             prompt = f"Goal: {plan.goal}\nStep Task: {current_step.task}\n\nCurrent Page State:\n{compressed_state}\n\nWhat is the next BrowserAction? Output ONLY JSON."
@@ -2032,7 +2081,107 @@ Do not repeat the same action if it doesn't change the state."""
                 current_step.status = StepStatus.DONE
                 current_step.result = "Browser task finished. Final state:\n" + compressed_state
                 break
-                
+
+            # Anti-thrashing: if the model issues the exact same non-wait action
+            # repeatedly (e.g. re-goto'ing a stuck interstitial), stop early
+            # instead of burning the full step budget on a no-op loop.
+            # 'wait' is exempt from this guard -- repeated waiting is the
+            # correct response to a slow-clearing interstitial, and punishing
+            # it here would fight the advice given in the interstitial notice.
+            action_signature = (action.action.lower(), action.target, action.value)
+            if action.action.lower() == "wait":
+                if action_signature == last_action_signature:
+                    wait_repeat_count += 1
+                else:
+                    wait_repeat_count = 0
+                last_action_signature = action_signature
+                repeat_count = 0
+
+                if wait_repeat_count >= max_identical_waits:
+                    current_step.status = StepStatus.FAILED
+                    current_step.error = (
+                        f"Page did not clear after {wait_repeat_count + 1} waits "
+                        f"(still on: {compressed_state.splitlines()[0] if compressed_state else 'unknown'})."
+                    )
+                    current_step.result = "Browser loop aborted: page stuck (likely a persistent bot-check)."
+                    break
+            else:
+                if action_signature == last_action_signature:
+                    repeat_count += 1
+                else:
+                    repeat_count = 0
+                last_action_signature = action_signature
+                wait_repeat_count = 0
+
+                # Deterministic backstop for navigation tasks: if the model
+                # re-issues an identical successful 'goto' AND the browser
+                # actually landed on that URL (not redirected/rewritten
+                # elsewhere by the site), it has already arrived -- the
+                # model just isn't recognizing completion. Force finish
+                # rather than burning steps or failing a step that actually
+                # succeeded.
+                #
+                # Critically, a same-URL redirect-back (e.g. requesting
+                # /problemset/all and the site 302s/rewrites you back to
+                # /problemset/ every time) must NOT be treated as arrival --
+                # it means the requested destination doesn't actually exist
+                # or isn't reachable, which is a real failure the replanner
+                # needs to see, not a false "success".
+                resulting_url = None
+                if compressed_state:
+                    for line in compressed_state.splitlines():
+                        if line.startswith("URL: "):
+                            resulting_url = line[len("URL: "):].strip()
+                            break
+
+                def _urls_match(requested: str, actual: str) -> bool:
+                    if not requested or not actual:
+                        return False
+                    r = requested.rstrip("/")
+                    a = actual.split("?")[0].rstrip("/")  # ignore query strings (e.g. CF challenge tokens)
+                    return r == a
+
+                is_stuck_page = (
+                    DOMCompressor.is_interstitial(
+                        compressed_state.splitlines()[0].replace("Title: ", "", 1)
+                        if compressed_state else ""
+                    )
+                    or compressed_state.startswith("Action failed:")
+                    or compressed_state.startswith("Error:")
+                    or (
+                        action.action.lower() == "goto"
+                        and not _urls_match(action.value, resulting_url)
+                    )
+                )
+                if (
+                    action.action.lower() == "goto"
+                    and repeat_count >= 1
+                    and not is_stuck_page
+                ):
+                    current_step.status = StepStatus.DONE
+                    current_step.result = (
+                        "Browser task finished (arrival confirmed after repeated "
+                        "identical navigation). Final state:\n" + compressed_state
+                    )
+                    break
+
+                if repeat_count >= max_identical_repeats:
+                    current_step.status = StepStatus.FAILED
+                    current_step.error = (
+                        f"Browser action repeated {repeat_count + 1} times with no progress "
+                        f"(action={action.action}, target={action.target}, value={action.value}). "
+                        + (
+                            f"Requested URL {action.value!r} did not match the resulting page URL "
+                            f"{resulting_url!r} -- the destination may not exist, may redirect "
+                            f"elsewhere, or may require navigating via an in-page link/click "
+                            f"instead of a direct goto."
+                            if action.action.lower() == "goto" and resulting_url is not None
+                            else ""
+                        )
+                    )
+                    current_step.result = "Browser loop aborted: stuck repeating the same action."
+                    break
+
             compressed_state = executor.execute(action)
             
         else:
@@ -2044,8 +2193,16 @@ Do not repeat the same action if it doesn't change the state."""
         current_step.status = StepStatus.FAILED
         current_step.error = str(e)
         current_step.result = str(e)
-    finally:
-        executor.close()
-        
+        # An exception here means the session may be in a bad state (crashed
+        # page, browser process died, etc.) -- don't hand a broken session
+        # to the next step. Close it now; get_or_create_session will spin up
+        # a fresh one next time this thread_id needs the browser again.
+        close_session(thread_id)
+    # NOTE: no `finally: executor.close()` here on purpose. The session is
+    # intentionally left open on success/normal-failure so later browser
+    # steps in the same goal run can reuse it. It gets closed once for the
+    # whole run in main.py's cleanup after the graph finishes (or via the
+    # except branch above if this step itself blew up the session).
+
     return {"plan": plan, "steps_executed": 1, **log_update}
 

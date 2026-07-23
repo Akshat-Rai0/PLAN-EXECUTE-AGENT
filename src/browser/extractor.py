@@ -1,8 +1,26 @@
 from selectolax.parser import HTMLParser
-from typing import Dict, Any, List, Optional
-import json
 from src.models.browser_models import PageSummary, ExtractedElement, ExtractedForm
 from src.browser.selector import SelectorManager
+
+
+def _is_valid_css_ident(value: str) -> bool:
+    """
+    Very small check for whether `value` can be used unescaped after a bare
+    '#' in a CSS ID selector. CSS identifiers cannot start with a digit (or a
+    hyphen followed by a digit), and must not contain characters outside
+    [a-zA-Z0-9_-] for our purposes here. Real-world IDs that fail this most
+    commonly look like site-internal numeric IDs (e.g. HackerNews' `id="49010345"`
+    on story rows), which are perfectly valid HTML `id` attributes but not
+    valid unescaped CSS selectors.
+    """
+    if not value:
+        return False
+    if value[0].isdigit():
+        return False
+    if value[0] == '-' and len(value) > 1 and value[1].isdigit():
+        return False
+    return all(ch.isalnum() or ch in ('-', '_') for ch in value)
+
 
 class DOMExtractor:
     def __init__(self, selector_manager: SelectorManager):
@@ -14,8 +32,16 @@ class DOMExtractor:
         current = node
         while current and current.tag != '-ROOT-':
             # Identify by ID if present
-            if current.attributes.get('id'):
-                path.insert(0, f"#{current.attributes['id']}")
+            node_id = current.attributes.get('id')
+            if node_id:
+                if _is_valid_css_ident(node_id):
+                    path.insert(0, f"#{node_id}")
+                else:
+                    # Fall back to an attribute selector, which works for any
+                    # ID value (numeric-leading, special characters, etc.)
+                    # without needing manual CSS escaping.
+                    escaped = node_id.replace('"', '\\"')
+                    path.insert(0, f'[id="{escaped}"]')
                 break
             # Else try by classes or structural
             tag = current.tag
@@ -56,7 +82,7 @@ class DOMExtractor:
             el_id = self.selector_manager.register(selector)
             summary.links.append(ExtractedElement(
                 id=el_id, tag=a.tag, text=text,
-                attributes={"href": a.attributes.get('href', '')}
+                attributes={"href": a.attributes.get('href') or ''}
             ))
             
         # Extract inputs
@@ -64,7 +90,11 @@ class DOMExtractor:
             if self._is_hidden(inp): continue
             selector = self._build_selector(inp)
             el_id = self.selector_manager.register(selector)
-            attrs = {k: v for k, v in inp.attributes.items() if k in ['type', 'name', 'placeholder', 'value']}
+            attrs = {
+                k: (v if v is not None else "")
+                for k, v in inp.attributes.items()
+                if k in ['type', 'name', 'placeholder', 'value']
+            }
             text = inp.text(strip=True) if inp.tag != 'input' else None
             summary.inputs.append(ExtractedElement(
                 id=el_id, tag=inp.tag, text=text, attributes=attrs
@@ -98,7 +128,7 @@ class DOMExtractor:
         return summary
         
     def _is_hidden(self, node) -> bool:
-        style = node.attributes.get('style', '').lower()
+        style = (node.attributes.get('style') or '').lower()
         if 'display: none' in style or 'display:none' in style or 'visibility: hidden' in style:
             return True
         if node.attributes.get('hidden') is not None:
