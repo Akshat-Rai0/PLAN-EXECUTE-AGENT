@@ -1351,31 +1351,202 @@ No markdown fences — output only the raw JSON object."""
     return {"plan": plan, "steps_executed": 1}
 
 
+# ---------------------------------------------------------------------------
+# Trusted-source routing for browser automation
+# ---------------------------------------------------------------------------
+
+# Maps a topic to a list of (name, url) pairs for trusted, authoritative
+# sources. When a step's task matches a topic (via keyword detection below),
+# use_browser_node instructs the browser agent to visit these sites directly
+# rather than doing an unconstrained open-web task — this trades some
+# flexibility for much higher trust/accuracy on topics where source quality
+# matters most (health, finance, legal, security, etc).
+TRUSTED_SOURCES: dict[str, list[tuple[str, str]]] = {
+    "health": [
+        ("Mayo Clinic", "https://www.mayoclinic.org"),
+        ("Cleveland Clinic", "https://my.clevelandclinic.org"),
+        ("World Health Organization", "https://www.who.int"),
+        ("MedlinePlus", "https://medlineplus.gov"),
+        ("CDC", "https://www.cdc.gov"),
+    ],
+    "news": [
+        ("Reuters", "https://www.reuters.com"),
+        ("Associated Press", "https://apnews.com"),
+        ("BBC News", "https://www.bbc.com/news"),
+        ("The New York Times", "https://www.nytimes.com"),
+        ("The Wall Street Journal", "https://www.wsj.com"),
+    ],
+    "technology": [
+        ("Ars Technica", "https://arstechnica.com"),
+        ("TechCrunch", "https://techcrunch.com"),
+        ("The Verge", "https://www.theverge.com"),
+        ("Wired", "https://www.wired.com"),
+        ("Tom's Hardware", "https://www.tomshardware.com"),
+    ],
+    "education": [
+        ("Khan Academy", "https://www.khanacademy.org"),
+        ("MIT OpenCourseWare", "https://ocw.mit.edu"),
+        ("Coursera", "https://www.coursera.org"),
+        ("edX", "https://www.edx.org"),
+        ("Britannica", "https://www.britannica.com"),
+    ],
+    "finance": [
+        ("Investopedia", "https://www.investopedia.com"),
+        ("Morningstar", "https://www.morningstar.com"),
+        ("Bloomberg", "https://www.bloomberg.com"),
+        ("The Wall Street Journal", "https://www.wsj.com"),
+        ("U.S. SEC", "https://www.sec.gov"),
+    ],
+    "science": [
+        ("Nature", "https://www.nature.com"),
+        ("Science", "https://www.science.org"),
+        ("Scientific American", "https://www.scientificamerican.com"),
+        ("NASA", "https://www.nasa.gov"),
+        ("National Geographic", "https://www.nationalgeographic.com"),
+    ],
+    "programming": [
+        ("MDN Web Docs", "https://developer.mozilla.org"),
+        ("Stack Overflow", "https://stackoverflow.com"),
+        ("GitHub Docs", "https://docs.github.com"),
+        ("W3Schools", "https://www.w3schools.com"),
+        ("GeeksforGeeks", "https://www.geeksforgeeks.org"),
+    ],
+    "shopping": [
+        ("Wirecutter", "https://www.nytimes.com/wirecutter"),
+        ("Consumer Reports", "https://www.consumerreports.org"),
+        ("RTINGS", "https://www.rtings.com"),
+        ("PCMag", "https://www.pcmag.com"),
+        ("CNET", "https://www.cnet.com"),
+    ],
+    "travel": [
+        ("Lonely Planet", "https://www.lonelyplanet.com"),
+        ("TripAdvisor", "https://www.tripadvisor.com"),
+        ("Rick Steves", "https://www.ricksteves.com"),
+        ("National Geographic Travel", "https://www.nationalgeographic.com/travel"),
+        ("U.S. State Dept Travel Advisories", "https://travel.state.gov"),
+    ],
+    "food": [
+        ("Serious Eats", "https://www.seriouseats.com"),
+        ("King Arthur Baking", "https://www.kingarthurbaking.com"),
+        ("BBC Good Food", "https://www.bbcgoodfood.com"),
+        ("Allrecipes", "https://www.allrecipes.com"),
+        ("America's Test Kitchen", "https://www.americastestkitchen.com"),
+    ],
+    "business": [
+        ("Harvard Business Review", "https://hbr.org"),
+        ("McKinsey & Company", "https://www.mckinsey.com"),
+        ("The Economist", "https://www.economist.com"),
+        ("World Bank", "https://www.worldbank.org"),
+        ("IMF", "https://www.imf.org"),
+    ],
+    "ai_ml": [
+        ("OpenAI", "https://openai.com"),
+        ("Google AI", "https://ai.google"),
+        ("Anthropic", "https://www.anthropic.com"),
+        ("Hugging Face", "https://huggingface.co"),
+        ("arXiv", "https://arxiv.org"),
+    ],
+    "cybersecurity": [
+        ("CISA", "https://www.cisa.gov"),
+        ("Krebs on Security", "https://krebsonsecurity.com"),
+        ("OWASP", "https://owasp.org"),
+        ("SANS Institute", "https://www.sans.org"),
+        ("NIST", "https://www.nist.gov"),
+    ],
+    "weather": [
+        ("National Weather Service", "https://www.weather.gov"),
+        ("NOAA", "https://www.noaa.gov"),
+        ("The Weather Channel", "https://weather.com"),
+        ("AccuWeather", "https://www.accuweather.com"),
+        ("WMO", "https://public.wmo.int"),
+    ],
+    "legal": [
+        ("Cornell LII", "https://www.law.cornell.edu"),
+        ("Justia", "https://www.justia.com"),
+        ("FindLaw", "https://www.findlaw.com"),
+        ("Supreme Court", "https://www.supremecourt.gov"),
+    ],
+}
+
+# Keyword -> topic detection. Checked against the step's task text
+# (lowercased). Order matters only in that the first topic whose keywords
+# match wins — kept simple/deterministic rather than an LLM call, since this
+# is a cheap pre-filter, not the actual research step.
+_TOPIC_KEYWORDS: dict[str, list[str]] = {
+    "health": ["health", "medical", "disease", "symptom", "medicine", "diagnosis", "treatment", "vaccine", "doctor", "illness"],
+    "news": ["news", "current event", "breaking", "headline", "politics", "election"],
+    "technology": ["technology", "tech news", "gadget", "software release", "hardware review", "device"],
+    "education": ["learn", "course", "tutorial", "study", "education", "lecture"],
+    "finance": ["stock", "invest", "finance", "market", "portfolio", "etf", "bond", "sec filing", "earnings"],
+    "science": ["science", "research paper", "physics", "chemistry", "biology", "astronomy", "space"],
+    "programming": ["code", "programming", "api", "documentation", "library", "framework", "syntax", "github"],
+    "shopping": ["review", "buy", "product comparison", "best product", "shopping"],
+    "travel": ["travel", "trip", "itinerary", "vacation", "visa", "flight", "destination"],
+    "food": ["recipe", "cooking", "baking", "ingredient", "dish", "meal"],
+    "business": ["business strategy", "economics", "economy", "corporate", "management", "gdp"],
+    "ai_ml": ["machine learning", "artificial intelligence", " ai ", "llm", "neural network", "model training", "arxiv"],
+    "cybersecurity": ["security vulnerability", "cyberattack", "malware", "cve", "cybersecurity", "data breach"],
+    "weather": ["weather forecast", "temperature today", "storm", "climate data", "hurricane"],
+    "legal": ["law", "legal", "statute", "court case", "regulation", "legislation"],
+}
+
+
+def _detect_trusted_topic(task_text: str) -> str | None:
+    """
+    Return the first topic whose keywords appear in the task text, or None
+    if no topic matches. Deliberately simple substring matching — this is a
+    pre-filter to decide whether to constrain the browser agent to a curated
+    source list, not a classification step that needs to be exhaustively
+    correct. False negatives just mean the agent falls back to open browsing;
+    false positives are unlikely given the specificity of the keyword lists.
+    """
+    text = f" {task_text.lower()} "
+    for topic, keywords in _TOPIC_KEYWORDS.items():
+        for kw in keywords:
+            if kw in text:
+                return topic
+    return None
+
+
+def _build_trusted_source_task(original_task: str, topic: str) -> str:
+    """
+    Rewrite the browser task to instruct the agent to check trusted sources
+    for this topic directly, rather than doing an open-ended web search. The
+    agent is told to visit the listed URLs (in order) and stop as soon as it
+    finds the information it needs, rather than mechanically visiting all of
+    them regardless of task the — that would waste time/steps for simple
+    lookups.
+    """
+    sources = TRUSTED_SOURCES.get(topic, [])
+    source_lines = "\n".join(f"- {name}: {url}" for name, url in sources)
+    return (
+        f"{original_task}\n\n"
+        f"This task falls under a topic where source trustworthiness matters. "
+        f"Prioritize gathering the information from the following trusted "
+        f"sources, visiting them directly by URL rather than doing a generic "
+        f"web search. Try them in order and stop once you have what you need; "
+        f"only fall back to a general web search if none of these sources "
+        f"have the relevant information:\n{source_lines}"
+    )
+
+
 def use_browser_node(state: State) -> dict:
     """
     Execute a browser automation task using browser-use (tool_hint='use_browser').
 
-    This node uses the browser_use library to automate browser interactions for
-    a wide variety of web-based tasks. It takes the current step's task as the
-    browser task and executes it using an Agent with the configured LLM.
+    Before building the agent's task, checks whether the step's task matches
+    a known topic (health, finance, programming, etc.) via keyword detection.
+    If it does, the task given to the browser agent is rewritten to point it
+    directly at a curated list of trusted URLs for that topic (see
+    TRUSTED_SOURCES / _TOPIC_KEYWORDS above) instead of leaving source
+    selection to unconstrained open-web browsing. This matters most for
+    topics where source quality has outsized impact on correctness — health,
+    finance, legal, cybersecurity, etc. — where an unconstrained agent could
+    land on a low-quality or unreliable page that looks superficially
+    relevant.
 
-    Supported task types include:
-    - Web scraping and data extraction (e.g., "find the top HN post", "extract product prices")
-    - Form filling and submission (e.g., "fill out a contact form", "submit a job application")
-    - Navigation and browsing (e.g., "navigate to a specific page", "find a particular article")
-    - Content interaction (e.g., "click on a button", "scroll through results")
-    - Information gathering (e.g., "find contact information", "get current stock prices")
-    - Multi-step workflows (e.g., "login to a site and download a report")
-    - Testing and validation (e.g., "check if a feature works", "verify page content")
-
-    The browser_use library requires:
-    - An LLM instance (configured via OPENROUTER_API_KEY)
-    - A task string (from the current step)
-    - Optional: BROWSER_USE_MODEL environment variable to customize the model
-
-    Configuration:
-    - OPENROUTER_API_KEY: Required API key for the LLM provider
-    - BROWSER_USE_MODEL: Optional model name (defaults to nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free)
+    If no topic matches, falls back to the original open-ended task exactly
+    as before.
     """
     plan = state["plan"]
     if plan is None:
@@ -1402,16 +1573,12 @@ def use_browser_node(state: State) -> dict:
             print(f"❌ Browser automation failed: browser-use not installed")
             return {"plan": plan, "steps_executed": 1}
 
-        # Get the LLM configuration
         import os
         from dotenv import load_dotenv
         load_dotenv()
 
-        # Check for OpenRouter API key (used in browser_automation reference)
         openrouter_key = os.getenv("OPENROUTER_API_KEY")
         if not openrouter_key:
-            # Fall back to using the same LLM as other nodes
-            # We'll need to adapt the LLM interface for browser_use
             current_step.status = StepStatus.FAILED
             current_step.error = (
                 "OPENROUTER_API_KEY not found in environment. "
@@ -1420,23 +1587,27 @@ def use_browser_node(state: State) -> dict:
             print(f"❌ Browser automation failed: OPENROUTER_API_KEY missing")
             return {"plan": plan, "steps_executed": 1}
 
-        # Configure the browser-use LLM with OpenRouter
-        # Using the same model as in browser_automation reference
         model = os.getenv("BROWSER_USE_MODEL", "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free")
         browser_llm = ChatOpenRouter(model=model, api_key=openrouter_key)
 
-        # Create the agent with the current step's task
+        # Detect whether this step's task matches a trusted-source topic and
+        # rewrite the browser task accordingly.
+        detected_topic = _detect_trusted_topic(current_step.task)
+        if detected_topic:
+            browser_task = _build_trusted_source_task(current_step.task, detected_topic)
+            print(f"🔗 Trusted-source topic detected: '{detected_topic}' — routing browser agent to curated sources")
+        else:
+            browser_task = current_step.task
+
         agent = Agent(
-            task=current_step.task,
+            task=browser_task,
             llm=browser_llm,
         )
 
-        # Run the browser automation (async, so we need to run it in an event loop)
         loop = asyncio.get_event_loop()
         history = None
         try:
             if loop.is_running():
-                # If there's already a running loop, we need to create a new one
                 import concurrent.futures
                 with concurrent.futures.ThreadPoolExecutor() as executor:
                     future = executor.submit(asyncio.run, agent.run())
@@ -1449,7 +1620,6 @@ def use_browser_node(state: State) -> dict:
             print(f"❌ Browser automation execution error: {str(e)}")
             return {"plan": plan, "steps_executed": 1, **log_update}
 
-        # Get the final result
         if history is None:
             current_step.status = StepStatus.FAILED
             current_step.error = "Browser automation returned no history/result"
@@ -1468,6 +1638,8 @@ def use_browser_node(state: State) -> dict:
 
         current_step.status = StepStatus.DONE
         current_step.result = result
+        if detected_topic:
+            current_step.result = f"[trusted sources: {detected_topic}] {result}"
         print(f"✅ Browser automation completed")
         print(f"👁️  Result: {result[:300]}{'...' if len(result) > 300 else ''}")
 
@@ -1477,7 +1649,6 @@ def use_browser_node(state: State) -> dict:
         print(f"❌ Browser automation error: {str(e)}")
 
     return {"plan": plan, "steps_executed": 1, **log_update}
-
 
 def ask_human_node(state: State) -> dict:
     """
