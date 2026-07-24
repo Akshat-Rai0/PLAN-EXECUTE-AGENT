@@ -60,6 +60,55 @@ def _trim_trailing_rambling(text: str) -> str:
     return _TRAILING_PARAGRAPH.sub("", text).strip()
 
 
+def _strip_wrapping_quotes(text: str) -> str:
+    """Strip one layer of matching outer quotes the LLM adds around
+    action_input (e.g. `Action Input: "bash -c 'cmd'"`).
+
+    Without this, the outer double-quotes stay part of the string. When
+    that string is later passed to shlex.split() for a shell_command
+    call, the quotes make the ENTIRE value parse as a single token, so
+    the allowlist check sees e.g. `bash -c 'python3 foo.py'` (as one
+    blob) instead of `bash` as argv[0] — always failing even though
+    'bash' is allowed. Only strips if the text starts AND ends with the
+    same quote char, so a genuinely quote-free command is untouched and
+    a JSON action_input (which starts with `{`) is unaffected.
+    """
+    if len(text) >= 2 and text[0] == text[-1] and text[0] in ("'", '"'):
+        return text[1:-1]
+    return text
+
+
+REPEAT_WARNING_THRESHOLD = 3
+
+
+def _detect_repeat_loop(history: list[Turn], threshold: int = REPEAT_WARNING_THRESHOLD) -> str:
+    """Return a warning string if the last `threshold` turns are the same
+    (action, action_input) pair repeated, else "".
+
+    The ReAct agent has no built-in loop-breaking mechanism: if a command
+    keeps failing the allowlist/parsing checks, the model tends to retry
+    trivial variants of the exact same thing indefinitely (seen in
+    practice: 15 straight `shell_command` attempts at deleting a file,
+    each a minor rephrasing of the last). This doesn't fix the underlying
+    cause — it makes the loop visible to the model so it has a chance to
+    actually change strategy instead of silently burning steps.
+    """
+    if len(history) < threshold:
+        return ""
+    recent = history[-threshold:]
+    pairs = {(t.action, t.action_input.strip()) for t in recent}
+    if len(pairs) == 1 and all(t.observation and t.observation.startswith("ERROR") for t in recent):
+        action, action_input = next(iter(pairs))
+        return (
+            f"\n⚠️ LOOP WARNING: You have repeated the exact same action "
+            f"({action!r} with input {action_input[:150]!r}) {threshold} times in a "
+            f"row and it failed every time. Repeating it again will not change the "
+            f"outcome. Re-read the error message carefully, reconsider your approach "
+            f"from scratch, or try a genuinely different action.\n"
+        )
+    return ""
+
+
 _VALID_ACTIONS = frozenset({
     "final_answer",
     "web_search",
@@ -110,7 +159,7 @@ def _parse_react_response(content: str) -> tuple[str, str, str]:
     action_input = match.group(3).strip()
 
     if action.lower() in _VALID_ACTIONS:
-        return (thought, action, _trim_trailing_rambling(action_input))
+        return (thought, action, _strip_wrapping_quotes(_trim_trailing_rambling(action_input)))
 
     # First match wasn't a real action (rambling leaked into the Action
     # capture). Look for the last valid "Action: <name>" line in the
@@ -123,7 +172,7 @@ def _parse_react_response(content: str) -> tuple[str, str, str]:
     valid_matches = list(re.finditer(valid_action_pattern, content, re.DOTALL | re.IGNORECASE))
     if valid_matches:
         last = valid_matches[-1]
-        return (thought, last.group(1).strip(), _trim_trailing_rambling(last.group(2).strip()))
+        return (thought, last.group(1).strip(), _strip_wrapping_quotes(_trim_trailing_rambling(last.group(2).strip())))
 
     # No recoverable valid action anywhere in the response.
     return ("", "", "")
@@ -140,30 +189,55 @@ def react_step(state: ReactState) -> dict:
 
     # Build the prompt: goal + full history rendered as Thought/Action/Observation text
     history_text = _render_history(history)  # "Thought: ...\nAction: ...\nObservation: ...\n\n" repeated
-    
+    loop_warning = _detect_repeat_loop(history)
+
     # Build messages for LLM
     system_message = SystemMessage(
         content="You are a helpful assistant that responds in the exact format: "
-        "Thought: ... Action: ... Action Input: ..."
+        "Thought: ... Action: ... Action Input: ...\n\n"
+        "GOAL FIDELITY: Execute the goal exactly as stated, using real actions — "
+        "don't guess or assume an outcome from the goal text alone, and don't "
+        "skip straight to final_answer without actually running something.\n\n"
+        "Read goals carefully to distinguish two different kinds of files:\n"
+        "1. Files the goal asks you to AUTHOR (e.g. 'write a script that...', "
+        "'create a Python file that...') — these you create.\n"
+        "2. Files the goal merely mentions as something a script READS or "
+        "operates on (e.g. '...that reads a file called X', '...processes "
+        "X.csv') — these are NOT yours to create. Do not create, initialize, "
+        "or write a placeholder/empty version of a file just because a script "
+        "you wrote is supposed to read it. If the goal doesn't explicitly ask "
+        "you to create that specific data/input file, leave it alone and let "
+        "the script's real behavior against the real (possibly absent) file "
+        "be the result.\n\n"
+        "Never substitute, create, or invent a different file/input in category "
+        "2 to make the task 'succeed' instead — if that file turns out not to "
+        "exist once your script actually runs against it, that is a valid, "
+        "expected outcome: report it truthfully in your final_answer (e.g. "
+        "'the file X does not exist') rather than quietly working around it "
+        "and reporting a fabricated success. A correctly-reported failure, "
+        "reached by actually running the script, is the goal — not a shortcut "
+        "guess and not a fabricated success achieved by creating the very "
+        "file the task was testing the absence of."
     )
     
     human_message = HumanMessage(
         content=f"""Goal: {goal}
 
 {history_text}
-
+{loop_warning}
 Available actions:
 - web_search(query): Search the web for information using Tavily. Provide a search query string (plain text).
 - today_date(): Get today's date in YYYY-MM-DD format. No input needed.
 - set_workspace_path(): Create a workspace directory for file operations. No input needed. Must be called before shell_command, write_file, or start_dev_server.
-- shell_command(command): Run a shell command in the workspace. Provide the command as a PLAIN STRING. IMPORTANT: If your command has arguments (like "python hello_world.py" or "npm install"), you MUST use "bash -c 'your command'" format. Only base commands like 'python', 'npm', 'ls' are allowed directly. Requires workspace_path to be set via set_workspace_path.
-- write_file(path, content): Write a file to the workspace. Action Input must be JSON: {{"path": "relative/path/to/file", "content": "file content"}}. Requires workspace_path to be set via set_workspace_path.
+- shell_command(command): Run a shell command in the workspace. Provide the command as a PLAIN STRING with NO surrounding quotes of any kind — do not wrap the whole thing in double-quotes. IMPORTANT: If your command has arguments (like "python hello_world.py" or "npm install"), use bash -c 'your command' format (single-quoted inner command, nothing wrapping the outside). Correct: Action Input: bash -c 'python3 script.py'  |  Incorrect: Action Input: "bash -c 'python3 script.py'". Only base commands like 'python', 'npm', 'ls' are allowed directly. Requires workspace_path to be set via set_workspace_path.
+- write_file(path, content): Write a file to the workspace. Action Input must be JSON: {{"path": "relative/path/to/file", "content": "file content"}}. Requires workspace_path to be set via set_workspace_path. Use this to author scripts/code the goal explicitly asks you to write. Do NOT use this to create, initialize, or stub out a data/input file that a script merely reads (e.g. don't create "input.csv" just because your script opens it) — if that file is missing, that's the real result to report, not something to manufacture.
 - start_dev_server(command, port): Start a development server. Action Input must be JSON: {{"command": "npm run dev", "port": 5173}}. Requires workspace_path to be set via set_workspace_path.
-- final_answer(answer): Provide the final answer to complete the task.
+- final_answer(answer): Provide the final answer to complete the task. Only call this after you've actually attempted the task (e.g. actually run the script) — not based on predicting the outcome from the goal text alone. If the goal's exact file/input/target turned out not to exist or the task could not be completed as stated, say so plainly based on what you actually observed — do not report success on a substituted input.
 
 Important patterns:
 - To run Python code: First use write_file to create a .py file, then use shell_command "bash -c 'python3 filename.py'" (note: use python3, not python)
 - To run commands with arguments: Always use "bash -c 'your command'" format
+- If a script errors because a named file doesn't exist, that observed error IS your result — report it via final_answer. Do not create that missing file yourself first (even an empty one) — the goal is testing what happens when it's genuinely absent. Only actually write and run the requested script; don't skip straight to final_answer by guessing.
 
 What is your next Thought and Action? Respond in this exact format:
 Thought: <your reasoning>
