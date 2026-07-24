@@ -182,6 +182,16 @@ CRITICAL — if a failed step used tool_hint "start_server" (e.g. error mentions
   BEFORE the next start_server attempt, rather than generating another
   step whose sole purpose is "run it again to see the error" — you may
   already have the error.
+
+CRITICAL — if a failed step used tool_hint "shell_command" and the error
+indicates the command was rejected, blocked, or not in the allowed command
+list:
+- Do NOT repeat the same command shape or the same shell wrapper on the next
+    attempt.
+- Rewrite the step to use an allowed command directly, or choose a different
+    tool entirely (for file deletion and clearing, use delete_file instead of rm).
+- Treat this as a command-shape problem, not as evidence that retrying the
+    same shell step will suddenly succeed.
 """
 
 
