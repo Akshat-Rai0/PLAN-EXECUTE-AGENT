@@ -3,8 +3,8 @@
 from unittest.mock import MagicMock, patch
 
 from src.agents.plan_execute import llm
-from src.agents.react.nodes import MAX_HISTORY_CHARS_IN_PROMPT, _render_history
-from src.agents.react.state import Turn
+from src.agents.react.nodes import MAX_HISTORY_CHARS_IN_PROMPT, _render_history, react_step
+from src.agents.react.state import Turn, ReactState
 from src.sandbox.server_manager import DevServer, stop_server
 
 
@@ -37,6 +37,30 @@ def test_react_history_is_bounded_to_recent_compact_turns():
     assert "thought 9" in rendered
     # Prefix text is intentionally outside the compact payload budget.
     assert len(rendered) <= MAX_HISTORY_CHARS_IN_PROMPT + 100
+
+
+def test_react_prompt_does_not_teach_bash_wrapped_shell_commands():
+    mock_response = MagicMock()
+    mock_response.content = "Thought: done\nAction: final_answer\nAction Input: ok"
+
+    state: ReactState = {
+        "goal": "create a simple script",
+        "history": [],
+        "final_answer": None,
+        "iterations": 0,
+        "workspace_path": None,
+    }
+
+    with patch("src.agents.react.nodes.get_llm") as mock_get_llm:
+        mock_llm = MagicMock()
+        mock_llm.invoke.return_value = mock_response
+        mock_get_llm.return_value = mock_llm
+
+        react_step(state)
+
+        prompt_content = mock_llm.invoke.call_args[0][0][1].content
+        assert "use bash -c" not in prompt_content.lower()
+        assert "Pass the literal command you want executed directly" in prompt_content
 
 
 def test_server_readiness_uses_monotonic_deadline():

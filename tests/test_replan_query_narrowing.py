@@ -158,3 +158,34 @@ def test_replan_narrowing_instruction_survives_retry():
 
         assert "MORE SPECIFIC" in retry_prompt_content, \
             "Narrowing instruction must survive into the retry prompt after a parse failure"
+
+
+def test_replan_prompt_handles_blocked_shell_commands():
+    """
+    A failed shell_command should be rewritten instead of replayed verbatim.
+    The replanner prompt should explicitly tell the model to change the command
+    shape or switch tools when the command was blocked by the allowlist.
+    """
+    valid_plan_json = '''{
+        "goal": "test goal",
+        "subtasks": [
+            {"id": 1, "task": "use delete_file instead of rm", "tool_hint": "delete_file", "status": "PENDING", "sensitive": false}
+        ]
+    }'''
+
+    with patch('src.agents.plan_execute.tools.get_llm') as mock_get_llm:
+        mock_llm = MagicMock()
+        mock_llm.invoke.return_value = _mock_llm_response(valid_plan_json)
+        mock_get_llm.return_value = mock_llm
+
+        breakdown_task(
+            "test goal",
+            context=["Step 1: delete file\nError: Command 'rm' is not in the allowed command list. Allowed: ['bash', 'cat', 'cp']"]
+        )
+
+        call_args = mock_llm.invoke.call_args
+        messages = call_args[0][0]
+        prompt_content = messages[1].content
+
+        assert "allowed command list" in prompt_content
+        assert "delete_file" in prompt_content or "Do NOT repeat the same command shape" in prompt_content
