@@ -9,6 +9,7 @@ from .tools import breakdown_task, bound_replan_context
 from src.tools.registry import (
     tavily_search, today_date,
     shell_command_tool, write_file_tool, delete_file_tool, start_dev_server_tool,
+    browser_use_tool,
 )
 from src.sandbox.shell_runner import make_project_workspace
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -1494,13 +1495,16 @@ _TOPIC_KEYWORDS: dict[str, list[str]] = {
 def _detect_trusted_topic(task_text: str) -> str | None:
     """
     Return the first topic whose keywords appear in the task text, or None
-    if no topic matches. Deliberately simple substring matching — this is a
-    pre-filter to decide whether to constrain the browser agent to a curated
-    source list, not a classification step that needs to be exhaustively
-    correct. False negatives just mean the agent falls back to open browsing;
-    false positives are unlikely given the specificity of the keyword lists.
+    if no topic matches. Skips topic routing for form filling, interaction,
+    and specific navigation tasks where open web research is not the goal.
     """
     text = f" {task_text.lower()} "
+    
+    # Do not route to trusted research sources if task is a UI/form action
+    action_keywords = ["fill", "form", "submit", "click", "login", "type into", "enter name", "enter email", "input"]
+    if any(ak in text for ak in action_keywords):
+        return None
+
     for topic, keywords in _TOPIC_KEYWORDS.items():
         for kw in keywords:
             if kw in text:
@@ -1532,21 +1536,12 @@ def _build_trusted_source_task(original_task: str, topic: str) -> str:
 
 def use_browser_node(state: State) -> dict:
     """
-    Execute a browser automation task using browser-use (tool_hint='use_browser').
+    Execute a browser automation task using browser-use via browser_use_tool.
 
     Before building the agent's task, checks whether the step's task matches
     a known topic (health, finance, programming, etc.) via keyword detection.
     If it does, the task given to the browser agent is rewritten to point it
-    directly at a curated list of trusted URLs for that topic (see
-    TRUSTED_SOURCES / _TOPIC_KEYWORDS above) instead of leaving source
-    selection to unconstrained open-web browsing. This matters most for
-    topics where source quality has outsized impact on correctness — health,
-    finance, legal, cybersecurity, etc. — where an unconstrained agent could
-    land on a low-quality or unreliable page that looks superficially
-    relevant.
-
-    If no topic matches, falls back to the original open-ended task exactly
-    as before.
+    directly at a curated list of trusted URLs for that topic.
     """
     plan = state["plan"]
     if plan is None:
@@ -1556,42 +1551,28 @@ def use_browser_node(state: State) -> dict:
     if current_step is None:
         raise RuntimeError("use_browser_node called with no RUNNING step")
 
-    # Log LOW-risk operation
     log_update = _log_approval(state, "use_browser", current_step.task)
 
+    # Set up HITL callback using langgraph.types.interrupt
+    from src.tools.browser_tool import BrowserTool, BrowserToolResult
+
+    def hitl_approval_callback(action_desc: str) -> bool:
+        approval_payload = {
+            "type": "browser_action_approval",
+            "step_id": current_step.id,
+            "task": current_step.task,
+            "action": action_desc,
+        }
+        user_response = interrupt(approval_payload)
+        if isinstance(user_response, str):
+            return user_response.strip().lower() in ("approve", "approved", "yes", "y", "true")
+        elif isinstance(user_response, dict):
+            return user_response.get("approved", False)
+        return bool(user_response)
+
+    BrowserTool.set_hitl_callback(hitl_approval_callback)
+
     try:
-        # Import browser_use here to avoid import errors if not installed
-        try:
-            from browser_use import Agent
-            from browser_use.llm import ChatOpenRouter
-        except ImportError:
-            current_step.status = StepStatus.FAILED
-            current_step.error = (
-                "browser-use library not installed. "
-                "Install it with: pip install browser-use>=0.13.6"
-            )
-            print(f"❌ Browser automation failed: browser-use not installed")
-            return {"plan": plan, "steps_executed": 1}
-
-        import os
-        from dotenv import load_dotenv
-        load_dotenv()
-
-        openrouter_key = os.getenv("OPENROUTER_API_KEY")
-        if not openrouter_key:
-            current_step.status = StepStatus.FAILED
-            current_step.error = (
-                "OPENROUTER_API_KEY not found in environment. "
-                "Browser automation currently requires OpenRouter API key."
-            )
-            print(f"❌ Browser automation failed: OPENROUTER_API_KEY missing")
-            return {"plan": plan, "steps_executed": 1}
-
-        model = os.getenv("BROWSER_USE_MODEL", "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free")
-        browser_llm = ChatOpenRouter(model=model, api_key=openrouter_key)
-
-        # Detect whether this step's task matches a trusted-source topic and
-        # rewrite the browser task accordingly.
         detected_topic = _detect_trusted_topic(current_step.task)
         if detected_topic:
             browser_task = _build_trusted_source_task(current_step.task, detected_topic)
@@ -1599,49 +1580,24 @@ def use_browser_node(state: State) -> dict:
         else:
             browser_task = current_step.task
 
-        agent = Agent(
+        raw_result_json = browser_use_tool(
+            action="run_task",
             task=browser_task,
-            llm=browser_llm,
         )
 
-        loop = asyncio.get_event_loop()
-        history = None
-        try:
-            if loop.is_running():
-                import concurrent.futures
-                with concurrent.futures.ThreadPoolExecutor() as executor:
-                    future = executor.submit(asyncio.run, agent.run())
-                    history = future.result()
-            else:
-                history = loop.run_until_complete(agent.run())
-        except Exception as e:
-            current_step.status = StepStatus.FAILED
-            current_step.error = f"Browser automation execution failed: {str(e)}"
-            print(f"❌ Browser automation execution error: {str(e)}")
-            return {"plan": plan, "steps_executed": 1, **log_update}
+        res = BrowserToolResult.model_validate_json(raw_result_json)
 
-        if history is None:
+        if res.success:
+            current_step.status = StepStatus.DONE
+            current_step.result = res.extracted_text or res.summary()
+            if detected_topic:
+                current_step.result = f"[trusted sources: {detected_topic}] {current_step.result}"
+            print(f"✅ Browser automation completed")
+            print(f"👁️  Result: {current_step.result[:300]}{'...' if len(current_step.result) > 300 else ''}")
+        else:
             current_step.status = StepStatus.FAILED
-            current_step.error = "Browser automation returned no history/result"
-            print(f"❌ Browser automation failed: no history returned")
-            return {"plan": plan, "steps_executed": 1, **log_update}
-
-        try:
-            result = history.final_result()
-            if not result:
-                result = "Browser automation completed but returned no result"
-        except Exception as e:
-            current_step.status = StepStatus.FAILED
-            current_step.error = f"Failed to extract result from browser history: {str(e)}"
-            print(f"❌ Failed to extract result: {str(e)}")
-            return {"plan": plan, "steps_executed": 1, **log_update}
-
-        current_step.status = StepStatus.DONE
-        current_step.result = result
-        if detected_topic:
-            current_step.result = f"[trusted sources: {detected_topic}] {result}"
-        print(f"✅ Browser automation completed")
-        print(f"👁️  Result: {result[:300]}{'...' if len(result) > 300 else ''}")
+            current_step.error = res.error or f"Browser action failed with status: {res.status}"
+            print(f"❌ Browser automation failed: {current_step.error}")
 
     except Exception as e:
         current_step.status = StepStatus.FAILED
@@ -1649,6 +1605,7 @@ def use_browser_node(state: State) -> dict:
         print(f"❌ Browser automation error: {str(e)}")
 
     return {"plan": plan, "steps_executed": 1, **log_update}
+
 
 def ask_human_node(state: State) -> dict:
     """
