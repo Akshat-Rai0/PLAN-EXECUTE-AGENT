@@ -15,17 +15,14 @@ WHAT THIS DOES NOT DO (read before treating output as final numbers):
    a certification that the shipped agent has a working non-synthesis
    mode, because it doesn't.
 
-2. category (e) browser_only goals are excluded from every run by default
-   (no browser tool exists yet — see golden_dataset.py). The report says
-   so explicitly rather than silently omitting them from a total count.
 
-3. LLM-as-judge scores are exactly as reliable as the underlying judge
+2. LLM-as-judge scores are exactly as reliable as the underlying judge
    LLM. For the 3 deterministic synthesis goals (d2/d3/d4) an exact-match
    check runs alongside the judge and both are reported — a mismatch
    between them is a signal to look at that specific run's raw output,
    not something this script resolves for you.
 
-4. This makes real LLM API calls — one plan + N step calls per goal per
+3. This makes real LLM API calls — one plan + N step calls per goal per
    arm, plus one judge call per goal (unless --skip-judge). Cost and time
    scale with (runnable goals) x (arms) x (LLM calls per run). Consider
    --goals to run a subset while developing/debugging this harness itself.
