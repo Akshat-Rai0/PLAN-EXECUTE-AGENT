@@ -29,6 +29,7 @@ import asyncio
 import base64
 import json
 import os
+import re
 import tempfile
 import traceback
 from datetime import datetime, timezone
@@ -37,6 +38,9 @@ from typing import Any, Optional, Type
 
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
+
+from .browser_driver import BrowserDriver, BrowserDriverError
+from .untrusted_content import scan_for_injection, wrap_web_content
 
 load_dotenv()
 
@@ -190,6 +194,13 @@ class BrowserTool:
         self._action_log: list[str] = []
         self._session_active = False
 
+        # BrowserDriver for deterministic primitives (Phase 2)
+        self._driver = BrowserDriver(
+            headless=self._headless,
+            allowed_domains=_DOMAIN_ALLOWLIST or None,
+            sandbox_mode=self._sandbox_mode,
+        )
+
     # ------------------------------------------------------------------
     # Lazy init helpers
     # ------------------------------------------------------------------
@@ -225,8 +236,16 @@ class BrowserTool:
             config_kwargs.get("headless"), self._sandbox_mode,
         ))
 
+        # Share the browser instance with the driver (Phase 2)
+        self._driver._browser = self._browser
+        self._driver._owns_browser = False
+        await self._driver.start()
+
     async def close_session(self):
         """Tear down the browser cleanly (end of plan run)."""
+        # Close driver first (Phase 2)
+        await self._driver.close()
+        
         if self._browser is not None:
             try:
                 await self._browser.close()
@@ -251,7 +270,45 @@ class BrowserTool:
         log_snapshot = list(self._action_log)
         # Clear per-action log for next action (keeps session log trimmed)
         self._action_log.clear()
+        
+        # Phase 3b: Apply injection wrapper to web-derived content
+        metadata = overrides.get("metadata", {})
+        extracted_text = overrides.get("extracted_text")
+        page_title = overrides.get("page_title")
+        current_url = overrides.get("current_url")
+        
+        if extracted_text and current_url and not metadata.get("injection_flagged"):
+            if scan_for_injection(extracted_text):
+                metadata["injection_flagged"] = True
+                self._log("INJECTION DETECTED in extracted_text")
+            else:
+                extracted_text = wrap_web_content(extracted_text, current_url)
+        
+        if page_title and current_url and not metadata.get("injection_flagged"):
+            if scan_for_injection(page_title):
+                metadata["injection_flagged"] = True
+                self._log("INJECTION DETECTED in page_title")
+            else:
+                page_title = wrap_web_content(page_title, current_url)
+        
+        overrides["extracted_text"] = extracted_text
+        overrides["page_title"] = page_title
+        overrides["metadata"] = metadata
+        
         return BrowserToolResult(action_log=log_snapshot, **overrides)
+
+    def _driver_result_to_tool_result(
+        self, driver_result, source_url: str | None = None
+    ) -> BrowserToolResult:
+        """Map DriverResult to BrowserToolResult (Phase 2)."""
+        return self._make_result(
+            success=True,
+            status=ActionStatus.SUCCESS,
+            current_url=driver_result.url or source_url,
+            page_title=driver_result.title,
+            extracted_text=driver_result.text or driver_result.message,
+            screenshot_path=driver_result.screenshot_path,
+        )
 
     def _error_result(self, error: str, status: ActionStatus = ActionStatus.FAILED) -> BrowserToolResult:
         self._log(f"ERROR: {error}")
@@ -317,147 +374,110 @@ class BrowserTool:
     async def navigate(self, url: str) -> BrowserToolResult:
         """Navigate to a URL and return page title + current URL."""
         self._log(f"navigate → {url}")
-        self._ensure_llm()
         await self._ensure_browser()
 
         try:
-            from browser_use import Agent
-
-            agent = Agent(
-                task=f"Navigate to {url} and report the page title.",
-                llm=self._llm,
-                browser=self._browser,
-            )
-            history = await asyncio.wait_for(agent.run(), timeout=self._timeout)
-            result_text = history.final_result() if history else None
-
-            return self._make_result(
-                success=True,
-                status=ActionStatus.SUCCESS,
-                current_url=url,
-                extracted_text=result_text or f"Navigated to {url}",
-                page_title=result_text[:120] if result_text else None,
-            )
+            result = await self._driver.navigate(url)
+            return self._driver_result_to_tool_result(result, source_url=url)
         except asyncio.TimeoutError:
             return self._timeout_result(f"navigate({url})")
+        except BrowserDriverError as e:
+            return self._error_result(f"navigate failed: {e}")
         except Exception as e:
             return self._error_result(f"navigate failed: {e}")
 
     async def click(self, selector: str) -> BrowserToolResult:
         """Click an element identified by CSS selector or description."""
         self._log(f"click → {selector}")
-        self._ensure_llm()
         await self._ensure_browser()
 
+        # Phase 3c: HITL gating for submit-like clicks
+        selector_lower = selector.lower()
+        submit_patterns = [
+            r"\[type=submit\]",
+            r"button\[type=submit\]",
+            r"\bsubmit\b",
+            r"\bbook\b",
+            r"\bpay\b",
+            r"\bcheckout\b",
+            r"\bconfirm\b",
+            r"\bpurchase\b",
+            r"\bdelete\b",
+            r"\bremove\b",
+        ]
+        
+        is_submit_like = any(
+            re.search(pattern, selector_lower) for pattern in submit_patterns
+        )
+        
+        if is_submit_like:
+            if not self.require_approval(
+                f"Click potentially irreversible element: {selector}"
+            ):
+                return self._make_result(
+                    success=False,
+                    status=ActionStatus.NEEDS_APPROVAL,
+                    error="Human rejected click action",
+                )
+
         try:
-            from browser_use import Agent
-
-            agent = Agent(
-                task=f"Click the element matching '{selector}' on the current page. "
-                     f"Report what happened after clicking.",
-                llm=self._llm,
-                browser=self._browser,
-            )
-            history = await asyncio.wait_for(agent.run(), timeout=self._timeout)
-            result_text = history.final_result() if history else None
-
-            return self._make_result(
-                success=True,
-                status=ActionStatus.SUCCESS,
-                extracted_text=result_text or f"Clicked {selector}",
-            )
+            result = await self._driver.click(selector)
+            return self._driver_result_to_tool_result(result)
         except asyncio.TimeoutError:
             return self._timeout_result(f"click({selector})")
+        except BrowserDriverError as e:
+            return self._error_result(f"click failed: {e}")
         except Exception as e:
             return self._error_result(f"click failed: {e}")
 
     async def fill(self, selector: str, value: str) -> BrowserToolResult:
         """Fill a form field identified by selector with the given value."""
         self._log(f"fill → {selector} = {value[:50]}{'...' if len(value) > 50 else ''}")
-        self._ensure_llm()
         await self._ensure_browser()
 
         try:
-            from browser_use import Agent
-
-            agent = Agent(
-                task=f"Find the input field matching '{selector}' and type '{value}' into it. "
-                     f"Report success or failure.",
-                llm=self._llm,
-                browser=self._browser,
-            )
-            history = await asyncio.wait_for(agent.run(), timeout=self._timeout)
-            result_text = history.final_result() if history else None
-
-            return self._make_result(
-                success=True,
-                status=ActionStatus.SUCCESS,
-                extracted_text=result_text or f"Filled {selector} with value",
-            )
+            result = await self._driver.fill(selector, value)
+            return self._driver_result_to_tool_result(result)
         except asyncio.TimeoutError:
             return self._timeout_result(f"fill({selector})")
+        except BrowserDriverError as e:
+            return self._error_result(f"fill failed: {e}")
         except Exception as e:
             return self._error_result(f"fill failed: {e}")
 
     async def select_option(self, selector: str, value: str) -> BrowserToolResult:
         """Select an option from a dropdown/select element."""
         self._log(f"select_option → {selector} = {value}")
-        self._ensure_llm()
         await self._ensure_browser()
 
         try:
-            from browser_use import Agent
-
-            agent = Agent(
-                task=f"Find the dropdown or select element matching '{selector}' "
-                     f"and select the option '{value}'. Report what was selected.",
-                llm=self._llm,
-                browser=self._browser,
-            )
-            history = await asyncio.wait_for(agent.run(), timeout=self._timeout)
-            result_text = history.final_result() if history else None
-
-            return self._make_result(
-                success=True,
-                status=ActionStatus.SUCCESS,
-                extracted_text=result_text or f"Selected {value} in {selector}",
-            )
+            result = await self._driver.select_option(selector, value)
+            return self._driver_result_to_tool_result(result)
         except asyncio.TimeoutError:
             return self._timeout_result(f"select_option({selector})")
+        except BrowserDriverError as e:
+            return self._error_result(f"select_option failed: {e}")
         except Exception as e:
             return self._error_result(f"select_option failed: {e}")
 
     async def screenshot(self, save_path: str | None = None) -> BrowserToolResult:
         """Take a screenshot of the current page."""
         self._log("screenshot")
-        self._ensure_llm()
         await self._ensure_browser()
 
+        if not save_path:
+            save_path = os.path.join(
+                tempfile.gettempdir(),
+                f"browser_screenshot_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png",
+            )
+
         try:
-            from browser_use import Agent
-
-            if not save_path:
-                save_path = os.path.join(
-                    tempfile.gettempdir(),
-                    f"browser_screenshot_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png",
-                )
-
-            agent = Agent(
-                task="Take a screenshot of the current page and describe what you see.",
-                llm=self._llm,
-                browser=self._browser,
-            )
-            history = await asyncio.wait_for(agent.run(), timeout=self._timeout)
-            result_text = history.final_result() if history else None
-
-            return self._make_result(
-                success=True,
-                status=ActionStatus.SUCCESS,
-                screenshot_path=save_path,
-                extracted_text=result_text or "Screenshot taken",
-            )
+            result = await self._driver.screenshot(save_path)
+            return self._driver_result_to_tool_result(result)
         except asyncio.TimeoutError:
             return self._timeout_result("screenshot")
+        except BrowserDriverError as e:
+            return self._error_result(f"screenshot failed: {e}")
         except Exception as e:
             return self._error_result(f"screenshot failed: {e}")
 
@@ -465,68 +485,30 @@ class BrowserTool:
         """Extract text content from the page or a specific element."""
         desc = selector or "entire page"
         self._log(f"get_text → {desc}")
-        self._ensure_llm()
         await self._ensure_browser()
 
         try:
-            from browser_use import Agent
-
-            if selector:
-                task = (
-                    f"Extract and return the visible text content of the element "
-                    f"matching '{selector}' on the current page. Return only the "
-                    f"text, no HTML tags."
-                )
-            else:
-                task = (
-                    "Extract and return the main visible text content of the "
-                    "current page. Exclude navigation, footers, and ads. "
-                    "Return only clean text."
-                )
-
-            agent = Agent(
-                task=task,
-                llm=self._llm,
-                browser=self._browser,
-            )
-            history = await asyncio.wait_for(agent.run(), timeout=self._timeout)
-            result_text = history.final_result() if history else None
-
-            return self._make_result(
-                success=True,
-                status=ActionStatus.SUCCESS,
-                extracted_text=result_text or "",
-            )
+            result = await self._driver.get_text(selector)
+            return self._driver_result_to_tool_result(result)
         except asyncio.TimeoutError:
             return self._timeout_result(f"get_text({desc})")
+        except BrowserDriverError as e:
+            return self._error_result(f"get_text failed: {e}")
         except Exception as e:
             return self._error_result(f"get_text failed: {e}")
 
     async def scroll(self, direction: str = "down", amount: int = 500) -> BrowserToolResult:
         """Scroll the page in the given direction."""
         self._log(f"scroll → {direction} by {amount}px")
-        self._ensure_llm()
         await self._ensure_browser()
 
         try:
-            from browser_use import Agent
-
-            agent = Agent(
-                task=f"Scroll the page {direction} by approximately {amount} pixels. "
-                     f"Report what new content is now visible.",
-                llm=self._llm,
-                browser=self._browser,
-            )
-            history = await asyncio.wait_for(agent.run(), timeout=self._timeout)
-            result_text = history.final_result() if history else None
-
-            return self._make_result(
-                success=True,
-                status=ActionStatus.SUCCESS,
-                extracted_text=result_text or f"Scrolled {direction}",
-            )
+            result = await self._driver.scroll(direction, amount)
+            return self._driver_result_to_tool_result(result)
         except asyncio.TimeoutError:
             return self._timeout_result(f"scroll({direction})")
+        except BrowserDriverError as e:
+            return self._error_result(f"scroll failed: {e}")
         except Exception as e:
             return self._error_result(f"scroll failed: {e}")
 
@@ -534,31 +516,15 @@ class BrowserTool:
         """Wait for an element to appear on the page."""
         wait_timeout = timeout or min(self._timeout, 30)
         self._log(f"wait_for → {selector} (timeout={wait_timeout}s)")
-        self._ensure_llm()
         await self._ensure_browser()
 
         try:
-            from browser_use import Agent
-
-            agent = Agent(
-                task=f"Wait for the element matching '{selector}' to appear on the "
-                     f"page (up to {wait_timeout} seconds). Report whether it appeared "
-                     f"and what it contains.",
-                llm=self._llm,
-                browser=self._browser,
-            )
-            history = await asyncio.wait_for(
-                agent.run(), timeout=wait_timeout + 5
-            )
-            result_text = history.final_result() if history else None
-
-            return self._make_result(
-                success=True,
-                status=ActionStatus.SUCCESS,
-                extracted_text=result_text or f"Element {selector} found",
-            )
+            result = await self._driver.wait_for(selector, wait_timeout)
+            return self._driver_result_to_tool_result(result)
         except asyncio.TimeoutError:
             return self._timeout_result(f"wait_for({selector})")
+        except BrowserDriverError as e:
+            return self._error_result(f"wait_for failed: {e}")
         except Exception as e:
             return self._error_result(f"wait_for failed: {e}")
 
