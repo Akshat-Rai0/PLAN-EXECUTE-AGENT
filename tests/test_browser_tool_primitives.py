@@ -734,3 +734,74 @@ class TestPlannerPromptSelfContainedSteps:
         assert "Last Name: Doe" in PROMPT_TEMPLATE
         assert "john.doe@example.com" in PROMPT_TEMPLATE
         assert "self-contained" in PROMPT_TEMPLATE.lower()
+
+
+class TestLLMReliabilityFixes:
+    """Test LLM reliability improvements (fallback_llm, timeout, deterministic dropdowns)."""
+
+    def test_fallback_llm_env_var_exists(self):
+        """Test that BROWSER_FALLBACK_MODEL env var is defined (fix #1)."""
+        from src.tools.browser_tool import _FALLBACK_MODEL
+        assert _FALLBACK_MODEL is not None
+        assert isinstance(_FALLBACK_MODEL, str)
+        assert len(_FALLBACK_MODEL) > 0
+
+    def test_llm_timeout_env_var_exists(self):
+        """Test that BROWSER_LLM_TIMEOUT env var is defined (fix #2)."""
+        from src.tools.browser_tool import _LLM_TIMEOUT
+        assert _LLM_TIMEOUT is not None
+        assert isinstance(_LLM_TIMEOUT, int)
+        assert _LLM_TIMEOUT > 0
+
+    @pytest.mark.asyncio
+    async def test_fill_select_backed_field_calls_driver(self, browser_tool):
+        """Test that fill_select_backed_field() calls BrowserDriver.select_option() (fix #3)."""
+        from unittest.mock import AsyncMock
+        from src.tools.browser_driver import DriverResult
+
+        browser_tool._ensure_browser = AsyncMock()
+        browser_tool._browser = AsyncMock()
+        
+        # Mock the driver's select_option method with proper DriverResult
+        browser_tool._driver.select_option = AsyncMock(return_value=DriverResult(
+            url="https://example.com",
+            message="Selected 'June'"
+        ))
+        
+        result = await browser_tool.fill_select_backed_field("select#month", "June")
+        
+        # Should have called driver.select_option
+        assert browser_tool._driver.select_option.called
+        assert browser_tool._driver.select_option.call_args[0][0] == "select#month"
+        assert browser_tool._driver.select_option.call_args[0][1] == "June"
+        # Result should be successful
+        assert result.status == "SUCCESS"
+
+    @pytest.mark.asyncio
+    async def test_index_not_found_error_suggests_deterministic_fallback(self, browser_tool):
+        """Test that index-not-found errors suggest deterministic fallback (fix #4)."""
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        browser_tool._ensure_llm = MagicMock()
+        browser_tool._llm = MagicMock()
+        browser_tool._ensure_browser = AsyncMock()
+        browser_tool._browser = AsyncMock()
+        browser_tool._session_active = True
+        browser_tool._check_session_health = AsyncMock(return_value=True)
+
+        with patch('browser_use.Agent') as MockAgent:
+            mock_agent = MagicMock()
+            
+            async def mock_agent_run():
+                # Simulate an index-not-found error
+                raise Exception("Element index 5 not available - page may have changed")
+            
+            mock_agent.run = mock_agent_run
+            MockAgent.return_value = mock_agent
+            
+            result = await browser_tool.run_task("Select month from dropdown")
+            
+            # Should fail with helpful error message
+            assert result.status == "FAILED"
+            assert "index mismatch" in result.error.lower() or "not available" in result.error.lower()
+            assert "fill_select_backed_field" in result.error
