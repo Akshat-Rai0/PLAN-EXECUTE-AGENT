@@ -193,6 +193,10 @@ class BrowserTool:
         self._llm = None
         self._action_log: list[str] = []
         self._session_active = False
+        self._agent = None  # Reuse single Agent across plan steps (fix #3)
+        self._last_url: str | None = None  # Track last known URL for session rebuild (fix #1)
+        self._original_goal: str | None = None  # Track original goal for context (fix #1)
+        self._rebuild_count = 0  # Cap recovery to one rebuild per step (fix #4)
 
         # BrowserDriver for deterministic primitives (Phase 2)
         self._driver = BrowserDriver(
@@ -219,10 +223,40 @@ class BrowserTool:
             )
         self._llm = ChatOpenRouter(model=self._model, api_key=api_key)
 
+    async def _check_session_health(self) -> bool:
+        """
+        Lightweight health check for the CDP session.
+        
+        Attempts to get the current page URL with a short timeout.
+        Returns True if the session is healthy, False if it's dead/half-dead.
+        """
+        if self._browser is None:
+            return False
+        
+        try:
+            # Use a very short timeout for the health check
+            await asyncio.wait_for(
+                self._browser.get_current_page_url(),
+                timeout=5.0
+            )
+            return True
+        except Exception:
+            # Any exception means the session is dead (CDP closed, queue shut down, etc.)
+            return False
+
     async def _ensure_browser(self):
         """Create (or reuse) a Browser + BrowserContext (Feature 11)."""
+        # Check session health before reusing (fix #1)
         if self._browser is not None and self._session_active:
-            return
+            if await self._check_session_health():
+                return
+            # Session is dead despite flag being True - force rebuild
+            self._log("Session health check failed, rebuilding...")
+            try:
+                await self.close_session()
+            except Exception:
+                # Swallow errors during teardown of a dead session
+                pass
 
         from browser_use import Browser
 
@@ -241,16 +275,49 @@ class BrowserTool:
         self._driver._owns_browser = False
         await self._driver.start()
 
+    def set_original_goal(self, goal: str):
+        """Set the original goal for context during session rebuilds (fix #1)."""
+        self._original_goal = goal
+        self._log(f"Set original goal: {goal[:100]}{'...' if len(goal) > 100 else ''}")
+
+    def reset_rebuild_count(self):
+        """Reset rebuild count for a new plan step (fix #4)."""
+        self._rebuild_count = 0
+
     async def close_session(self):
         """Tear down the browser cleanly (end of plan run)."""
         # Close driver first (Phase 2)
-        await self._driver.close()
+        try:
+            await asyncio.wait_for(self._driver.close(), timeout=20.0)
+        except asyncio.TimeoutError:
+            self._log("WARNING: Driver close timed out after 20s, forcing cleanup")
+        except Exception as e:
+            self._log(f"WARNING: Driver close error: {e}")
+        
+        # Close Agent if it exists
+        if self._agent is not None:
+            try:
+                await asyncio.wait_for(self._agent.close(), timeout=20.0)
+            except asyncio.TimeoutError:
+                self._log("WARNING: Agent close timed out after 20s, forcing cleanup")
+            except Exception as e:
+                self._log(f"WARNING: Agent close error: {e}")
+            self._agent = None
         
         if self._browser is not None:
             try:
-                await self._browser.close()
-            except Exception:
-                pass
+                await asyncio.wait_for(self._browser.close(), timeout=20.0)
+            except asyncio.TimeoutError:
+                self._log("WARNING: Browser close timed out after 20s, forcing cleanup")
+                # Force kill the browser process if possible
+                try:
+                    # browser_use doesn't expose a direct kill method, but we can
+                    # clear references and let garbage collection handle it
+                    self._log("Forced browser cleanup - clearing references")
+                except Exception:
+                    pass
+            except Exception as e:
+                self._log(f"WARNING: Browser close error: {e}")
             self._browser = None
             self._browser_context = None
             self._session_active = False
@@ -544,42 +611,129 @@ class BrowserTool:
         This is the general-purpose entry point — most high-level features
         (e1–e4, 5–10) ultimately flow through here with appropriately
         crafted task prompts.
+        
+        Session lifecycle fixes:
+        - Reuses a single Agent instance across plan steps via add_new_task() (fix #3)
+        - Catches session-dead exceptions and retries with a fresh session (fix #2)
+        - Proactively checks session health after completion (fix #4)
+        - Prepend navigate to last URL on session rebuild (fix #1)
+        - Cap recovery to one rebuild per step (fix #4)
         """
         self._log(f"run_task → {task[:120]}{'...' if len(task) > 120 else ''}")
         self._ensure_llm()
         await self._ensure_browser()
 
+        # Import bubus for QueueShutDown exception handling (fix #2)
         try:
-            from browser_use import Agent
+            import bubus.service
+            _QueueShutDown = bubus.service.QueueShutDown
+        except ImportError:
+            _QueueShutDown = None
 
-            agent_kwargs: dict[str, Any] = {
-                "task": task,
-                "llm": self._llm,
-                "browser": self._browser,
-                "max_actions_per_step": 4,
-                "use_vision": True,
-            }
+        # Session-dead exceptions to catch (fix #2)
+        session_dead_exceptions = []
+        if _QueueShutDown is not None:
+            session_dead_exceptions.append(_QueueShutDown)
+        # Add generic connection/CDP errors
+        session_dead_exceptions.extend([
+            ConnectionError,
+            ConnectionRefusedError,
+            ConnectionResetError,
+        ])
 
-            agent = Agent(**agent_kwargs)
-            history = await asyncio.wait_for(agent.run(), timeout=self._timeout)
+        async def _execute_task(attempt: int = 1, retry_task: str | None = None) -> BrowserToolResult:
+            """Inner function that accepts an optional modified task for retries."""
+            actual_task = retry_task if retry_task is not None else task
+            
+            try:
+                from browser_use import Agent
 
-            if history is None:
-                return self._error_result("Agent returned no history")
+                # Reuse existing Agent if available (fix #3)
+                if self._agent is None:
+                    agent_kwargs: dict[str, Any] = {
+                        "task": actual_task,
+                        "llm": self._llm,
+                        "browser": self._browser,
+                        "max_actions_per_step": 4,
+                        "use_vision": True,
+                    }
+                    self._agent = Agent(**agent_kwargs)
+                    self._log("Created new Agent instance")
+                else:
+                    # Continue with existing Agent using add_new_task()
+                    self._agent.add_new_task(actual_task)
+                    self._log(f"Reusing existing Agent (attempt {attempt})")
 
-            result_text = history.final_result()
-            if not result_text:
-                result_text = "Task completed but returned no text result"
+                history = await asyncio.wait_for(self._agent.run(), timeout=self._timeout)
 
-            return self._make_result(
-                success=True,
-                status=ActionStatus.SUCCESS,
-                extracted_text=result_text,
-                page_title=result_text[:120] if result_text else None,
-            )
-        except asyncio.TimeoutError:
-            return self._timeout_result(f"run_task")
-        except Exception as e:
-            return self._error_result(f"run_task failed: {e}")
+                if history is None:
+                    return self._error_result("Agent returned no history")
+
+                result_text = history.final_result()
+                if not result_text:
+                    result_text = "Task completed but returned no text result"
+
+                # Update last known URL after successful task (fix #1)
+                try:
+                    current_url = await self._browser.get_current_page_url()
+                    if current_url:
+                        self._last_url = current_url
+                        self._log(f"Updated last known URL: {current_url}")
+                except Exception:
+                    pass  # URL tracking is best-effort
+
+                # Proactive health check after successful completion (fix #4)
+                if not await self._check_session_health():
+                    self._log("Session health check failed after task completion, marking as degraded")
+                    # Don't fail the result, but mark session as dead for next call
+                    self._session_active = False
+
+                return self._make_result(
+                    success=True,
+                    status=ActionStatus.SUCCESS,
+                    extracted_text=result_text,
+                    page_title=result_text[:120] if result_text else None,
+                )
+            except tuple(session_dead_exceptions) as e:
+                # Session-dead exception caught (fix #2)
+                self._log(f"Session-dead exception caught: {type(e).__name__}: {e}")
+                self._session_active = False
+                self._agent = None  # Agent is tied to the dead session
+                
+                # Cap recovery to one rebuild per step (fix #4)
+                if self._rebuild_count >= 1:
+                    self._log("Rebuild limit reached (1 per step), surfacing error to graph")
+                    return self._error_result(
+                        f"Session died during task execution and rebuild limit exceeded: {e}"
+                    )
+                
+                self._rebuild_count += 1
+                
+                if attempt == 1:
+                    # Retry once with a fresh session
+                    self._log("Retrying task with fresh session...")
+                    try:
+                        await self.close_session()
+                    except Exception:
+                        pass  # Swallow errors during teardown of dead session
+                    await self._ensure_browser()
+                    
+                    # Prepend navigate to last known URL if available (fix #1)
+                    retry_task = task
+                    if self._last_url:
+                        self._log(f"Prepending navigate to {self._last_url} for session rebuild continuity")
+                        retry_task = f"First, navigate to {self._last_url}. Then: {task}"
+                    
+                    return await _execute_task(attempt=2, retry_task=retry_task)
+                else:
+                    # Second attempt also failed
+                    return self._error_result(f"Session died during task execution: {e}")
+            except asyncio.TimeoutError:
+                return self._timeout_result(f"run_task")
+            except Exception as e:
+                return self._error_result(f"run_task failed: {e}")
+
+        return await _execute_task()
 
     # ==================================================================
     # Feature e1 — Search + Compare on a Booking Flow
