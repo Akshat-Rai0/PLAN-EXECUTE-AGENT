@@ -461,3 +461,276 @@ async def test_integration_domain_allowlist_enforced():
         assert result.status == ActionStatus.SUCCESS
     finally:
         await tool.close_session()
+
+
+# ---------------------------------------------------------------------------
+# Session lifecycle regression tests (fix #5)
+# ---------------------------------------------------------------------------
+
+class TestSessionLifecycle:
+    """Test session health checks and recovery from dead sessions."""
+
+    @pytest.mark.asyncio
+    async def test_session_health_check_failure_triggers_rebuild(self, browser_tool):
+        """Test that a failed health check in _ensure_browser triggers session rebuild."""
+        from unittest.mock import AsyncMock, patch
+        
+        # Mock browser as existing but unhealthy
+        browser_tool._browser = AsyncMock()
+        browser_tool._session_active = True
+        
+        # First health check fails (session dead)
+        # Second call succeeds (after rebuild)
+        health_check_results = [False, True]
+        
+        async def mock_health_check():
+            result = health_check_results.pop(0)
+            return result
+        
+        browser_tool._check_session_health = mock_health_check
+        
+        # Mock close_session and browser creation
+        browser_tool.close_session = AsyncMock()
+        browser_tool._driver.start = AsyncMock()
+        
+        with patch('browser_use.Browser') as MockBrowser:
+            mock_browser_instance = AsyncMock()
+            mock_browser_instance.get_current_page_url = AsyncMock(return_value="https://example.com")
+            MockBrowser.return_value = mock_browser_instance
+            
+            await browser_tool._ensure_browser()
+            
+            # Should have closed the dead session
+            assert browser_tool.close_session.called
+            # Should have created a new browser
+            assert MockBrowser.called
+            # Session should be marked active again
+            assert browser_tool._session_active is True
+
+    @pytest.mark.asyncio
+    async def test_queue_shutdown_exception_triggers_retry(self, browser_tool):
+        """Test that QueueShutDown exception triggers session rebuild and retry."""
+        from unittest.mock import AsyncMock, patch, MagicMock
+        
+        # Mock LLM and browser
+        browser_tool._ensure_llm = MagicMock()
+        browser_tool._llm = MagicMock()
+        browser_tool._ensure_browser = AsyncMock()
+        browser_tool._browser = AsyncMock()
+        browser_tool._session_active = True
+        
+        # Mock bubus QueueShutDown
+        try:
+            import bubus.service
+            QueueShutDown = bubus.service.QueueShutDown
+        except ImportError:
+            # Create a mock exception if bubus is not available
+            class QueueShutDown(Exception):
+                pass
+        
+        # First call raises QueueShutDown, second succeeds
+        call_count = [0]
+        
+        async def mock_agent_run():
+            call_count[0] += 1
+            if call_count[0] == 1:
+                raise QueueShutDown("Queue shut down")
+            # Second call succeeds
+            mock_history = MagicMock()
+            mock_history.final_result.return_value = "Task completed successfully"
+            return mock_history
+        
+        # Mock Agent
+        with patch('browser_use.Agent') as MockAgent:
+            mock_agent = MagicMock()
+            mock_agent.run = mock_agent_run
+            MockAgent.return_value = mock_agent
+            
+            # Mock close_session and _ensure_browser for retry
+            browser_tool.close_session = AsyncMock()
+            browser_tool._check_session_health = AsyncMock(return_value=True)
+            
+            result = await browser_tool.run_task("Test task")
+            
+            # Should have retried after QueueShutDown
+            assert call_count[0] == 2
+            # Should have closed the dead session
+            assert browser_tool.close_session.called
+            # Should have succeeded on retry
+            assert result.status == ActionStatus.SUCCESS
+            assert "Task completed successfully" in result.extracted_text
+
+    @pytest.mark.asyncio
+    async def test_agent_reuse_across_calls(self, browser_tool):
+        """Test that Agent instance is reused across multiple run_task calls (fix #3)."""
+        from unittest.mock import AsyncMock, MagicMock, patch
+        
+        browser_tool._ensure_llm = MagicMock()
+        browser_tool._llm = MagicMock()
+        browser_tool._ensure_browser = AsyncMock()
+        browser_tool._browser = AsyncMock()
+        browser_tool._session_active = True
+        browser_tool._check_session_health = AsyncMock(return_value=True)
+        
+        with patch('browser_use.Agent') as MockAgent:
+            mock_agent = MagicMock()
+            
+            async def mock_agent_run():
+                mock_history = MagicMock()
+                mock_history.final_result.return_value = "Task completed"
+                return mock_history
+            
+            mock_agent.run = mock_agent_run
+            mock_agent.add_new_task = MagicMock()
+            MockAgent.return_value = mock_agent
+            
+            # First call creates Agent
+            result1 = await browser_tool.run_task("Task 1")
+            assert result1.status == ActionStatus.SUCCESS
+            assert browser_tool._agent is not None
+            assert MockAgent.call_count == 1
+            
+            # Second call reuses Agent via add_new_task
+            result2 = await browser_tool.run_task("Task 2")
+            assert result2.status == ActionStatus.SUCCESS
+            assert MockAgent.call_count == 1  # No new Agent created
+            assert mock_agent.add_new_task.called  # add_new_task was called
+
+    @pytest.mark.asyncio
+    async def test_proactive_health_check_after_task(self, browser_tool):
+        """Test that session health is checked after task completion (fix #4)."""
+        from unittest.mock import AsyncMock, MagicMock, patch
+        
+        browser_tool._ensure_llm = MagicMock()
+        browser_tool._llm = MagicMock()
+        browser_tool._ensure_browser = AsyncMock()
+        browser_tool._browser = AsyncMock()
+        browser_tool._session_active = True
+        
+        # Health check fails after task completion
+        browser_tool._check_session_health = AsyncMock(return_value=False)
+        
+        with patch('browser_use.Agent') as MockAgent:
+            mock_agent = MagicMock()
+            
+            async def mock_agent_run():
+                mock_history = MagicMock()
+                mock_history.final_result.return_value = "Task completed"
+                return mock_history
+            
+            mock_agent.run = mock_agent_run
+            MockAgent.return_value = mock_agent
+            
+            result = await browser_tool.run_task("Test task")
+            
+            # Task should still succeed
+            assert result.status == ActionStatus.SUCCESS
+            # But session should be marked as inactive for next call
+            assert browser_tool._session_active is False
+
+    @pytest.mark.asyncio
+    async def test_session_rebuild_prepends_navigate_to_last_url(self, browser_tool):
+        """Test that session rebuild prepends navigate to last known URL (fix #1)."""
+        from unittest.mock import AsyncMock, MagicMock, patch
+        
+        browser_tool._ensure_llm = MagicMock()
+        browser_tool._llm = MagicMock()
+        browser_tool._ensure_browser = AsyncMock()
+        browser_tool._browser = AsyncMock()
+        browser_tool._session_active = True
+        browser_tool._check_session_health = AsyncMock(return_value=True)
+        
+        # Set last known URL
+        browser_tool._last_url = "https://demoqa.com/automation-practice-form"
+        
+        try:
+            import bubus.service
+            QueueShutDown = bubus.service.QueueShutDown
+        except ImportError:
+            class QueueShutDown(Exception):
+                pass
+        
+        with patch('browser_use.Agent') as MockAgent:
+            mock_agent = MagicMock()
+            
+            # Track tasks passed to Agent
+            tasks_passed = []
+            
+            async def mock_agent_run():
+                # Check what task was set
+                if hasattr(mock_agent, 'add_new_task'):
+                    # Get the last task added via add_new_task
+                    if mock_agent.add_new_task.call_count > 0:
+                        tasks_passed.append(mock_agent.add_new_task.call_args[0][0])
+                else:
+                    # Get task from constructor
+                    if mock_agent.init_kwargs:
+                        tasks_passed.append(mock_agent.init_kwargs.get('task'))
+                
+                # First call raises QueueShutDown, second succeeds
+                if len(tasks_passed) == 1:
+                    raise QueueShutDown("Queue shut down")
+                
+                mock_history = MagicMock()
+                mock_history.final_result.return_value = "Task completed"
+                return mock_history
+            
+            mock_agent.run = mock_agent_run
+            mock_agent.add_new_task = MagicMock()
+            
+            def mock_agent_init(**kwargs):
+                mock_agent.init_kwargs = kwargs
+                return mock_agent
+            
+            MockAgent.side_effect = mock_agent_init
+            
+            # Mock close_session and _ensure_browser for retry
+            browser_tool.close_session = AsyncMock()
+            
+            result = await browser_tool.run_task("Fill out the form")
+            
+            # Should have retried after QueueShutDown
+            assert result.status == ActionStatus.SUCCESS
+            # The retry task should include navigate to last URL
+            # Check that add_new_task was called with a task containing the URL
+            if mock_agent.add_new_task.called:
+                retry_task = mock_agent.add_new_task.call_args[0][0]
+                assert "https://demoqa.com/automation-practice-form" in retry_task
+                assert "navigate" in retry_task.lower()
+
+
+class TestPlannerPromptSelfContainedSteps:
+    """Test that planner prompt generates self-contained browser steps (fix #2)."""
+
+    def test_planner_prompt_includes_self_contained_instructions(self):
+        """Test that the planner prompt includes self-contained step instructions."""
+        from src.agents.plan_execute.tools import PROMPT_TEMPLATE
+        
+        # Check that the prompt contains the self-contained instructions
+        assert "COMPLETELY SELF-CONTAINED" in PROMPT_TEMPLATE
+        assert "EXACT URL" in PROMPT_TEMPLATE
+        assert "CONCRETE field values" in PROMPT_TEMPLATE
+        assert "BAD example" in PROMPT_TEMPLATE
+        assert "GOOD example" in PROMPT_TEMPLATE
+        assert "the given details" in PROMPT_TEMPLATE
+        assert "as described above" in PROMPT_TEMPLATE
+
+    def test_planner_prompt_bad_example_shows_anti_pattern(self):
+        """Test that the prompt shows the bad anti-pattern example."""
+        from src.agents.plan_execute.tools import PROMPT_TEMPLATE
+        
+        # The bad example should show the problematic pattern
+        assert "Fill out the practice form with the given details" in PROMPT_TEMPLATE
+        assert "ambiguous" in PROMPT_TEMPLATE.lower()
+        assert "will fail if the session is rebuilt" in PROMPT_TEMPLATE
+
+    def test_planner_prompt_good_example_shows_concrete_values(self):
+        """Test that the prompt shows the good pattern with concrete values."""
+        from src.agents.plan_execute.tools import PROMPT_TEMPLATE
+        
+        # The good example should show concrete values
+        assert "https://demoqa.com/automation-practice-form" in PROMPT_TEMPLATE
+        assert "First Name: John" in PROMPT_TEMPLATE
+        assert "Last Name: Doe" in PROMPT_TEMPLATE
+        assert "john.doe@example.com" in PROMPT_TEMPLATE
+        assert "self-contained" in PROMPT_TEMPLATE.lower()
