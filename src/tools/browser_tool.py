@@ -557,6 +557,7 @@ class BrowserTool:
                 "llm": self._llm,
                 "browser": self._browser,
                 "max_actions_per_step": 4,
+                "use_vision": True,
             }
 
             agent = Agent(**agent_kwargs)
@@ -596,6 +597,8 @@ class BrowserTool:
         prompt = (
             f"{task}\n\n"
             f"Instructions:\n"
+            f"You have VISION capabilities - you can SEE the page visually. Use this to "
+            f"identify elements, read visual content, and understand the page layout.\n\n"
             f"1. Navigate to the booking/search page.\n"
             f"2. Read ALL available search results (scroll if needed).\n"
             f"3. Extract details for each option: name/carrier, price/fare, "
@@ -639,6 +642,8 @@ class BrowserTool:
 
         prompt = (
             f"Login to {url} and read the authenticated dashboard.\n\n"
+            f"You have VISION capabilities - you can SEE the page visually. Use this to "
+            f"identify form fields, buttons, and read the rendered dashboard content.\n\n"
             f"Steps:\n"
             f"1. Navigate to {url}\n"
             f"2. Find the login form and enter:\n"
@@ -689,16 +694,21 @@ class BrowserTool:
 
         prompt = (
             f"Fill out and submit the form at {url}.\n\n"
+            f"You have VISION capabilities - you can SEE the page visually. Use this to "
+            f"identify form fields, buttons, and verify submission success visually.\n\n"
             f"Steps:\n"
+
             f"1. Navigate to {url}\n"
-            f"2. Fill in these fields:\n{field_lines}\n"
+            f"2. use vision to know all the fields that need to be filled in the form\n"
+            f"3. use vision to know the positions of the fields and fill them in with the provided values\n"
+            f"4. Fill in these fields:\n{field_lines}\n"
             f"{submit_hint}\n"
-            f"4. Wait for the page to respond after submission.\n"
-            f"5. Verify the submission was successful by checking for:\n"
+            f"5. Wait for the page to respond after submission.\n"
+            f"6. Verify the submission was successful by checking for:\n"
             f"   - A success message on the page, OR\n"
             f"   - A redirect to a confirmation page, OR\n"
             f"   - A confirmation banner/toast\n"
-            f"6. Return the confirmation message or page content that "
+            f"7. Return the confirmation message or page content that "
             f"proves submission succeeded. If submission failed, report "
             f"the error message shown on the page."
         )
@@ -736,6 +746,9 @@ class BrowserTool:
 
         prompt = (
             f"Apply filters on {url} and read the updated results.\n\n"
+            f"You have VISION capabilities - you can SEE the page visually. Use this to "
+            f"identify filter controls (dropdowns, checkboxes, sliders) and observe "
+            f"when content updates.\n\n"
             f"Steps:\n"
             f"1. Navigate to {url}\n"
             f"2. Apply these filter actions:\n"
@@ -763,6 +776,9 @@ class BrowserTool:
         """
         prompt = (
             f"Scrape data from {url}.\n\n"
+            f"You have VISION capabilities - you can SEE the page visually. Use this to "
+            f"identify content sections, tables, lists, and distinguish between relevant "
+            f"content and navigation/ads.\n\n"
             f"What to extract: {extract}\n\n"
             f"Instructions:\n"
             f"1. Navigate to {url}\n"
@@ -783,6 +799,9 @@ class BrowserTool:
         sel_hint = f" identified by '{table_selector}'" if table_selector else ""
         prompt = (
             f"Extract the data table{sel_hint} from {url}.\n\n"
+            f"You have VISION capabilities - you can SEE the page visually. Use this to "
+            f"identify tables visually, distinguish headers from data, and ensure you "
+            f"capture the complete table structure.\n\n"
             f"Instructions:\n"
             f"1. Navigate to {url}\n"
             f"2. Locate the table{sel_hint}.\n"
@@ -810,6 +829,9 @@ class BrowserTool:
         step_lines = "\n".join(f"   Step {i}: {s}" for i, s in enumerate(steps, 1))
         prompt = (
             f"Execute this multi-step workflow in sequence:\n\n"
+            f"You have VISION capabilities - you can SEE the page visually. Use this to "
+            f"identify elements, verify actions completed successfully, and understand "
+            f"page state changes between steps.\n\n"
             f"{step_lines}\n\n"
             f"CRITICAL RULES:\n"
             f"- Execute steps IN ORDER. Do not skip or reorder.\n"
