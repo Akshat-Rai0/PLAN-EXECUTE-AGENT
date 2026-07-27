@@ -134,7 +134,12 @@ _DEFAULT_MODEL = os.getenv(
     "BROWSER_USE_MODEL",
     "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
 )
+_FALLBACK_MODEL = os.getenv(
+    "BROWSER_FALLBACK_MODEL",
+    "meta-llama/llama-3.1-8b-instruct:free",  # Reasonable free fallback
+)
 _DEFAULT_TIMEOUT = int(os.getenv("BROWSER_USE_TIMEOUT", "60"))
+_LLM_TIMEOUT = int(os.getenv("BROWSER_LLM_TIMEOUT", "120"))  # Per-call LLM timeout (fix #2)
 _HEADLESS = os.getenv("PLAYWRIGHT_HEADLESS", "false").lower() in ("1", "true", "yes")
 _SANDBOX_MODE = os.getenv("BROWSER_USE_SANDBOX", "false").lower() in ("1", "true", "yes")
 _DOMAIN_ALLOWLIST = [
@@ -579,6 +584,33 @@ class BrowserTool:
         except Exception as e:
             return self._error_result(f"scroll failed: {e}")
 
+    async def fill_select_backed_field(
+        self, selector: str, value: str
+    ) -> BrowserToolResult:
+        """
+        Fill a <select>-backed dropdown field deterministically (fix #3).
+        
+        This bypasses the free-form Agent's unreliable index reasoning for
+        dropdowns like react-datepicker widgets. Uses BrowserDriver.select_option()
+        directly for reliable value selection.
+        
+        Args:
+            selector: CSS selector for the <select> element
+            value: The value to select (must match an option value)
+        """
+        self._log(f"fill_select_backed_field → {selector} = {value!r}")
+        await self._ensure_browser()
+        
+        try:
+            result = await self._driver.select_option(selector, value)
+            return self._driver_result_to_tool_result(result)
+        except asyncio.TimeoutError:
+            return self._timeout_result(f"select_option({selector})")
+        except BrowserDriverError as e:
+            return self._error_result(f"select_option failed: {e}")
+        except Exception as e:
+            return self._error_result(f"select_option failed: {e}")
+
     async def wait_for(self, selector: str, timeout: float | None = None) -> BrowserToolResult:
         """Wait for an element to appear on the page."""
         wait_timeout = timeout or min(self._timeout, 30)
@@ -650,6 +682,13 @@ class BrowserTool:
 
                 # Reuse existing Agent if available (fix #3)
                 if self._agent is None:
+                    # Configure fallback LLM for reliability (fix #1)
+                    fallback_llm = None
+                    if _FALLBACK_MODEL and _FALLBACK_MODEL != _DEFAULT_MODEL:
+                        from browser_use.llm import ChatOpenRouter
+                        fallback_llm = ChatOpenRouter(model=_FALLBACK_MODEL, api_key=os.getenv("OPENROUTER_API_KEY"))
+                        self._log(f"Configured fallback LLM: {_FALLBACK_MODEL}")
+                    
                     agent_kwargs: dict[str, Any] = {
                         "task": actual_task,
                         "llm": self._llm,
@@ -657,6 +696,10 @@ class BrowserTool:
                         "max_actions_per_step": 4,
                         "use_vision": True,
                     }
+                    if fallback_llm is not None:
+                        agent_kwargs["llm"] = self._llm  # Primary LLM
+                        agent_kwargs["fallback_llm"] = fallback_llm  # Fallback (fix #1)
+                    
                     self._agent = Agent(**agent_kwargs)
                     self._log("Created new Agent instance")
                 else:
@@ -664,7 +707,7 @@ class BrowserTool:
                     self._agent.add_new_task(actual_task)
                     self._log(f"Reusing existing Agent (attempt {attempt})")
 
-                history = await asyncio.wait_for(self._agent.run(), timeout=self._timeout)
+                history = await asyncio.wait_for(self._agent.run(), timeout=_LLM_TIMEOUT)  # Use LLM timeout (fix #2)
 
                 if history is None:
                     return self._error_result("Agent returned no history")
@@ -731,6 +774,18 @@ class BrowserTool:
             except asyncio.TimeoutError:
                 return self._timeout_result(f"run_task")
             except Exception as e:
+                # Detect index-not-found errors after dropdown operations (fix #4)
+                error_str = str(e)
+                if "Element index" in error_str and "not available" in error_str:
+                    self._log(f"Detected index-not-found error: {e}")
+                    self._log("This suggests a dropdown/index mismatch. Consider using fill_select_backed_field() for deterministic selection.")
+                    # Try to recover by suggesting the deterministic path
+                    # We can't automatically retry with the deterministic helper without knowing the selector,
+                    # but we surface a clear error message to guide the planner or caller
+                    return self._error_result(
+                        f"Dropdown selection failed due to index mismatch: {e}. "
+                        "Use fill_select_backed_field(selector, value) for reliable <select> handling."
+                    )
                 return self._error_result(f"run_task failed: {e}")
 
         return await _execute_task()
