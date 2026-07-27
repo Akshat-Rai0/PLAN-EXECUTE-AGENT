@@ -12,8 +12,8 @@ ReAct baseline via a controlled three-arm ablation.
 - **Phase 3** ✅ Replanner + Termination Logic (Arm 2 complete)
 - **Phase 4** ✅ Dynamic Tool Synthesis
 - **Phase 5** ✅ Sandbox Hardening
-- **Phase 6** ⏳ Human-in-the-Loop Approval Gates
-- **Phase 7** ⏳ Browser Automation (Arm 3 complete)
+- **Phase 6** ✅ Human-in-the-Loop Approval Gates
+- **Phase 7** 🔄 Browser Automation (Vision capabilities added, in progress)
 - **Phase 8** ⏳ ReAct Baseline + Ablation (Arm 1)
 - **Phase 9** ⏳ Web UI + Deployment
 
@@ -137,3 +137,5 @@ Tests specifically target and validate fixes for production bugs:
 % source .venv/bin/activate
 python -m src.agents.plan_execute.main "Plan a weekend trip to Goa"
 ```
+
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/Akshat-Rai0/PLAN-EXECUTE-AGENT)
