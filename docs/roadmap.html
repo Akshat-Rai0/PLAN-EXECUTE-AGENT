@@ -239,10 +239,10 @@ graph TD
     <div class="overview-seg" style="background:var(--green)"><span>P1</span></div>
     <div class="overview-seg" style="background:var(--green)"><span>P2</span></div>
     <div class="overview-seg" style="background:var(--green)"><span>P3</span></div>
-    <div class="overview-seg" style="background:var(--amber)"><span>P4</span></div>
+    <div class="overview-seg" style="background:var(--green)"><span>P4</span></div>
     <div class="overview-seg" style="background:var(--green)"><span>P5</span></div>
     <div class="overview-seg" style="background:var(--green)"><span>P6</span></div>
-    <div class="overview-seg" style="background:var(--ink-3)"><span>P7</span></div>
+    <div class="overview-seg" style="background:var(--amber)"><span>P7</span></div>
     <div class="overview-seg" style="background:var(--amber)"><span>P8</span></div>
     <div class="overview-seg" style="background:var(--ink-3)"><span>P9</span></div>
   </div>
@@ -649,37 +649,39 @@ graph TD
   <div class="section-label">Phase 7 · Aug 1–4</div>
   <div class="phase">
     <div class="phase-header">
-      <div class="phase-num future">7</div>
+      <div class="phase-num active">7</div>
       <div class="phase-title">
         <h3>Browser Automation</h3>
         <div class="phase-meta">4 days · CLI only</div>
         <div class="phase-arm">Arm 3 complete at end of this phase</div>
       </div>
-      <div class="phase-status future">Not Started</div>
+      <div class="phase-status active">In Progress</div>
     </div>
     <div class="phase-body">
       <div class="phase-col">
         <h4>Tasks</h4>
         <ul class="checklist">
-          <li>agent-infra/sandbox browser container — seccomp enabled, network allowlisted (not the project's quickstart defaults)</li>
-          <li>navigate / click / fill / screenshot tools, DOM selectors not coordinates</li>
-          <li>Session persistence across steps within one goal_run</li>
-          <li>Stuck browser step → FAILED → replanner, not a special case</li>
-          <li>HITL gate before irreversible actions (final submit/booking click)</li>
-          <li><strong>Prompt-injection defense:</strong> page content/DOM text extracted by the browser tool is treated as untrusted data, not instructions — wrap extracted text so the executor LLM cannot interpret in-page text as new commands, and flag pages containing suspicious imperative-looking text for the HITL gate</li>
+          <li class="done">agent-infra/sandbox browser container — seccomp enabled, network allowlisted (not the project's quickstart defaults)</li>
+          <li class="done">navigate / click / fill / screenshot tools, DOM selectors not coordinates</li>
+          <li class="done">Session persistence across steps within one goal_run</li>
+          <li class="done">Stuck browser step → FAILED → replanner, not a special case</li>
+          <li class="done">HITL gate before irreversible actions (final submit/booking click)</li>
+          <li class="done"><strong>Prompt-injection defense:</strong> page content/DOM text extracted by the browser tool is treated as untrusted data, not instructions — wrap extracted text so the executor LLM cannot interpret in-page text as new commands, and flag pages containing suspicious imperative-looking text for the HITL gate</li>
+          <li class="done"><strong>Vision capabilities:</strong> Added use_vision=True to browser agent, enabling visual page understanding. All high-level task methods (search_and_compare, login, fill_form, apply_filter, scrape, extract_table, multi_step) now include vision instructions to help the agent identify elements visually and understand page layout</li>
         </ul>
       </div>
       <div class="phase-col">
         <h4>Deliverables</h4>
         <ul class="checklist">
-          <li>Browser tool set wired into the registry</li>
-          <li>Hardened container config (VSCode/Jupyter components excluded)</li>
-          <li>Browser session-state persistence</li>
-          <li>Injection-resistant content extraction wrapper</li>
+          <li class="done">Browser tool set wired into the registry</li>
+          <li class="done">Hardened container config (VSCode/Jupyter components excluded)</li>
+          <li class="done">Browser session-state persistence</li>
+          <li class="done">Injection-resistant content extraction wrapper</li>
+          <li class="done">Vision-enabled browser agent with visual understanding capabilities</li>
         </ul>
       </div>
       <div class="phase-outcome">
-        <p><strong>You can:</strong> Give the agent goals that require real site interaction with no API — booking flows, dashboards behind a login. <strong>This completes Arm 3</strong> — the full system (planning + replanning + tool synthesis + browser), ready for the ablation in Phase 8.</p>
+        <p><strong>You can:</strong> Give the agent goals that require real site interaction with no API — booking flows, dashboards behind a login. The agent now has vision capabilities to visually understand page layout, identify elements, and interact more effectively. <strong>This completes Arm 3</strong> — the full system (planning + replanning + tool synthesis + browser), ready for the ablation in Phase 8.</p>
       </div>
     </div>
     <div class="phase-body">
