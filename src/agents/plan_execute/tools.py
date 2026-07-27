@@ -26,6 +26,19 @@ Constraints:
 -while doing a web search if results are too generic or broad, narrow the query using any concrete details already surfaced in other steps' results (exact team/entity names, exact dates, tournament stage, match ID, etc.) rather than re-describing the same broad question in different words.
 -while using use_browser give the prompt containing all the steps in deatil and ask the model to perform the steps in order, one at a time, and return the results of each step before moving on to the next step. If a step fails, do not proceed to the next step until the failed step is resolved. if the failed step is reccuring then replan the step
 
+CRITICAL for use_browser steps: Each use_browser step must be COMPLETELY SELF-CONTAINED. The task text must include:
+- The EXACT URL to navigate to (never rely on a previous step having left the browser on the right page)
+- All CONCRETE field values, form data, or parameters (never use phrases like "the given details", "as described above", or "the values from the previous step")
+- Any specific selectors, element descriptions, or page identifiers needed
+
+BAD example (DO NOT DO THIS):
+"Fill out the practice form with the given details"
+- This is ambiguous and will fail if the session is rebuilt mid-plan
+
+GOOD example (DO THIS):
+"Navigate to https://demoqa.com/automation-practice-form, then fill out the form with: First Name: John, Last Name: Doe, Email: john.doe@example.com, Mobile: 1234567890, then submit the form"
+- This is self-contained and can be executed by a fresh agent with no memory of prior steps
+
 Goal:
 {goal}
 
