@@ -753,29 +753,27 @@ class TestLLMReliabilityFixes:
         assert isinstance(_LLM_TIMEOUT, int)
         assert _LLM_TIMEOUT > 0
 
-    @pytest.mark.asyncio
-    async def test_fill_select_backed_field_calls_driver(self, browser_tool):
-        """Test that fill_select_backed_field() calls BrowserDriver.select_option() (fix #3)."""
-        from unittest.mock import AsyncMock
-        from src.tools.browser_driver import DriverResult
 
-        browser_tool._ensure_browser = AsyncMock()
+class TestSessionRebuildFixes:
+    """Test session-rebuild reliability improvements (bounded timeout, proper cleanup)."""
+
+    @pytest.mark.asyncio
+    async def test_agent_none_after_close_session(self, browser_tool):
+        """Test that Agent is set to None after close_session (fix #1)."""
+        from unittest.mock import AsyncMock
+
+        browser_tool._agent = AsyncMock()
         browser_tool._browser = AsyncMock()
+        browser_tool._driver = AsyncMock()
         
-        # Mock the driver's select_option method with proper DriverResult
-        browser_tool._driver.select_option = AsyncMock(return_value=DriverResult(
-            url="https://example.com",
-            message="Selected 'June'"
-        ))
+        await browser_tool.close_session()
         
-        result = await browser_tool.fill_select_backed_field("select#month", "June")
-        
-        # Should have called driver.select_option
-        assert browser_tool._driver.select_option.called
-        assert browser_tool._driver.select_option.call_args[0][0] == "select#month"
-        assert browser_tool._driver.select_option.call_args[0][1] == "June"
-        # Result should be successful
-        assert result.status == "SUCCESS"
+        # Agent should be None after close
+        assert browser_tool._agent is None
+
+
+class TestSilentLoopDetection:
+    """Test silent-loop detection in Agent history (fix #2)."""
 
     @pytest.mark.asyncio
     async def test_index_not_found_error_suggests_deterministic_fallback(self, browser_tool):
@@ -804,4 +802,4 @@ class TestLLMReliabilityFixes:
             # Should fail with helpful error message
             assert result.status == "FAILED"
             assert "index mismatch" in result.error.lower() or "not available" in result.error.lower()
-            assert "fill_select_backed_field" in result.error
+            assert "select_option" in result.error
