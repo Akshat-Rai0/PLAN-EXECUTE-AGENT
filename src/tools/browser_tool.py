@@ -584,33 +584,6 @@ class BrowserTool:
         except Exception as e:
             return self._error_result(f"scroll failed: {e}")
 
-    async def fill_select_backed_field(
-        self, selector: str, value: str
-    ) -> BrowserToolResult:
-        """
-        Fill a <select>-backed dropdown field deterministically (fix #3).
-        
-        This bypasses the free-form Agent's unreliable index reasoning for
-        dropdowns like react-datepicker widgets. Uses BrowserDriver.select_option()
-        directly for reliable value selection.
-        
-        Args:
-            selector: CSS selector for the <select> element
-            value: The value to select (must match an option value)
-        """
-        self._log(f"fill_select_backed_field → {selector} = {value!r}")
-        await self._ensure_browser()
-        
-        try:
-            result = await self._driver.select_option(selector, value)
-            return self._driver_result_to_tool_result(result)
-        except asyncio.TimeoutError:
-            return self._timeout_result(f"select_option({selector})")
-        except BrowserDriverError as e:
-            return self._error_result(f"select_option failed: {e}")
-        except Exception as e:
-            return self._error_result(f"select_option failed: {e}")
-
     async def wait_for(self, selector: str, timeout: float | None = None) -> BrowserToolResult:
         """Wait for an element to appear on the page."""
         wait_timeout = timeout or min(self._timeout, 30)
@@ -650,6 +623,12 @@ class BrowserTool:
         - Proactively checks session health after completion (fix #4)
         - Prepend navigate to last URL on session rebuild (fix #1)
         - Cap recovery to one rebuild per step (fix #4)
+        
+        Known limitation: For multi-field forms, the agent's loop-detector shows
+        it reliably loses track past ~5-6 fields in a single run_task call.
+        Suggested: Break large form-fill tasks into multiple smaller steps
+        (2-3 fields each) so mid-form failures only cost partial progress and
+        the replanner can react. This is a planning-level change, not a tool-level fix.
         """
         self._log(f"run_task → {task[:120]}{'...' if len(task) > 120 else ''}")
         self._ensure_llm()
@@ -712,6 +691,42 @@ class BrowserTool:
                 if history is None:
                     return self._error_result("Agent returned no history")
 
+                # Detect silent-loop failure mode (fix #2)
+                # Check for repeated identical actions or loop-detection events in history
+                try:
+                    if hasattr(history, 'history') and history.history:
+                        action_sequence = []
+                        for step in history.history:
+                            if hasattr(step, 'action') and step.action:
+                                action_str = str(step.action)
+                                action_sequence.append(action_str)
+                        
+                        # Check for repeated identical actions (3+ times)
+                        if len(action_sequence) >= 3:
+                            last_three = action_sequence[-3:]
+                            if last_three[0] == last_three[1] == last_three[2]:
+                                self._log(f"Detected silent loop: repeated action '{last_three[0]}' 3 times")
+                                return self._error_result(
+                                    f"Agent entered a silent loop repeating action '{last_three[0]}' "
+                                    f"without completing the task. Task likely failed."
+                                )
+                        
+                        # Check for loop-detection events in history
+                        history_str = str(history.history)
+                        if "loop detection" in history_str.lower() or "loop" in history_str.lower():
+                            self._log("Detected loop-detection event in agent history")
+                            # Check if final result is actually meaningful or just a premature submit
+                            result_text = history.final_result()
+                            if result_text and len(result_text) < 50:  # Suspiciously short result
+                                self._log(f"Suspiciously short result after loop detection: '{result_text}'")
+                                return self._error_result(
+                                    f"Agent detected a loop and may have prematurely submitted. "
+                                    f"Result: '{result_text}'. Task likely incomplete."
+                                )
+                except Exception as e:
+                    # History inspection failed, but don't block execution
+                    self._log(f"Could not inspect history for loop detection: {e}")
+
                 result_text = history.final_result()
                 if not result_text:
                     result_text = "Task completed but returned no text result"
@@ -741,7 +756,6 @@ class BrowserTool:
                 # Session-dead exception caught (fix #2)
                 self._log(f"Session-dead exception caught: {type(e).__name__}: {e}")
                 self._session_active = False
-                self._agent = None  # Agent is tied to the dead session
                 
                 # Cap recovery to one rebuild per step (fix #4)
                 if self._rebuild_count >= 1:
@@ -759,7 +773,16 @@ class BrowserTool:
                         await self.close_session()
                     except Exception:
                         pass  # Swallow errors during teardown of dead session
-                    await self._ensure_browser()
+                    
+                    # Rebuild with bounded timeout to fail fast instead of hanging
+                    try:
+                        # Agent is now None (set by close_session), safe to rebuild
+                        await asyncio.wait_for(self._ensure_browser(), timeout=30.0)
+                    except asyncio.TimeoutError:
+                        self._log("Session rebuild timed out after 30s, failing fast to replanner")
+                        return self._error_result(
+                            f"Session rebuild timed out - browser session may be in corrupted state: {e}"
+                        )
                     
                     # Prepend navigate to last known URL if available (fix #1)
                     retry_task = task
@@ -778,13 +801,13 @@ class BrowserTool:
                 error_str = str(e)
                 if "Element index" in error_str and "not available" in error_str:
                     self._log(f"Detected index-not-found error: {e}")
-                    self._log("This suggests a dropdown/index mismatch. Consider using fill_select_backed_field() for deterministic selection.")
+                    self._log("This suggests a dropdown/index mismatch. Consider using select_option() for deterministic selection.")
                     # Try to recover by suggesting the deterministic path
                     # We can't automatically retry with the deterministic helper without knowing the selector,
                     # but we surface a clear error message to guide the planner or caller
                     return self._error_result(
                         f"Dropdown selection failed due to index mismatch: {e}. "
-                        "Use fill_select_backed_field(selector, value) for reliable <select> handling."
+                        "Use select_option(selector, value) for reliable <select> handling."
                     )
                 return self._error_result(f"run_task failed: {e}")
 
@@ -853,13 +876,16 @@ class BrowserTool:
             f"Login to {url} and read the authenticated dashboard.\n\n"
             f"You have VISION capabilities - you can SEE the page visually. Use this to "
             f"identify form fields, buttons, and read the rendered dashboard content.\n\n"
+            f"CRITICAL: Fill username and password in a SINGLE coordinated action - do not fill one field at a time. "
+            f"Use vision to identify both field positions first, then fill them sequentially in one pass.\n\n"
             f"Steps:\n"
             f"1. Navigate to {url}\n"
-            f"2. Find the login form and enter:\n"
+            f"2. Use vision to identify the login form fields (username and password) in one pass\n"
+            f"3. Fill BOTH fields at once:\n"
             f"   - Username/email: {username}\n"
             f"   - Password: {password}\n"
             f"{selector_hints}\n"
-            f"3. Submit the login form and wait for the dashboard to fully render.\n"
+            f"4. Submit the login form and wait for the dashboard to fully render.\n"
             f"{wait_hint}\n"
             f"5. Read and extract the VISIBLE information displayed on the "
             f"dashboard page (do NOT read raw HTML source).\n"
@@ -881,7 +907,22 @@ class BrowserTool:
         """
         Populate a form with the provided field values, submit it, and
         verify the submission was confirmed by the website.
+        
+        Integrates with UserInfoStore to auto-fill known values.
         """
+        # Integrate with UserInfoStore for auto-fill (fix #5)
+        from .user_info_store import get_user_info_store
+        
+        store = get_user_info_store()
+        
+        # Pre-fill fields from store if not already provided
+        for key in fields.keys():
+            if not fields[key]:  # If field value is empty
+                stored_value = store.get_info(key)
+                if stored_value:
+                    fields[key] = stored_value
+                    self._log(f"Auto-filled {key} from user info store")
+        
         # Feature 15 — HITL gate for form submission (irreversible)
         if not self.require_approval(
             f"Fill and submit form at {url} with {len(fields)} fields"
@@ -905,19 +946,19 @@ class BrowserTool:
             f"Fill out and submit the form at {url}.\n\n"
             f"You have VISION capabilities - you can SEE the page visually. Use this to "
             f"identify form fields, buttons, and verify submission success visually.\n\n"
+            f"CRITICAL: Fill ALL fields in a SINGLE coordinated action - do not fill one field at a time. "
+            f"Use vision to identify all field positions first, then fill them sequentially in one pass.\n\n"
             f"Steps:\n"
-
             f"1. Navigate to {url}\n"
-            f"2. use vision to know all the fields that need to be filled in the form\n"
-            f"3. use vision to know the positions of the fields and fill them in with the provided values\n"
-            f"4. Fill in these fields:\n{field_lines}\n"
+            f"2. Use vision to identify ALL form fields and their positions in one pass\n"
+            f"3. Fill ALL fields at once with these values:\n{field_lines}\n"
             f"{submit_hint}\n"
-            f"5. Wait for the page to respond after submission.\n"
-            f"6. Verify the submission was successful by checking for:\n"
+            f"4. Wait for the page to respond after submission.\n"
+            f"5. Verify the submission was successful by checking for:\n"
             f"   - A success message on the page, OR\n"
             f"   - A redirect to a confirmation page, OR\n"
             f"   - A confirmation banner/toast\n"
-            f"7. Return the confirmation message or page content that "
+            f"6. Return the confirmation message or page content that "
             f"proves submission succeeded. If submission failed, report "
             f"the error message shown on the page."
         )
