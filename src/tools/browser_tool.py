@@ -132,7 +132,11 @@ class BrowserAction(str, Enum):
 
 _DEFAULT_MODEL = os.getenv(
     "BROWSER_USE_MODEL",
-    "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+    "nvidia/nemotron-3-ultra-550b-a55b:free",
+)
+_VISION_MODEL = os.getenv(
+    "BROWSER_USE_VISION_MODEL",
+    "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",  # Vision-capable model
 )
 _FALLBACK_MODEL = os.getenv(
     "BROWSER_FALLBACK_MODEL",
@@ -678,15 +682,26 @@ class BrowserTool:
                         fallback_llm = ChatOpenRouter(model=_FALLBACK_MODEL, api_key=os.getenv("OPENROUTER_API_KEY"))
                         self._log(f"Configured fallback LLM: {_FALLBACK_MODEL}")
                     
+                    # Use vision model if vision is enabled and a separate vision model is configured
+                    use_vision = _VISION_MODEL and _VISION_MODEL != _DEFAULT_MODEL
+                    if use_vision:
+                        # Create separate LLM instance for vision
+                        from browser_use.llm import ChatOpenRouter
+                        vision_llm = ChatOpenRouter(model=_VISION_MODEL, api_key=os.getenv("OPENROUTER_API_KEY"))
+                        self._log(f"Using vision model: {_VISION_MODEL}")
+                        agent_llm = vision_llm
+                    else:
+                        agent_llm = self._llm
+                    
                     agent_kwargs: dict[str, Any] = {
                         "task": actual_task,
-                        "llm": self._llm,
+                        "llm": agent_llm,
                         "browser": self._browser,
                         "max_actions_per_step": 4,
-                        "use_vision": True,
+                        "use_vision": use_vision,
                     }
                     if fallback_llm is not None:
-                        agent_kwargs["llm"] = self._llm  # Primary LLM
+                        agent_kwargs["llm"] = agent_llm  # Primary LLM
                         agent_kwargs["fallback_llm"] = fallback_llm  # Fallback (fix #1)
                     
                     self._agent = Agent(**agent_kwargs)
