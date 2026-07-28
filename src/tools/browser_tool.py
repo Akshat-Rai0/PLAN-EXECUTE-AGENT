@@ -242,7 +242,7 @@ class BrowserTool:
             # Use a very short timeout for the health check
             await asyncio.wait_for(
                 self._browser.get_current_page_url(),
-                timeout=5.0
+                timeout=3.0
             )
             return True
         except Exception:
@@ -251,12 +251,12 @@ class BrowserTool:
 
     async def _ensure_browser(self):
         """Create (or reuse) a Browser + BrowserContext (Feature 11)."""
-        # Check session health before reusing (fix #1)
+        # Check session health before reusing (fix #1, fix #3)
         if self._browser is not None and self._session_active:
             if await self._check_session_health():
                 return
-            # Session is dead despite flag being True - force rebuild
-            self._log("Session health check failed, rebuilding...")
+            # Session is dead despite flag being True - force rebuild proactively
+            self._log("Session health check failed, rebuilding proactively before operation...")
             try:
                 await self.close_session()
             except Exception:
@@ -291,42 +291,45 @@ class BrowserTool:
 
     async def close_session(self):
         """Tear down the browser cleanly (end of plan run)."""
-        # Close driver first (Phase 2)
-        try:
-            await asyncio.wait_for(self._driver.close(), timeout=20.0)
-        except asyncio.TimeoutError:
-            self._log("WARNING: Driver close timed out after 20s, forcing cleanup")
-        except Exception as e:
-            self._log(f"WARNING: Driver close error: {e}")
+        # Run all close operations concurrently with shorter timeouts (fix #5)
+        # This reduces recovery time from 60s+ to ~5s when session is already dead
+        close_tasks = []
+        
+        # Close driver (Phase 2)
+        if self._driver is not None:
+            close_tasks.append(asyncio.create_task(
+                asyncio.wait_for(self._driver.close(), timeout=5.0)
+            ))
         
         # Close Agent if it exists
         if self._agent is not None:
-            try:
-                await asyncio.wait_for(self._agent.close(), timeout=20.0)
-            except asyncio.TimeoutError:
-                self._log("WARNING: Agent close timed out after 20s, forcing cleanup")
-            except Exception as e:
-                self._log(f"WARNING: Agent close error: {e}")
-            self._agent = None
+            close_tasks.append(asyncio.create_task(
+                asyncio.wait_for(self._agent.close(), timeout=5.0)
+            ))
         
+        # Close browser if it exists
         if self._browser is not None:
-            try:
-                await asyncio.wait_for(self._browser.close(), timeout=20.0)
-            except asyncio.TimeoutError:
-                self._log("WARNING: Browser close timed out after 20s, forcing cleanup")
-                # Force kill the browser process if possible
-                try:
-                    # browser_use doesn't expose a direct kill method, but we can
-                    # clear references and let garbage collection handle it
-                    self._log("Forced browser cleanup - clearing references")
-                except Exception:
-                    pass
-            except Exception as e:
-                self._log(f"WARNING: Browser close error: {e}")
-            self._browser = None
-            self._browser_context = None
-            self._session_active = False
-            self._log("Browser session closed")
+            close_tasks.append(asyncio.create_task(
+                asyncio.wait_for(self._browser.close(), timeout=5.0)
+            ))
+        
+        # Wait for all close operations to complete (or timeout)
+        if close_tasks:
+            results = await asyncio.gather(*close_tasks, return_exceptions=True)
+            
+            # Log any errors but don't fail the whole close operation
+            for i, result in enumerate(results):
+                if isinstance(result, asyncio.TimeoutError):
+                    self._log(f"WARNING: Close operation {i} timed out after 5s, forcing cleanup")
+                elif isinstance(result, Exception):
+                    self._log(f"WARNING: Close operation {i} error: {result}")
+        
+        # Clear references regardless of close success
+        self._agent = None
+        self._browser = None
+        self._browser_context = None
+        self._session_active = False
+        self._log("Browser session closed")
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -660,6 +663,13 @@ class BrowserTool:
                 from browser_use import Agent
 
                 # Reuse existing Agent if available (fix #3)
+                # Proactively check session health before attempting reuse (fix #3)
+                if self._agent is not None:
+                    if not await self._check_session_health():
+                        self._log("Agent exists but session is dead, forcing rebuild before reuse")
+                        self._agent = None  # Force new Agent creation
+                        self._session_active = False
+                
                 if self._agent is None:
                     # Configure fallback LLM for reliability (fix #1)
                     fallback_llm = None
