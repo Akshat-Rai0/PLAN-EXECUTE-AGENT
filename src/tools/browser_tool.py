@@ -44,9 +44,6 @@ from .untrusted_content import scan_for_injection, wrap_web_content
 
 load_dotenv()
 
-# ---------------------------------------------------------------------------
-# Feature 12 — Structured Typed Output
-# ---------------------------------------------------------------------------
 
 class ActionStatus(str, Enum):
     """Outcome status of a single browser action."""
@@ -96,9 +93,6 @@ class BrowserToolResult(BaseModel):
         return " | ".join(parts)
 
 
-# ---------------------------------------------------------------------------
-# Feature 13 — Explicit Action Primitives  (enum of supported actions)
-# ---------------------------------------------------------------------------
 
 class BrowserAction(str, Enum):
     """All recognised action verbs the tool can execute."""
@@ -126,9 +120,6 @@ class BrowserAction(str, Enum):
     CLOSE_SESSION = "close_session"
 
 
-# ---------------------------------------------------------------------------
-# Default configuration from environment
-# ---------------------------------------------------------------------------
 
 _DEFAULT_MODEL = os.getenv(
     "BROWSER_USE_MODEL",
@@ -153,9 +144,6 @@ _DOMAIN_ALLOWLIST = [
 ]
 
 
-# ---------------------------------------------------------------------------
-# Feature 16 — Sandboxed Execution  (lightweight: headless + timeout + domain)
-# ---------------------------------------------------------------------------
 
 def _apply_sandbox_config() -> dict:
     """
@@ -172,9 +160,6 @@ def _apply_sandbox_config() -> dict:
     }
 
 
-# ---------------------------------------------------------------------------
-# BrowserTool — the main class
-# ---------------------------------------------------------------------------
 
 class BrowserTool:
     """
@@ -214,9 +199,6 @@ class BrowserTool:
             sandbox_mode=self._sandbox_mode,
         )
 
-    # ------------------------------------------------------------------
-    # Lazy init helpers
-    # ------------------------------------------------------------------
 
     def _ensure_llm(self):
         """Initialise the OpenRouter LLM once."""
@@ -335,9 +317,6 @@ class BrowserTool:
         self._session_active = False
         self._log("Browser session closed")
 
-    # ------------------------------------------------------------------
-    # Internal helpers
-    # ------------------------------------------------------------------
 
     def _log(self, msg: str):
         entry = f"[{datetime.now(timezone.utc).strftime('%H:%M:%S')}] {msg}"
@@ -398,9 +377,6 @@ class BrowserTool:
         self._log(msg)
         return self._make_result(success=False, status=ActionStatus.TIMEOUT, error=msg)
 
-    # ------------------------------------------------------------------
-    # Feature 14 — Graceful Stuck-State Handling
-    # ------------------------------------------------------------------
 
     async def _with_timeout(self, coro, action_name: str):
         """
@@ -416,9 +392,6 @@ class BrowserTool:
                 f"{action_name} failed: {type(e).__name__}: {e}"
             )
 
-    # ------------------------------------------------------------------
-    # Feature 15 — HITL Approval gate
-    # ------------------------------------------------------------------
 
     _hitl_callback = None  # Set by use_browser_node to hook into interrupt()
 
@@ -446,9 +419,6 @@ class BrowserTool:
         self._log(f"HITL: requesting approval for: {action_desc}")
         return self._hitl_callback(action_desc)
 
-    # ==================================================================
-    # Feature 13 — Explicit Action Primitives
-    # ==================================================================
 
     async def navigate(self, url: str) -> BrowserToolResult:
         """Navigate to a URL and return page title + current URL."""
@@ -607,9 +577,6 @@ class BrowserTool:
         except Exception as e:
             return self._error_result(f"wait_for failed: {e}")
 
-    # ==================================================================
-    # High-level agent-driven tasks
-    # ==================================================================
 
     async def run_task(
         self,
@@ -838,9 +805,6 @@ class BrowserTool:
 
         return await _execute_task()
 
-    # ==================================================================
-    # Feature e1 — Search + Compare on a Booking Flow
-    # ==================================================================
 
     async def search_and_compare(
         self,
@@ -867,9 +831,6 @@ class BrowserTool:
         )
         return await self.run_task(prompt)
 
-    # ==================================================================
-    # Feature e2 — Authenticated Login + Dashboard Read
-    # ==================================================================
 
     async def login(
         self,
@@ -919,9 +880,6 @@ class BrowserTool:
         )
         return await self.run_task(prompt)
 
-    # ==================================================================
-    # Feature e3 — Form Fill + Submission Confirmation
-    # ==================================================================
 
     async def fill_form(
         self,
@@ -989,9 +947,6 @@ class BrowserTool:
         )
         return await self.run_task(prompt)
 
-    # ==================================================================
-    # Feature e4 — Client-Side Filter Interaction
-    # ==================================================================
 
     async def apply_filter(
         self,
@@ -1036,9 +991,6 @@ class BrowserTool:
         )
         return await self.run_task(prompt)
 
-    # ==================================================================
-    # Feature 5 — Web Scraping / Data Extraction
-    # ==================================================================
 
     async def scrape(
         self,
@@ -1089,9 +1041,6 @@ class BrowserTool:
         )
         return await self.run_task(prompt)
 
-    # ==================================================================
-    # Feature 9 — Multi-Step Workflows
-    # ==================================================================
 
     async def multi_step(
         self,
@@ -1119,9 +1068,6 @@ class BrowserTool:
         )
         return await self.run_task(prompt)
 
-    # ==================================================================
-    # Feature 10 — Testing and Validation
-    # ==================================================================
 
     async def validate(
         self,
@@ -1156,9 +1102,6 @@ class BrowserTool:
         )
         return await self.run_task(prompt)
 
-    # ==================================================================
-    # Dispatcher — routes action string to the right method
-    # ==================================================================
 
     async def execute(
         self,
@@ -1274,10 +1217,6 @@ class BrowserTool:
             )
 
 
-# ---------------------------------------------------------------------------
-# Module-level singleton for session persistence across a plan run
-# (Feature 11) — created on first use, closed by close_session().
-# ---------------------------------------------------------------------------
 
 _active_browser_tool: BrowserTool | None = None
 
@@ -1304,9 +1243,6 @@ async def close_browser_tool():
         _active_browser_tool = None
 
 
-# ---------------------------------------------------------------------------
-# Synchronous wrapper for use in registry.py / nodes.py
-# ---------------------------------------------------------------------------
 
 def _run_async(coro):
     """

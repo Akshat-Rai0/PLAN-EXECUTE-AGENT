@@ -715,9 +715,6 @@ Instructions:
         return {"plan": plan, "steps_executed": 1}
 
 
-# ---------------------------------------------------------------------------
-# Coding-agent nodes
-# ---------------------------------------------------------------------------
 
 def setup_workspace_node(state: State) -> dict:
     """
@@ -1352,9 +1349,6 @@ No markdown fences — output only the raw JSON object."""
     return {"plan": plan, "steps_executed": 1}
 
 
-# ---------------------------------------------------------------------------
-# Trusted-source routing for browser automation
-# ---------------------------------------------------------------------------
 
 # Maps a topic to a list of (name, url) pairs for trusted, authoritative
 # sources. When a step's task matches a topic (via keyword detection below),
@@ -1534,6 +1528,37 @@ def _build_trusted_source_task(original_task: str, topic: str) -> str:
     )
 
 
+def _detect_structured_form_fields(task: str) -> dict[str, str] | None:
+    """
+    Detect "field: value" patterns in a task string and extract structured field data.
+    
+    Returns a dict of field names to values if patterns are found, None otherwise.
+    Supports patterns like:
+    - "Name: John, Email: john@example.com"
+    - "Fill form with Name: John and Email: john@example.com"
+    """
+    import re
+    
+    # Pattern to match "field: value" pairs (case-insensitive, handles commas, and, etc.)
+    pattern = r'([A-Za-z][A-Za-z0-9_\s]*?)\s*:\s*([^,;\n]+)(?:\s*(?:,|and)\s*|$)'
+    matches = re.findall(pattern, task, re.IGNORECASE)
+    
+    if len(matches) < 2:  # Require at least 2 field:value pairs to consider it structured
+        return None
+    
+    fields = {}
+    for field, value in matches:
+        field = field.strip()
+        value = value.strip()
+        if field and value:
+            # Clean up common filler words
+            field = re.sub(r'\b(with|for|the|a|an)\b', '', field, flags=re.IGNORECASE).strip()
+            if field:
+                fields[field] = value
+    
+    return fields if len(fields) >= 2 else None
+
+
 def use_browser_node(state: State) -> dict:
     """
     Execute a browser automation task using browser-use via browser_use_tool.
@@ -1542,6 +1567,9 @@ def use_browser_node(state: State) -> dict:
     a known topic (health, finance, programming, etc.) via keyword detection.
     If it does, the task given to the browser agent is rewritten to point it
     directly at a curated list of trusted URLs for that topic.
+    
+    Also detects structured form fill patterns ("field: value") and uses
+    hybrid approach (Agent discovery + deterministic fills) for performance.
     """
     plan = state["plan"]
     if plan is None:
@@ -1573,24 +1601,46 @@ def use_browser_node(state: State) -> dict:
     BrowserTool.set_hitl_callback(hitl_approval_callback)
 
     try:
-        detected_topic = _detect_trusted_topic(current_step.task)
-        if detected_topic:
-            browser_task = _build_trusted_source_task(current_step.task, detected_topic)
-            print(f"🔗 Trusted-source topic detected: '{detected_topic}' — routing browser agent to curated sources")
+        # Check for structured form fill patterns
+        structured_fields = _detect_structured_form_fields(current_step.task)
+        
+        if structured_fields:
+            # Extract URL from task if present
+            import re
+            url_match = re.search(r'https?://[^\s,;)]+', current_step.task)
+            url = url_match.group(0) if url_match else ""
+            
+            print(f"🔧 Structured form fill detected with {len(structured_fields)} fields - using hybrid approach")
+            print(f"   Fields: {', '.join(structured_fields.keys())}")
+            
+            raw_result_json = browser_use_tool(
+                action="fill_form_structured",
+                task=current_step.task,
+                url=url,
+                fields=structured_fields,
+            )
         else:
-            browser_task = current_step.task
+            # Use standard agent-driven approach
+            detected_topic = _detect_trusted_topic(current_step.task)
+            if detected_topic:
+                browser_task = _build_trusted_source_task(current_step.task, detected_topic)
+                print(f"🔗 Trusted-source topic detected: '{detected_topic}' — routing browser agent to curated sources")
+            else:
+                browser_task = current_step.task
 
-        raw_result_json = browser_use_tool(
-            action="run_task",
-            task=browser_task,
-        )
+            raw_result_json = browser_use_tool(
+                action="run_task",
+                task=browser_task,
+            )
 
         res = BrowserToolResult.model_validate_json(raw_result_json)
 
         if res.success:
             current_step.status = StepStatus.DONE
             current_step.result = res.extracted_text or res.summary()
-            if detected_topic:
+            if structured_fields:
+                current_step.result = f"[structured fill] {current_step.result}"
+            elif detected_topic:
                 current_step.result = f"[trusted sources: {detected_topic}] {current_step.result}"
             print(f"✅ Browser automation completed")
             print(f"👁️  Result: {current_step.result[:300]}{'...' if len(current_step.result) > 300 else ''}")
