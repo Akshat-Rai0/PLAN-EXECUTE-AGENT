@@ -1607,6 +1607,60 @@ def use_browser_node(state: State) -> dict:
     return {"plan": plan, "steps_executed": 1, **log_update}
 
 
+def extract_user_info_node(state: State) -> dict:
+    """
+    Extract and store user information from human responses.
+    
+    This node uses an LLM to identify personal information (name, email, phone, etc.)
+    from human responses and stores it in the global UserInfoStore for future form filling.
+    """
+    from src.tools.user_info_store import get_user_info_store, save_user_info_store
+    from .llm import get_llm
+    
+    # Get the most recent human response if available
+    human_questions = state.get("human_questions", [])
+    if not human_questions:
+        return {"plan": state["plan"]}
+    
+    # Get the last human response
+    last_response = human_questions[-1].get("response", "")
+    if not last_response or isinstance(last_response, dict):
+        return {"plan": state["plan"]}
+    
+    # Use LLM to extract personal information
+    llm = get_llm()
+    extraction_prompt = (
+        f"Extract personal information from the following text. Return ONLY valid JSON "
+        f"with these fields if present: full_name, email, phone, address, company, job_title. "
+        f"Only include fields that are clearly present in the text. "
+        f"Text: {last_response}"
+    )
+    
+    try:
+        response = llm.invoke(extraction_prompt)
+        response_text = response.content if hasattr(response, 'content') else str(response)
+        
+        # Parse JSON response
+        import json
+        extracted_info = json.loads(response_text)
+        
+        # Store extracted information
+        store = get_user_info_store()
+        for key, value in extracted_info.items():
+            if value:  # Only store non-empty values
+                store.set_info(key, value, source="conversation", confidence=0.9)
+        
+        save_user_info_store()
+        
+        print(f"📝 Extracted and stored user info: {list(extracted_info.keys())}")
+        
+    except (json.JSONDecodeError, KeyError, ValueError, AttributeError) as e:
+        # Extraction failed, but don't block execution
+        print(f"⚠️ Failed to extract user info: {e}")
+    
+    return {"plan": state["plan"]}
+
+
 def ask_human_node(state: State) -> dict:
     """
     Handle LLM requests to ask the human a question.

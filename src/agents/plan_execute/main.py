@@ -110,6 +110,29 @@ def handle_interrupt_cli(interrupt_data):
         response = input("\nYour answer: ").strip()
         return {"human_response": response}
     
+    elif interrupt_type == "user_info_request":
+        # Handle request for missing user information (fix #6)
+        missing_fields = payload.get("missing_fields", [])
+        context = payload.get("context", "Filling form")
+        step_id = payload.get("step_id", "?")
+        
+        print(f"\n{'='*80}")
+        print(f"📋 USER INFORMATION REQUEST (Step {step_id})")
+        print(f"{'='*80}")
+        print(f"Context: {context}")
+        print(f"\nThe following information is needed:")
+        for field in missing_fields:
+            print(f"  - {field}")
+        print(f"{'='*80}")
+        
+        provided_info = {}
+        for field in missing_fields:
+            value = input(f"\nEnter {field}: ").strip()
+            if value:
+                provided_info[field] = value
+        
+        return {"provided_info": provided_info}
+    
     else:
         print(f"\n⚠️ Unknown interrupt type: {interrupt_type}")
         return {"decision": "reject"}
@@ -117,6 +140,10 @@ def handle_interrupt_cli(interrupt_data):
 
 def main():
     """Main CLI entry point for plan generation."""
+    
+    # Initialize UserInfoStore for user information persistence (fix #7)
+    from src.tools.user_info_store import load_user_info_store
+    load_user_info_store()
     
     # Get input from command line argument or prompt
     if len(sys.argv) > 1:

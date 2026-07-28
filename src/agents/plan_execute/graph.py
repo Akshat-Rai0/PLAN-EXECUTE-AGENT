@@ -5,7 +5,7 @@ from .nodes import (
     plan_node, executor_node, tavily_search_node, synthesize_node,
     replaner, reason_node, code_executor_node, synthesize_tool_node,
     setup_workspace_node, shell_node, write_file_node, delete_file_node, start_server_node,
-    approval_node, ask_human_node, use_browser_node,
+    approval_node, ask_human_node, extract_user_info_node, use_browser_node,
     MAX_TOTAL_STEPS,
 )
 from .state import State, StepStatus
@@ -191,6 +191,7 @@ def build_graph():
     graph.add_node("use_browser", use_browser_node)
     graph.add_node("approval", approval_node)
     graph.add_node("ask_human", ask_human_node)
+    graph.add_node("extract_user_info", extract_user_info_node)
     
     # Stub node kept registered for backward-compat (in case anything still
     # references "stub" directly) but is no longer reachable via normal
@@ -314,6 +315,12 @@ def build_graph():
     
     # After replaning, route back to executor to run the new plan
     graph.add_edge("replaner", "executor")
+    
+    # After ask_human, extract user info from response
+    graph.add_edge("ask_human", "extract_user_info")
+    
+    # After extract_user_info, route back to executor
+    graph.add_edge("extract_user_info", "executor")
     
     # After synthesis, we're done
     graph.add_edge("synthesize", END)
