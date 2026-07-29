@@ -381,7 +381,7 @@ GOLDEN_DATASET: list[GoldenGoal] = [
     # ------------------------------------------------------------------
     GoldenGoal(
         id="e1",
-        goal="On a flight-booking site such as https://www.kayak.com, "
+        goal="On a flight-booking site https://www.google.com/travel/flights, "
              "search for a one-way economy flight from New York (JFK) to "
              "London (LHR) departing 30 days from today, and report the "
              "price of the cheapest listed option.",

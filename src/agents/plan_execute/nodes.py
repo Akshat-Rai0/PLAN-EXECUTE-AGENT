@@ -1356,110 +1356,120 @@ No markdown fences — output only the raw JSON object."""
 # rather than doing an unconstrained open-web task — this trades some
 # flexibility for much higher trust/accuracy on topics where source quality
 # matters most (health, finance, legal, security, etc).
-TRUSTED_SOURCES: dict[str, list[tuple[str, str]]] = {
+TRUSTED_SOURCES: dict[str, list[tuple[str, str, list[str]]]] = {
     "health": [
-        ("Mayo Clinic", "https://www.mayoclinic.org"),
-        ("Cleveland Clinic", "https://my.clevelandclinic.org"),
-        ("World Health Organization", "https://www.who.int"),
-        ("MedlinePlus", "https://medlineplus.gov"),
-        ("CDC", "https://www.cdc.gov"),
+        ("Mayo Clinic", "https://www.mayoclinic.org", ["data_collection", "info_retrieval", "comparison"]),
+        ("Cleveland Clinic", "https://my.clevelandclinic.org", ["data_collection", "info_retrieval", "comparison"]),
+        ("World Health Organization", "https://www.who.int", ["data_collection", "info_retrieval", "comparison"]),
+        ("MedlinePlus", "https://medlineplus.gov", ["data_collection", "info_retrieval", "comparison"]),
+        ("CDC", "https://www.cdc.gov", ["data_collection", "info_retrieval", "comparison"]),
     ],
     "news": [
-        ("Reuters", "https://www.reuters.com"),
-        ("Associated Press", "https://apnews.com"),
-        ("BBC News", "https://www.bbc.com/news"),
-        ("The New York Times", "https://www.nytimes.com"),
-        ("The Wall Street Journal", "https://www.wsj.com"),
+        ("Reuters", "https://www.reuters.com", ["data_collection", "info_retrieval", "comparison"]),
+        ("Associated Press", "https://apnews.com", ["data_collection", "info_retrieval", "comparison"]),
+        ("BBC News", "https://www.bbc.com/news", ["data_collection", "info_retrieval", "comparison"]),
+        ("The New York Times", "https://www.nytimes.com", ["data_collection", "info_retrieval", "comparison"]),
+        ("The Wall Street Journal", "https://www.wsj.com", ["data_collection", "info_retrieval", "comparison"]),
     ],
     "technology": [
-        ("Ars Technica", "https://arstechnica.com"),
-        ("TechCrunch", "https://techcrunch.com"),
-        ("The Verge", "https://www.theverge.com"),
-        ("Wired", "https://www.wired.com"),
-        ("Tom's Hardware", "https://www.tomshardware.com"),
+        ("Ars Technica", "https://arstechnica.com", ["data_collection", "info_retrieval", "comparison"]),
+        ("TechCrunch", "https://techcrunch.com", ["data_collection", "info_retrieval", "comparison"]),
+        ("The Verge", "https://www.theverge.com", ["data_collection", "info_retrieval", "comparison"]),
+        ("Wired", "https://www.wired.com", ["data_collection", "info_retrieval", "comparison"]),
+        ("Tom's Hardware", "https://www.tomshardware.com", ["data_collection", "info_retrieval", "comparison"]),
     ],
     "education": [
-        ("Khan Academy", "https://www.khanacademy.org"),
-        ("MIT OpenCourseWare", "https://ocw.mit.edu"),
-        ("Coursera", "https://www.coursera.org"),
-        ("edX", "https://www.edx.org"),
-        ("Britannica", "https://www.britannica.com"),
+        ("Khan Academy", "https://www.khanacademy.org", ["data_collection", "info_retrieval", "comparison"]),
+        ("MIT OpenCourseWare", "https://ocw.mit.edu", ["data_collection", "info_retrieval", "comparison"]),
+        ("Coursera", "https://www.coursera.org", ["data_collection", "info_retrieval", "comparison"]),
+        ("edX", "https://www.edx.org", ["data_collection", "info_retrieval", "comparison"]),
+        ("Britannica", "https://www.britannica.com", ["data_collection", "info_retrieval", "comparison"]),
     ],
     "finance": [
-        ("Investopedia", "https://www.investopedia.com"),
-        ("Morningstar", "https://www.morningstar.com"),
-        ("Bloomberg", "https://www.bloomberg.com"),
-        ("The Wall Street Journal", "https://www.wsj.com"),
-        ("U.S. SEC", "https://www.sec.gov"),
+        ("Investopedia", "https://www.investopedia.com", ["data_collection", "info_retrieval", "comparison"]),
+        ("Morningstar", "https://www.morningstar.com", ["data_collection", "info_retrieval", "comparison"]),
+        ("Bloomberg", "https://www.bloomberg.com", ["data_collection", "info_retrieval", "comparison"]),
+        ("The Wall Street Journal", "https://www.wsj.com", ["data_collection", "info_retrieval", "comparison"]),
+        ("U.S. SEC", "https://www.sec.gov", ["data_collection", "info_retrieval", "comparison"]),
     ],
     "science": [
-        ("Nature", "https://www.nature.com"),
-        ("Science", "https://www.science.org"),
-        ("Scientific American", "https://www.scientificamerican.com"),
-        ("NASA", "https://www.nasa.gov"),
-        ("National Geographic", "https://www.nationalgeographic.com"),
+        ("Nature", "https://www.nature.com", ["data_collection", "info_retrieval", "comparison"]),
+        ("Science", "https://www.science.org", ["data_collection", "info_retrieval", "comparison"]),
+        ("Scientific American", "https://www.scientificamerican.com", ["data_collection", "info_retrieval", "comparison"]),
+        ("NASA", "https://www.nasa.gov", ["data_collection", "info_retrieval", "comparison"]),
+        ("National Geographic", "https://www.nationalgeographic.com", ["data_collection", "info_retrieval", "comparison"]),
     ],
     "programming": [
-        ("MDN Web Docs", "https://developer.mozilla.org"),
-        ("Stack Overflow", "https://stackoverflow.com"),
-        ("GitHub Docs", "https://docs.github.com"),
-        ("W3Schools", "https://www.w3schools.com"),
-        ("GeeksforGeeks", "https://www.geeksforgeeks.org"),
+        ("MDN Web Docs", "https://developer.mozilla.org", ["data_collection", "info_retrieval", "comparison"]),
+        ("Stack Overflow", "https://stackoverflow.com", ["data_collection", "info_retrieval", "comparison"]),
+        ("GitHub Docs", "https://docs.github.com", ["data_collection", "info_retrieval", "comparison"]),
+        ("W3Schools", "https://www.w3schools.com", ["data_collection", "info_retrieval", "comparison"]),
+        ("GeeksforGeeks", "https://www.geeksforgeeks.org", ["data_collection", "info_retrieval", "comparison"]),
     ],
     "shopping": [
-        ("Wirecutter", "https://www.nytimes.com/wirecutter"),
-        ("Consumer Reports", "https://www.consumerreports.org"),
-        ("RTINGS", "https://www.rtings.com"),
-        ("PCMag", "https://www.pcmag.com"),
-        ("CNET", "https://www.cnet.com"),
+        ("Wirecutter", "https://www.nytimes.com/wirecutter", ["data_collection", "info_retrieval", "comparison"]),
+        ("Consumer Reports", "https://www.consumerreports.org", ["data_collection", "info_retrieval", "comparison"]),
+        ("RTINGS", "https://www.rtings.com", ["data_collection", "info_retrieval", "comparison"]),
+        ("PCMag", "https://www.pcmag.com", ["data_collection", "info_retrieval", "comparison"]),
+        ("CNET", "https://www.cnet.com", ["data_collection", "info_retrieval", "comparison"]),
     ],
     "travel": [
-        ("Lonely Planet", "https://www.lonelyplanet.com"),
-        ("TripAdvisor", "https://www.tripadvisor.com"),
-        ("Rick Steves", "https://www.ricksteves.com"),
-        ("National Geographic Travel", "https://www.nationalgeographic.com/travel"),
-        ("U.S. State Dept Travel Advisories", "https://travel.state.gov"),
+        ("Lonely Planet", "https://www.lonelyplanet.com", ["data_collection", "info_retrieval", "comparison"]),
+        ("TripAdvisor", "https://www.tripadvisor.com", ["data_collection", "info_retrieval", "comparison"]),
+        ("Rick Steves", "https://www.ricksteves.com", ["data_collection", "info_retrieval", "comparison"]),
+        ("National Geographic Travel", "https://www.nationalgeographic.com/travel", ["data_collection", "info_retrieval", "comparison"]),
+        ("U.S. State Dept Travel Advisories", "https://travel.state.gov", ["data_collection", "info_retrieval", "comparison"]),
     ],
     "food": [
-        ("Serious Eats", "https://www.seriouseats.com"),
-        ("King Arthur Baking", "https://www.kingarthurbaking.com"),
-        ("BBC Good Food", "https://www.bbcgoodfood.com"),
-        ("Allrecipes", "https://www.allrecipes.com"),
-        ("America's Test Kitchen", "https://www.americastestkitchen.com"),
+        ("Serious Eats", "https://www.seriouseats.com", ["data_collection", "info_retrieval", "comparison"]),
+        ("King Arthur Baking", "https://www.kingarthurbaking.com", ["data_collection", "info_retrieval", "comparison"]),
+        ("BBC Good Food", "https://www.bbcgoodfood.com", ["data_collection", "info_retrieval", "comparison"]),
+        ("Allrecipes", "https://www.allrecipes.com", ["data_collection", "info_retrieval", "comparison"]),
+        ("America's Test Kitchen", "https://www.americastestkitchen.com", ["data_collection", "info_retrieval", "comparison"]),
     ],
     "business": [
-        ("Harvard Business Review", "https://hbr.org"),
-        ("McKinsey & Company", "https://www.mckinsey.com"),
-        ("The Economist", "https://www.economist.com"),
-        ("World Bank", "https://www.worldbank.org"),
-        ("IMF", "https://www.imf.org"),
+        ("Harvard Business Review", "https://hbr.org", ["data_collection", "info_retrieval", "comparison"]),
+        ("McKinsey & Company", "https://www.mckinsey.com", ["data_collection", "info_retrieval", "comparison"]),
+        ("The Economist", "https://www.economist.com", ["data_collection", "info_retrieval", "comparison"]),
+        ("World Bank", "https://www.worldbank.org", ["data_collection", "info_retrieval", "comparison"]),
+        ("IMF", "https://www.imf.org", ["data_collection", "info_retrieval", "comparison"]),
     ],
     "ai_ml": [
-        ("OpenAI", "https://openai.com"),
-        ("Google AI", "https://ai.google"),
-        ("Anthropic", "https://www.anthropic.com"),
-        ("Hugging Face", "https://huggingface.co"),
-        ("arXiv", "https://arxiv.org"),
+        ("OpenAI", "https://openai.com", ["data_collection", "info_retrieval", "comparison"]),
+        ("Google AI", "https://ai.google", ["data_collection", "info_retrieval", "comparison"]),
+        ("Anthropic", "https://www.anthropic.com", ["data_collection", "info_retrieval", "comparison"]),
+        ("Hugging Face", "https://huggingface.co", ["data_collection", "info_retrieval", "comparison"]),
+        ("arXiv", "https://arxiv.org", ["data_collection", "info_retrieval", "comparison"]),
     ],
     "cybersecurity": [
-        ("CISA", "https://www.cisa.gov"),
-        ("Krebs on Security", "https://krebsonsecurity.com"),
-        ("OWASP", "https://owasp.org"),
-        ("SANS Institute", "https://www.sans.org"),
-        ("NIST", "https://www.nist.gov"),
+        ("CISA", "https://www.cisa.gov", ["data_collection", "info_retrieval", "comparison"]),
+        ("Krebs on Security", "https://krebsonsecurity.com", ["data_collection", "info_retrieval", "comparison"]),
+        ("OWASP", "https://owasp.org", ["data_collection", "info_retrieval", "comparison"]),
+        ("SANS Institute", "https://www.sans.org", ["data_collection", "info_retrieval", "comparison"]),
+        ("NIST", "https://www.nist.gov", ["data_collection", "info_retrieval", "comparison"]),
     ],
     "weather": [
-        ("National Weather Service", "https://www.weather.gov"),
-        ("NOAA", "https://www.noaa.gov"),
-        ("The Weather Channel", "https://weather.com"),
-        ("AccuWeather", "https://www.accuweather.com"),
-        ("WMO", "https://public.wmo.int"),
+        ("National Weather Service", "https://www.weather.gov", ["data_collection", "info_retrieval", "comparison"]),
+        ("NOAA", "https://www.noaa.gov", ["data_collection", "info_retrieval", "comparison"]),
+        ("The Weather Channel", "https://weather.com", ["data_collection", "info_retrieval", "comparison"]),
+        ("AccuWeather", "https://www.accuweather.com", ["data_collection", "info_retrieval", "comparison"]),
+        ("WMO", "https://public.wmo.int", ["data_collection", "info_retrieval", "comparison"]),
     ],
     "legal": [
-        ("Cornell LII", "https://www.law.cornell.edu"),
-        ("Justia", "https://www.justia.com"),
-        ("FindLaw", "https://www.findlaw.com"),
-        ("Supreme Court", "https://www.supremecourt.gov"),
+        ("Cornell LII", "https://www.law.cornell.edu", ["data_collection", "info_retrieval", "comparison"]),
+        ("Justia", "https://www.justia.com", ["data_collection", "info_retrieval", "comparison"]),
+        ("FindLaw", "https://www.findlaw.com", ["data_collection", "info_retrieval", "comparison"]),
+        ("Supreme Court", "https://www.supremecourt.gov", ["data_collection", "info_retrieval", "comparison"]),
+    ],
+    "flights": [
+        ("Google Flights", "https://www.google.com/flights", ["booking", "comparison", "data_collection"])
+    ],
+    "trains": [
+        ("IRCTC", "https://www.irctc.co.in", ["booking", "comparison", "data_collection"])
+    ],
+    "hotels": [
+        ("Booking.com", "https://www.booking.com", ["booking", "comparison", "data_collection"]),
+        ("Google Hotels", "https://www.google.com/travel/hotels", ["booking", "comparison", "data_collection"])
     ],
 }
 
@@ -1483,6 +1493,9 @@ _TOPIC_KEYWORDS: dict[str, list[str]] = {
     "cybersecurity": ["security vulnerability", "cyberattack", "malware", "cve", "cybersecurity", "data breach"],
     "weather": ["weather forecast", "temperature today", "storm", "climate data", "hurricane"],
     "legal": ["law", "legal", "statute", "court case", "regulation", "legislation"],
+    "flights": ["flight", "airline", "plane", "ticket"],
+    "trains": ["train", "railway", "irctc", "ticket"],
+    "hotels": ["hotel", "motel", "accommodation", "booking"],
 }
 
 
@@ -1559,18 +1572,12 @@ def _detect_structured_form_fields(task: str) -> dict[str, str] | None:
     return fields if len(fields) >= 2 else None
 
 
+
 def use_browser_node(state: State) -> dict:
     """
-    Execute a browser automation task using browser-use via browser_use_tool.
-
-    Before building the agent's task, checks whether the step's task matches
-    a known topic (health, finance, programming, etc.) via keyword detection.
-    If it does, the task given to the browser agent is rewritten to point it
-    directly at a curated list of trusted URLs for that topic.
-    
-    Also detects structured form fill patterns ("field: value") and uses
-    hybrid approach (Agent discovery + deterministic fills) for performance.
+    Dispatch the browser task to the appropriate specialized pipeline.
     """
+    import asyncio
     plan = state["plan"]
     if plan is None:
         raise RuntimeError("use_browser_node called with no plan in state")
@@ -1581,9 +1588,10 @@ def use_browser_node(state: State) -> dict:
 
     log_update = _log_approval(state, "use_browser", current_step.task)
 
-    # Set up HITL callback using langgraph.types.interrupt
-    from src.tools.browser_tool import BrowserTool, BrowserToolResult
-
+    from src.tools.browser_tool import BrowserTool, ActionStatus
+    
+    # We set up HITL the same way
+    from langgraph.types import interrupt
     def hitl_approval_callback(action_desc: str) -> bool:
         approval_payload = {
             "type": "browser_action_approval",
@@ -1598,63 +1606,107 @@ def use_browser_node(state: State) -> dict:
             return user_response.get("approved", False)
         return bool(user_response)
 
-    BrowserTool.set_hitl_callback(hitl_approval_callback)
-
+    browser_tool = BrowserTool()
+    browser_tool.set_hitl_callback(hitl_approval_callback)
+    
+    task_type = state.get("browser_task_type", "info_retrieval")
+    targets = state.get("browser_targets", [])
+    
     try:
-        # Check for structured form fill patterns
-        structured_fields = _detect_structured_form_fields(current_step.task)
-        
-        if structured_fields:
-            # Extract URL from task if present
-            import re
-            url_match = re.search(r'https?://[^\s,;)]+', current_step.task)
-            url = url_match.group(0) if url_match else ""
-            
-            print(f"🔧 Structured form fill detected with {len(structured_fields)} fields - using hybrid approach")
-            print(f"   Fields: {', '.join(structured_fields.keys())}")
-            
-            raw_result_json = browser_use_tool(
-                action="fill_form_structured",
-                task=current_step.task,
-                url=url,
-                fields=structured_fields,
-            )
+        # Dispatch to pipeline
+        if task_type == "form_filling":
+            from .browser_pipelines.form_filling import run_form_filling_pipeline
+            res = asyncio.run(run_form_filling_pipeline(browser_tool, current_step.task))
+        elif task_type == "data_collection":
+            from .browser_pipelines.data_collection import run_data_collection_pipeline
+            # Assuming extraction goal is the task itself
+            res = asyncio.run(run_data_collection_pipeline(current_step.task, targets, current_step.task))
+        elif task_type == "comparison":
+            from .browser_pipelines.comparison import run_comparison_pipeline
+            res = asyncio.run(run_comparison_pipeline(browser_tool, current_step.task, targets, current_step.task))
+        elif task_type == "booking":
+            from .browser_pipelines.booking import run_booking_pipeline
+            res = asyncio.run(run_booking_pipeline(browser_tool, current_step.task, targets))
         else:
-            # Use standard agent-driven approach
-            detected_topic = _detect_trusted_topic(current_step.task)
-            if detected_topic:
-                browser_task = _build_trusted_source_task(current_step.task, detected_topic)
-                print(f"🔗 Trusted-source topic detected: '{detected_topic}' — routing browser agent to curated sources")
-            else:
-                browser_task = current_step.task
-
-            raw_result_json = browser_use_tool(
-                action="run_task",
-                task=browser_task,
-            )
-
-        res = BrowserToolResult.model_validate_json(raw_result_json)
-
-        if res.success:
-            current_step.status = StepStatus.DONE
-            current_step.result = res.extracted_text or res.summary()
-            if structured_fields:
-                current_step.result = f"[structured fill] {current_step.result}"
-            elif detected_topic:
-                current_step.result = f"[trusted sources: {detected_topic}] {current_step.result}"
-            print(f"✅ Browser automation completed")
-            print(f"👁️  Result: {current_step.result[:300]}{'...' if len(current_step.result) > 300 else ''}")
-        else:
-            current_step.status = StepStatus.FAILED
-            current_step.error = res.error or f"Browser action failed with status: {res.status}"
-            print(f"❌ Browser automation failed: {current_step.error}")
-
+            from .browser_pipelines.info_retrieval import run_info_retrieval_pipeline
+            res = asyncio.run(run_info_retrieval_pipeline(browser_tool, current_step.task, targets))
+            
     except Exception as e:
         current_step.status = StepStatus.FAILED
-        current_step.error = f"use_browser_node error: {str(e)}"
-        print(f"❌ Browser automation error: {str(e)}")
-
+        current_step.error = f"Pipeline execution failed: {str(e)}"
+        print(f"❌ Browser pipeline failed: {e}")
+        return {"plan": plan, "steps_executed": 1, **log_update}
+    finally:
+        asyncio.run(browser_tool.close_session())
+        
+    if res.success:
+        current_step.status = StepStatus.DONE
+        current_step.result = res.summary()
+    else:
+        current_step.status = StepStatus.FAILED
+        current_step.error = res.error
+        current_step.result = res.summary()
+        
     return {"plan": plan, "steps_executed": 1, **log_update}
+def classify_browser_task_node(state: State) -> dict:
+    """
+    Classify a browser task to determine which pipeline to use.
+    Uses LLM to categorize the task and extract potential targets.
+    """
+    plan = state["plan"]
+    if plan is None:
+        raise RuntimeError("classify_browser_task_node called with no plan in state")
+
+    current_step = next((s for s in plan.subtasks if s.status == StepStatus.RUNNING), None)
+    if current_step is None:
+        raise RuntimeError("classify_browser_task_node called with no RUNNING step")
+
+    from .llm import get_llm
+    from langchain_core.messages import SystemMessage, HumanMessage
+    import json
+
+    prompt = f"""Analyze this browser automation task: "{current_step.task}"
+
+Classify it into one of these types:
+- "form_filling" - Filling out forms, submitting data, logging in
+- "data_collection" - Scraping lists of items, collecting multiple data points from a page
+- "comparison" - Comparing options (prices, features) across one or multiple sites
+- "booking" - Purchasing, booking flights/hotels, reserving items
+- "info_retrieval" - General web browsing, finding a specific fact, reading an article
+
+Also extract any target URLs or specific entities mentioned as a list of strings in "targets".
+
+Return a JSON object with strictly this schema:
+{{
+    "task_type": "string",
+    "targets": ["string", "string"]
+}}
+"""
+
+    llm = get_llm()
+    try:
+        response = llm.invoke([
+            SystemMessage(content="You are a task classifier. Output ONLY valid JSON, no markdown fences."),
+            HumanMessage(content=prompt)
+        ])
+        content = response.content.strip()
+        if content.startswith("```"):
+            lines = content.split("\n")
+            if lines[0].startswith("```"): lines = lines[1:]
+            if lines and lines[-1].strip() == "```": lines = lines[:-1]
+            content = "\n".join(lines).strip()
+
+        data = json.loads(content)
+        task_type = data.get("task_type", "info_retrieval")
+        targets = data.get("targets", [])
+
+        print(f"🧠 Classified browser task as: {task_type} with targets: {targets}")
+        return {"plan": plan, "browser_task_type": task_type, "browser_targets": targets}
+
+    except Exception as e:
+        print(f"⚠️ Task classification failed, defaulting to info_retrieval: {e}")
+        return {"plan": plan, "browser_task_type": "info_retrieval", "browser_targets": []}
+
 
 
 def extract_user_info_node(state: State) -> dict:
