@@ -1588,7 +1588,7 @@ def use_browser_node(state: State) -> dict:
 
     log_update = _log_approval(state, "use_browser", current_step.task)
 
-    from src.tools.browser_tool import BrowserTool, ActionStatus
+    from src.tools.browser_tool import get_browser_tool, ActionStatus
     
     # We set up HITL the same way
     from langgraph.types import interrupt
@@ -1606,7 +1606,7 @@ def use_browser_node(state: State) -> dict:
             return user_response.get("approved", False)
         return bool(user_response)
 
-    browser_tool = BrowserTool()
+    browser_tool = get_browser_tool()
     browser_tool.set_hitl_callback(hitl_approval_callback)
     
     task_type = state.get("browser_task_type", "info_retrieval")
@@ -1636,8 +1636,6 @@ def use_browser_node(state: State) -> dict:
         current_step.error = f"Pipeline execution failed: {str(e)}"
         print(f"❌ Browser pipeline failed: {e}")
         return {"plan": plan, "steps_executed": 1, **log_update}
-    finally:
-        asyncio.run(browser_tool.close_session())
         
     if res.success:
         current_step.status = StepStatus.DONE
@@ -2140,6 +2138,13 @@ def synthesize_node(state: State) -> dict:
     plan = state["plan"]
     if plan is None:
         raise RuntimeError("synthesize_node called with no plan in state")
+
+    import asyncio
+    from src.tools.browser_tool import close_browser_tool
+    try:
+        asyncio.run(close_browser_tool())
+    except Exception as e:
+        print(f"⚠️ Failed to close browser tool: {e}")
 
     print(f"\n{'='*80}")
     print(f"🧠 Synthesizing Final Answer")
