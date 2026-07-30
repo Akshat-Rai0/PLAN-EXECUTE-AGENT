@@ -1,5 +1,5 @@
 """
-The 20-goal golden dataset for the three-arm ablation study.
+The 16-goal golden dataset for the three-arm ablation study.
 
 Categories (from docs/plan-and-execute-agent.html, section 07):
   (a) forced_replan       — a step fails and forces the replanner to revise
@@ -7,18 +7,15 @@ Categories (from docs/plan-and-execute-agent.html, section 07):
   (c) straightforward     — no replanning needed; baseline efficiency test
   (d) synthesis_required  — needs a tool not in the fixed registry; only
                              succeeds if dynamic tool synthesis works
-  (e) browser_only        — solvable only via real browser interaction
-                             (NOT YET RUNNABLE — no browser tool exists yet,
-                             see NOTE below)
 
 Each goal records:
   - goal: the exact prompt text to run through an agent
-  - category: one of the five above
+  - category: one of the four above
   - expected_step_count: a human-set estimate, used only as a rough sanity
     signal in reports (LLM planners are non-deterministic in step count;
     this is NOT a hard pass/fail gate)
   - required_capability: "search" | "code_exec" | "synthesis" | "reasoning"
-    | "browser" | "shell" — informs which arms a goal is even solvable on
+    | "shell" — informs which arms a goal is even solvable on
   - success_criteria: plain-language description handed to the LLM judge
     alongside the goal and the final answer, so the judge knows what
     "correct" means for this specific goal (a generic "is this a good
@@ -44,15 +41,6 @@ ways that make the judge's job ill-defined:
     concrete anchor company/subject so the second search step can be
     checked against what the first step actually returned, not against a
     fuzzy category.
-NOTE on category (e), browser_only: per the codebase audit, no browser
-automation tool exists yet (confirmed: no browser-related code anywhere in
-the repo as of commit 018e1a6). These 4 goals are included in the dataset
-now — per the original spec's structure — but are marked
-`runnable_now=False`. The eval runner SKIPS them by default and reports
-them separately as "blocked on missing capability" rather than silently
-scoring them as failures, since a failure here would conflate "the agent
-is bad" with "the agent is missing a tool it was never built to have yet."
-Flip `runnable_now=True` once browser automation ships.
 """
 
 from __future__ import annotations
@@ -65,10 +53,9 @@ Category = Literal[
     "new_information",
     "straightforward",
     "synthesis_required",
-    "browser_only",
 ]
 
-Capability = Literal["search", "code_exec", "synthesis", "reasoning", "browser", "shell"]
+Capability = Literal["search", "code_exec", "synthesis", "reasoning", "shell"]
 
 
 @dataclass(frozen=True)
@@ -376,74 +363,6 @@ GOLDEN_DATASET: list[GoldenGoal] = [
             "was actually run (not just asserted)."
         ),
     ),
-    # ------------------------------------------------------------------
-    # (e) browser_only — NOT YET RUNNABLE, no browser tool exists
-    # ------------------------------------------------------------------
-    GoldenGoal(
-        id="e1",
-        goal="On a flight-booking site https://www.google.com/travel/flights, "
-             "search for a one-way economy flight from New York (JFK) to "
-             "London (LHR) departing 30 days from today, and report the "
-             "price of the cheapest listed option.",
-        category="browser_only",
-        expected_step_count=5,
-        required_capability="browser",
-        success_criteria="Requires real browser interaction with a "
-                          "date-picker and search-results flow on a live "
-                          "booking site — no API/search substitute exists.",
-        runnable_now=True,
-        notes="Blocked: no browser automation tool implemented yet.",
-    ),
-    GoldenGoal(
-        id="e2",
-        goal="Log into a public demo dashboard (e.g. "
-             "https://demo.opencart.com/admin, standard published demo "
-             "credentials) and report the numeric values shown on the "
-             "main summary/overview widget after login.",
-        category="browser_only",
-        expected_step_count=4,
-        required_capability="browser",
-        success_criteria="Requires filling and submitting a real login "
-                          "form and reading rendered DOM content that "
-                          "only appears after authentication.",
-        runnable_now=True,
-        notes="Blocked: no browser automation tool implemented yet.",
-    ),
-    GoldenGoal(
-        id="e3",
-        goal="On a test form site such as "
-             "https://www.selenium.dev/selenium/web/web-form.html, fill "
-             "out the text input with the value 'ablation-test', select "
-             "an option from the dropdown, submit the form, and confirm "
-             "the submission succeeded by reading the resulting "
-             "confirmation page.",
-        category="browser_only",
-        expected_step_count=4,
-        required_capability="browser",
-        success_criteria="Requires filling multiple distinct form field "
-                          "types and submitting via real browser "
-                          "interaction, then verifying a post-submit "
-                          "confirmation state.",
-        runnable_now=True,
-        notes="Blocked: no browser automation tool implemented yet.",
-    ),
-    GoldenGoal(
-        id="e4",
-        goal="On an e-commerce demo site such as "
-             "https://demo.opencart.com, navigate to a product category "
-             "listing, apply a price sort or filter via the UI controls, "
-             "and report the name of the first product shown after "
-             "filtering.",
-        category="browser_only",
-        expected_step_count=5,
-        required_capability="browser",
-        success_criteria="Requires interacting with client-side sort/"
-                          "filter UI controls and reading the resulting "
-                          "re-rendered list — not just parsing the "
-                          "unfiltered static HTML.",
-        runnable_now=True,
-        notes="Blocked: no browser automation tool implemented yet.",
-    ),
 ]
 
 
@@ -470,4 +389,4 @@ if __name__ == "__main__":
     for cat, count in cats.items():
         print(f"  {cat}: {count}")
     print(f"Runnable now: {len(runnable_goals())}")
-    print(f"Blocked (no browser tool): {len(blocked_goals())}")
+    print(f"Blocked (missing capability): {len(blocked_goals())}")

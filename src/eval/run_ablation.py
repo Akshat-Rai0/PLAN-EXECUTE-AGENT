@@ -68,16 +68,10 @@ def run_ablation(
         goals = [g for g in goals if g.id in wanted]
         missing = wanted - {g.id for g in goals}
         if missing:
-            # Could be a typo, or a real (e) goal that's correctly excluded
-            # — distinguish the two so the person isn't left guessing.
-            blocked_ids = {g.id for g in blocked_goals()}
+            # Could be a typo in the requested goal IDs
             for m in missing:
-                if m in blocked_ids:
-                    print(f"⚠️  Goal {m!r} was requested but is category (e) "
-                          f"browser_only and not yet runnable — skipping it.")
-                else:
-                    print(f"⚠️  Goal {m!r} was requested but does not exist "
-                          f"in the golden dataset — skipping it.")
+                print(f"⚠️  Goal {m!r} was requested but does not exist "
+                      f"in the golden dataset — skipping it.")
 
     results: dict[str, dict[str, ArmResult]] = {g.id: {} for g in goals}
     judge_results: dict[str, dict[str, JudgeResult]] = {g.id: {} for g in goals}
@@ -274,8 +268,7 @@ def write_report(run_output: dict, output_dir: Path) -> tuple[Path, Path]:
         "",
         f"Arms evaluated: {', '.join(run_output['arms'])}",
         f"Goals evaluated: {len(run_output['goals'])} "
-        f"(of {len(GOLDEN_DATASET)} total in golden dataset; "
-        f"{len(blocked_goals())} category-(e) browser goals excluded — no browser tool yet)",
+        f"(of {len(GOLDEN_DATASET)} total in golden dataset)",
         f"Total wall-clock time: {run_output['total_elapsed_seconds']:.1f}s",
         "",
         "## Aggregate metrics by arm",
@@ -317,9 +310,7 @@ def write_report(run_output: dict, output_dir: Path) -> tuple[Path, Path]:
         "1. Arm 2 (`plan_execute_no_synthesis`) is produced via a runtime "
         "monkey-patch of the eval harness, not a real toggle in the shipped "
         "agent — see `arm_runner.py` docstring for details.",
-        "2. Category (e) browser-only goals are excluded entirely — no "
-        "browser automation tool exists in the codebase yet.",
-        "3. LLM-as-judge scores depend on the judge LLM's own reliability. "
+        "2. LLM-as-judge scores depend on the judge LLM's own reliability. "
         "For deterministic goals (d2/d3/d4), cross-check the `exact_match` "
         "field in the JSON report against the judge's correctness_score — "
         "a mismatch means the judge got it wrong, not the agent.",
