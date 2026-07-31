@@ -15,6 +15,7 @@ def test_high_risk_tools():
         "file_editor",
         "code_executor",
         "start_server",
+        "browser_use",
     ]
     
     for tool in high_risk_tools:
