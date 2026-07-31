@@ -31,17 +31,34 @@ cp .env.example .env  # add your API keys (ANTHROPIC_API_KEY, TAVILY_API_KEY, GR
 Required environment variables:
 - `ANTHROPIC_API_KEY` - For Claude models (if using Claude as LLM provider)
 - `TAVILY_API_KEY` - For web search functionality
-- `GROQ_API_KEY` - For Groq models (if using Groq as LLM provider)
-- `LLM_PROVIDER` - Choose between "groq" (default) or "ollama" for local development
+- `GROQ_API_KEY` - Required when `LLM_PROVIDER=groq` (for tool-calling model)
+- `OPENROUTER_API_KEY` - Required for the default agentic model (Nemotron via OpenRouter) and for Browser Use web-automation steps (Gemma via OpenRouter)
+- `LLM_PROVIDER` - Choose between "openrouter" (default), "groq", "anthropic", or "ollama"
 - `SANDBOX_TIMEOUT_SECONDS` - Code execution timeout (default: 15)
 - `SANDBOX_MAX_MEMORY_MB` - Memory limit for sandboxed code (default: 256)
 - `OUTBOUND_DOMAIN_ALLOWLIST` - Allowed domains for network access (default: api.tavily.com)
+
+### Browser Use
+
+Browser steps use `OPENROUTER_API_KEY` and require the local browser runtime after
+dependencies are installed:
+
+```bash
+browser-use install
+```
+
+The graph uses `tool_hint="browser_use"` for rendered-page tasks and runs
+`google/gemma-4-31b-it:free` through OpenRouter with vision disabled. The Plan-and-Execute
+agent uses `nvidia/nemotron-3-ultra-550b-a55b:free` through OpenRouter by
+default. Browser actions are approval-gated; mark a plan step `sensitive: true`
+for a requested form submission, purchase, message, or other external side effect.
 
 ## Repo layout
 ```
 src/
   tools/              fixed tool registry (search, code-exec, shell, file ops)
     registry.py       tool definitions and risk classification
+    browser_use/      Browser Use runner (OpenRouter Gemma, text-only)
   sandbox/            subprocess sandbox: timeouts, resource caps, network guards
     runner.py         sandbox execution with output validation
     shell_runner.py   shell command execution with allowlisting
