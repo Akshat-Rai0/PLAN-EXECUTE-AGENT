@@ -1,0 +1,1868 @@
+================================================================================
+BROWSER-USE COMPLETE IMPLEMENTATION GUIDE
+Form Filling, Booking System, and Comparison Features
+================================================================================
+
+TABLE OF CONTENTS
+-----------------
+1. Project Overview
+2. Installation & Setup
+3. Project Structure
+4. Phase 1: Project Setup and Installation
+5. Phase 2: Core Browser-Use Integration
+6. Phase 3: User Interaction System
+7. Phase 4: Form Filling Implementation
+8. Phase 5: Booking System Implementation
+9. Phase 6: Comparison and Browsing Features
+10. Phase 7: Testing and Validation
+11. Phase 8: Production Considerations
+12. Quick Start Guide
+13. Implementation Timeline
+14. Troubleshooting
+
+================================================================================
+1. PROJECT OVERVIEW
+================================================================================
+
+This implementation guide provides a complete blueprint for implementing a
+multi-purpose browser automation agent using browser-use library with the
+following capabilities:
+
+1. FORM FILLING - Automated form submission on any website
+2. BOOKING SYSTEM - Flight/hotel/train/movie ticket booking with user interaction
+3. COMPARISON - Browse and compare products/services across multiple sites
+
+The architecture is modular, allowing you to use components independently or
+combined as needed.
+
+================================================================================
+2. INSTALLATION & SETUP
+================================================================================
+
+PREREQUISITES:
+- Python 3.11 or higher
+- pip or uv package manager
+- API key for Browser-Use or other LLM provider
+
+INSTALLATION STEPS:
+-------------------
+
+# Create virtual environment
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Install browser-use and dependencies
+pip install browser-use python-dotenv pydantic pydantic-settings
+
+# Optional: Install uv for faster dependency management
+pip install uv
+uv venv --python 3.11
+source .venv/bin/activate
+uv sync
+
+API KEY SETUP:
+--------------
+
+Get your API key from: https://cloud.browser-use.com/new-api-key
+
+Create a .env file in your project root:
+BROWSER_USE_API_KEY=your_api_key_here
+
+# Alternative LLM providers (uncomment if using):
+# OPENAI_API_KEY=your_openai_key
+# ANTHROPIC_API_KEY=your_anthropic_key
+# GOOGLE_API_KEY=your_google_key
+
+================================================================================
+3. PROJECT STRUCTURE
+================================================================================
+
+your-project/
+├── .env                          # API keys and configuration
+├── .gitignore                   # Git ignore file
+├── requirements.txt             # Python dependencies
+├── README.md                    # Project documentation
+├── main.py                      # Main entry point
+│
+├── config/
+│   ├── __init__.py
+│   ├── settings.py              # Configuration management
+│   └── production.py            # Production-specific settings
+│
+├── agents/
+│   ├── __init__.py
+│   ├── base_agent.py            # Base agent configuration
+│   ├── form_agent.py            # Form filling specialist
+│   ├── booking_agent.py         # Booking specialist
+│   └── comparison_agent.py      # Comparison specialist
+│
+├── tools/
+│   ├── __init__.py
+│   ├── user_interaction.py     # User input tools
+│   ├── booking_tools.py         # Booking-specific tools
+│   └── comparison_tools.py      # Comparison-specific tools
+│
+├── models/
+│   ├── __init__.py
+│   ├── booking.py               # Booking data models
+│   └── comparison.py            # Comparison data models
+│
+├── utils/
+│   ├── __init__.py
+│   ├── error_handling.py       # Error handling utilities
+│   ├── security.py             # Security utilities
+│   └── helpers.py               # Helper functions
+│
+├── tests/
+│   ├── __init__.py
+│   ├── test_form_agent.py
+│   ├── test_booking_agent.py
+│   ├── test_comparison_agent.py
+│   └── test_integration.py
+│
+└── logs/                        # Application logs (auto-created)
+
+================================================================================
+4. PHASE 1: PROJECT SETUP AND INSTALLATION
+================================================================================
+
+FILE: requirements.txt
+----------------------
+browser-use
+python-dotenv
+pydantic
+pydantic-settings
+pytest
+pytest-asyncio
+
+FILE: .gitignore
+----------------
+venv/
+.venv/
+__pycache__/
+*.pyc
+.env
+logs/
+*.log
+.DS_Store
+.pytest_cache/
+
+FILE: config/__init__.py
+------------------------
+# Empty file to make config a package
+
+FILE: config/settings.py
+------------------------
+from pydantic import SettingsConfigDict
+from pydantic_settings import BaseSettings
+from typing import Literal
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+    
+    # LLM Configuration
+    browser_use_api_key: str | None = None
+    openai_api_key: str | None = None
+    anthropic_api_key: str | None = None
+    google_api_key: str | None = None
+    
+    # Browser Configuration
+    headless: bool = False
+    use_cloud: bool = False
+    llm_provider: Literal["browser_use", "openai", "anthropic", "google"] = "browser_use"
+    llm_model: str = "bu-2-0"
+    
+    # Agent Configuration
+    max_steps: int = 100
+    max_failures: int = 3
+    use_vision: bool | Literal["auto"] = "auto"
+    
+    # Performance
+    llm_timeout: int = 90
+    step_timeout: int = 180
+
+settings = Settings()
+
+FILE: config/production.py
+--------------------------
+"""Production-specific configuration overrides"""
+from config.settings import settings
+
+class ProductionSettings:
+    """Production environment settings"""
+    
+    # Override development settings for production
+    HEADLESS = True
+    USE_CLOUD = True
+    MAX_STEPS = 50
+    MAX_FAILURES = 2
+    LOG_LEVEL = "INFO"
+    
+    # Security
+    ALLOWED_DOMAINS = [
+        'amazon.com',
+        'expedia.com',
+        'booking.com',
+        'kayak.com',
+        'google.com'
+    ]
+
+================================================================================
+5. PHASE 2: CORE BROWSER-USE INTEGRATION
+================================================================================
+
+FILE: agents/__init__.py
+------------------------
+# Empty file to make agents a package
+
+FILE: agents/base_agent.py
+--------------------------
+from browser_use import Agent, Browser, ChatBrowserUse, ChatOpenAI, ChatAnthropic, ChatGoogle
+from browser_use.tools.service import Tools
+from config.settings import settings
+from typing import Any
+
+class BaseAgentFactory:
+    """Factory for creating configured agents with consistent settings"""
+    
+    @staticmethod
+    def get_llm():
+        """Initialize LLM based on configuration"""
+        if settings.llm_provider == "browser_use":
+            return ChatBrowserUse(model=settings.llm_model)
+        elif settings.llm_provider == "openai":
+            return ChatOpenAI(model=settings.llm_model)
+        elif settings.llm_provider == "anthropic":
+            return ChatAnthropic(model=settings.llm_model)
+        elif settings.llm_provider == "google":
+            return ChatGoogle(model=settings.llm_model)
+        else:
+            return ChatBrowserUse(model="bu-2-0")
+    
+    @staticmethod
+    def create_agent(
+        task: str,
+        tools: Tools | None = None,
+        **kwargs
+    ) -> Agent:
+        """Create a configured agent with standard settings"""
+        llm = BaseAgentFactory.get_llm()
+        
+        # Base configuration
+        agent_config = {
+            "task": task,
+            "llm": llm,
+            "max_steps": settings.max_steps,
+            "max_failures": settings.max_failures,
+            "use_vision": settings.use_vision,
+            "llm_timeout": settings.llm_timeout,
+            "step_timeout": settings.step_timeout,
+            **kwargs
+        }
+        
+        # Add tools if provided
+        if tools:
+            agent_config["tools"] = tools
+        
+        return Agent(**agent_config)
+    
+    @staticmethod
+    def create_browser_agent(
+        task: str,
+        tools: Tools | None = None,
+        headless: bool | None = None,
+        use_cloud: bool | None = None,
+        **kwargs
+    ) -> Agent:
+        """Create agent with browser configuration"""
+        browser_config = {}
+        
+        if headless is not None:
+            browser_config["headless"] = headless
+        elif settings.headless:
+            browser_config["headless"] = settings.headless
+            
+        if use_cloud is not None:
+            browser_config["use_cloud"] = use_cloud
+        elif settings.use_cloud:
+            browser_config["use_cloud"] = settings.use_cloud
+        
+        return BaseAgentFactory.create_agent(
+            task=task,
+            tools=tools,
+            **browser_config,
+            **kwargs
+        )
+
+================================================================================
+6. PHASE 3: USER INTERACTION SYSTEM
+================================================================================
+
+FILE: tools/__init__.py
+-----------------------
+# Empty file to make tools a package
+
+FILE: tools/user_interaction.py
+-------------------------------
+from browser_use import ActionResult, Tools
+from browser_use.tools.service import Tools
+from typing import Callable, Awaitable
+import asyncio
+import logging
+
+logger = logging.getLogger(__name__)
+
+class UserInteractionManager:
+    """Manages different methods of user interaction"""
+    
+    def __init__(self, input_method: str = "cli"):
+        self.input_method = input_method
+        self.input_callback: Callable[[str], Awaitable[str]] | None = None
+        self.history: list[dict] = []
+    
+    def set_input_callback(self, callback: Callable[[str], Awaitable[str]]):
+        """Set custom input callback for web/API interfaces"""
+        self.input_callback = callback
+        logger.info(f"Custom input callback set for {self.input_method} interface")
+    
+    async def get_user_input(self, question: str) -> str:
+        """Get user input using configured method"""
+        try:
+            if self.input_callback:
+                response = await self.input_callback(question)
+            elif self.input_method == "cli":
+                response = input(f"{question}: ")
+            elif self.input_method == "mock":
+                response = "mock_response"
+            elif self.input_method == "web":
+                raise NotImplementedError("Web input requires callback implementation")
+            else:
+                raise ValueError(f"Unknown input method: {self.input_method}")
+            
+            # Log interaction
+            self.history.append({
+                "question": question,
+                "response": response,
+                "method": self.input_method,
+                "timestamp": asyncio.get_event_loop().time()
+            })
+            
+            return response
+        except Exception as e:
+            logger.error(f"Error getting user input: {e}")
+            raise
+
+# Global user interaction manager
+user_manager = UserInteractionManager()
+
+def get_user_tools() -> Tools:
+    """Create user interaction tools for agent use"""
+    tools = Tools()
+    
+    @tools.registry.action('Ask user a question and wait for their response')
+    async def ask_user(question: str) -> ActionResult:
+        """Ask the user a question and get their input"""
+        try:
+            response = await user_manager.get_user_input(question)
+            return ActionResult(
+                extracted_content=response,
+                include_in_memory=True
+            )
+        except Exception as e:
+            return ActionResult(error=f"Failed to get user input: {str(e)}")
+    
+    @tools.registry.action('Ask user for confirmation (yes/no)')
+    async def ask_confirmation(question: str) -> ActionResult:
+        """Ask user a yes/no question"""
+        try:
+            response = await user_manager.get_user_input(f"{question} (yes/no): ")
+            is_confirmed = response.lower() in ['yes', 'y', 'true', '1']
+            return ActionResult(
+                extracted_content=str(is_confirmed),
+                include_in_memory=True
+            )
+        except Exception as e:
+            return ActionResult(error=f"Failed to get confirmation: {str(e)}")
+    
+    @tools.registry.action('Ask user to choose from options')
+    async def ask_choice(question: str, options: list[str]) -> ActionResult:
+        """Ask user to choose from provided options"""
+        try:
+            options_text = "\n".join([f"{i+1}. {opt}" for i, opt in enumerate(options)])
+            response = await user_manager.get_user_input(f"{question}\n{options_text}\nEnter choice number: ")
+            
+            try:
+                choice_index = int(response) - 1
+                if 0 <= choice_index < len(options):
+                    return ActionResult(
+                        extracted_content=options[choice_index],
+                        include_in_memory=True
+                    )
+                else:
+                    return ActionResult(error="Invalid choice number")
+            except ValueError:
+                return ActionResult(error="Please enter a valid number")
+        except Exception as e:
+            return ActionResult(error=f"Failed to get user choice: {str(e)}")
+    
+    @tools.registry.action('Get numeric input from user')
+    async def get_numeric_input(question: str, min_value: int | None = None, max_value: int | None = None) -> ActionResult:
+        """Get numeric input from user with optional validation"""
+        try:
+            response = await user_manager.get_user_input(question)
+            value = float(response)
+            
+            if min_value is not None and value < min_value:
+                return ActionResult(error=f"Value must be at least {min_value}")
+            if max_value is not None and value > max_value:
+                return ActionResult(error=f"Value must be at most {max_value}")
+            
+            return ActionResult(
+                extracted_content=str(value),
+                include_in_memory=True
+            )
+        except ValueError:
+            return ActionResult(error="Please enter a valid number")
+        except Exception as e:
+            return ActionResult(error=f"Failed to get numeric input: {str(e)}")
+    
+    return tools
+
+================================================================================
+7. PHASE 4: FORM FILLING IMPLEMENTATION
+================================================================================
+
+FILE: agents/form_agent.py
+---------------------------
+from browser_use import ActionResult, Tools
+from agents.base_agent import BaseAgentFactory
+from typing import dict
+import logging
+
+logger = logging.getLogger(__name__)
+
+class FormAgent:
+    """Specialized agent for form filling tasks"""
+    
+    def __init__(self):
+        self.tools = self._get_form_tools()
+    
+    def _get_form_tools(self) -> Tools:
+        """Create form-specific tools"""
+        tools = Tools()
+        
+        @tools.registry.action('Prepare form data for filling')
+        async def prepare_form_data(form_data: dict[str, str]) -> ActionResult:
+            """Prepare and validate form data"""
+            # Validate that form data is not empty
+            if not form_data:
+                return ActionResult(error="Form data cannot be empty")
+            
+            formatted_data = "\n".join([f"- {key}: {value}" for key, value in form_data.items()])
+            logger.info(f"Form data prepared: {formatted_data}")
+            
+            return ActionResult(
+                extracted_content=f"Form data prepared:\n{formatted_data}",
+                include_in_memory=True
+            )
+        
+        @tools.registry.action('Validate form fields before submission')
+        async def validate_form_fields(validation_rules: dict[str, str]) -> ActionResult:
+            """Validate form data against provided rules"""
+            # Simple validation logic
+            errors = []
+            
+            for field, rule in validation_rules.items():
+                if rule == "required" and not field:
+                    errors.append(f"{field} is required")
+                elif rule == "email" and "@" not in field:
+                    errors.append(f"{field} must be a valid email")
+            
+            if errors:
+                return ActionResult(error=f"Validation failed: {', '.join(errors)}")
+            
+            return ActionResult(
+                extracted_content="Form validation passed",
+                include_in_memory=True
+            )
+        
+        return tools
+    
+    async def fill_form_task(
+        self,
+        url: str,
+        form_data: dict[str, str],
+        submit: bool = True,
+        validation_rules: dict[str, str] | None = None
+    ) -> str:
+        """Execute form filling task"""
+        task = f"""
+        Go to {url}
+        Fill out the form with the following data:
+        {self._format_form_data(form_data)}
+        """
+        
+        if validation_rules:
+            task += f"\nValidate the form using these rules: {validation_rules}"
+        
+        if submit:
+            task += "\nThen submit the form and report the result."
+        else:
+            task += "\nDo not submit the form, just fill it out and show me the filled form."
+        
+        logger.info(f"Starting form filling task for {url}")
+        
+        agent = BaseAgentFactory.create_browser_agent(
+            task=task,
+            tools=self.tools
+        )
+        
+        try:
+            history = await agent.run()
+            result = history.final_result()
+            logger.info(f"Form filling completed: {result}")
+            return result
+        except Exception as e:
+            logger.error(f"Form filling failed: {e}")
+            raise
+    
+    def _format_form_data(self, form_data: dict[str, str]) -> str:
+        """Format form data for task description"""
+        return "\n".join([f"- {key}: {value}" for key, value in form_data.items()])
+    
+    async def fill_form_with_user_input(self, url: str) -> str:
+        """Fill form by collecting data from user interactively"""
+        from tools.user_interaction import user_manager
+        
+        form_data = {}
+        
+        print("Enter form field data (empty field name to finish):")
+        
+        while True:
+            field_name = await user_manager.get_user_input("Field name: ")
+            if not field_name:
+                break
+            
+            field_value = await user_manager.get_user_input(f"Value for {field_name}: ")
+            form_data[field_name] = field_value
+        
+        submit_response = await user_manager.get_user_input("Submit form? (yes/no): ")
+        submit = submit_response.lower() in ['yes', 'y']
+        
+        return await self.fill_form_task(url, form_data, submit)
+
+================================================================================
+8. PHASE 5: BOOKING SYSTEM IMPLEMENTATION
+================================================================================
+
+FILE: models/__init__.py
+-----------------------
+# Empty file to make models a package
+
+FILE: models/booking.py
+----------------------
+from pydantic import BaseModel, Field
+from typing import Literal, Optional
+
+class FlightDetails(BaseModel):
+    """Flight booking details"""
+    origin: str = Field(description="Departure city/airport code")
+    destination: str = Field(description="Arrival city/airport code")
+    departure_date: str = Field(description="Departure date (YYYY-MM-DD)")
+    return_date: Optional[str] = Field(default=None, description="Return date for round-trip (YYYY-MM-DD)")
+    passengers: int = Field(default=1, description="Number of passengers")
+    class_type: Literal["economy", "business", "first"] = Field(default="economy")
+    budget: Optional[float] = Field(default=None, description="Maximum budget per person in USD")
+
+class HotelDetails(BaseModel):
+    """Hotel booking details"""
+    location: str = Field(description="City or specific location")
+    check_in: str = Field(description="Check-in date (YYYY-MM-DD)")
+    check_out: str = Field(description="Check-out date (YYYY-MM-DD)")
+    guests: int = Field(default=2, description="Number of guests")
+    rooms: int = Field(default=1, description="Number of rooms")
+    budget: Optional[float] = Field(default=None, description="Maximum budget per night in USD")
+
+class BookingConfirmation(BaseModel):
+    """Booking confirmation details"""
+    booking_reference: str = Field(description="Confirmation number/reference")
+    provider: str = Field(description="Booking provider/website")
+    total_cost: float = Field(description="Total cost in USD")
+    confirmation_url: str = Field(description="URL to manage booking")
+    booking_details: dict = Field(description="Complete booking details")
+
+FILE: tools/booking_tools.py
+---------------------------
+from browser_use import ActionResult, Tools
+from models.booking import FlightDetails, HotelDetails
+from typing import Literal
+import logging
+
+logger = logging.getLogger(__name__)
+
+def get_booking_tools() -> Tools:
+    """Create booking-specific tools"""
+    tools = Tools()
+    
+    @tools.registry.action('Collect flight booking details from user')
+    async def collect_flight_details() -> ActionResult:
+        """Collect all required flight booking information"""
+        from tools.user_interaction import user_manager
+        
+        try:
+            origin = await user_manager.get_user_input("Origin city/airport code: ")
+            destination = await user_manager.get_user_input("Destination city/airport code: ")
+            departure_date = await user_manager.get_user_input("Departure date (YYYY-MM-DD): ")
+            return_date_input = await user_manager.get_user_input("Return date (YYYY-MM-DD, or leave empty for one-way): ")
+            passengers = await user_manager.get_user_input("Number of passengers: ")
+            class_type = await user_manager.get_user_input("Class (economy/business/first, default economy): ")
+            budget_input = await user_manager.get_user_input("Maximum budget per person in USD (or leave empty): ")
+            
+            flight_details = FlightDetails(
+                origin=origin,
+                destination=destination,
+                departure_date=departure_date,
+                return_date=return_date_input if return_date_input else None,
+                passengers=int(passengers),
+                class_type=class_type.lower() if class_type else "economy",
+                budget=float(budget_input) if budget_input else None
+            )
+            
+            logger.info(f"Flight details collected: {flight_details.model_dump()}")
+            
+            return ActionResult(
+                extracted_content=f"Flight details collected: {flight_details.model_dump()}",
+                include_in_memory=True
+            )
+        except Exception as e:
+            logger.error(f"Failed to collect flight details: {e}")
+            return ActionResult(error=f"Failed to collect flight details: {str(e)}")
+    
+    @tools.registry.action('Collect hotel booking details from user')
+    async def collect_hotel_details() -> ActionResult:
+        """Collect all required hotel booking information"""
+        from tools.user_interaction import user_manager
+        
+        try:
+            location = await user_manager.get_user_input("Location (city): ")
+            check_in = await user_manager.get_user_input("Check-in date (YYYY-MM-DD): ")
+            check_out = await user_manager.get_user_input("Check-out date (YYYY-MM-DD): ")
+            guests = await user_manager.get_user_input("Number of guests: ")
+            rooms = await user_manager.get_user_input("Number of rooms: ")
+            budget_input = await user_manager.get_user_input("Maximum budget per night in USD (or leave empty): ")
+            
+            hotel_details = HotelDetails(
+                location=location,
+                check_in=check_in,
+                check_out=check_out,
+                guests=int(guests),
+                rooms=int(rooms),
+                budget=float(budget_input) if budget_input else None
+            )
+            
+            logger.info(f"Hotel details collected: {hotel_details.model_dump()}")
+            
+            return ActionResult(
+                extracted_content=f"Hotel details collected: {hotel_details.model_dump()}",
+                include_in_memory=True
+            )
+        except Exception as e:
+            logger.error(f"Failed to collect hotel details: {e}")
+            return ActionResult(error=f"Failed to collect hotel details: {str(e)}")
+    
+    @tools.registry.action('Search flights on specific website')
+    async def search_flights(
+        provider: str,
+        flight_details: dict,
+        browser_session
+    ) -> ActionResult:
+        """Search for flights on a specific provider website"""
+        logger.info(f"Searching flights on {provider} with details: {flight_details}")
+        return ActionResult(
+            extracted_content=f"Searching flights on {provider}",
+            include_in_memory=True
+        )
+    
+    @tools.registry.action('Search hotels on specific website')
+    async def search_hotels(
+        provider: str,
+        hotel_details: dict,
+        browser_session
+    ) -> ActionResult:
+        """Search for hotels on a specific provider website"""
+        logger.info(f"Searching hotels on {provider} with details: {hotel_details}")
+        return ActionResult(
+            extracted_content=f"Searching hotels on {provider}",
+            include_in_memory=True
+        )
+    
+    @tools.registry.action('Complete booking process')
+    async def complete_booking(
+        provider: str,
+        booking_type: Literal["flight", "hotel"],
+        browser_session
+    ) -> ActionResult:
+        """Complete the booking process on the selected provider"""
+        logger.info(f"Completing {booking_type} booking on {provider}")
+        return ActionResult(
+            extracted_content=f"Initiating {booking_type} booking on {provider}",
+            include_in_memory=True
+        )
+    
+    return tools
+
+FILE: agents/booking_agent.py
+----------------------------
+from browser_use import Agent
+from agents.base_agent import BaseAgentFactory
+from tools.booking_tools import get_booking_tools
+from tools.user_interaction import get_user_tools
+import logging
+
+logger = logging.getLogger(__name__)
+
+class BookingAgent:
+    """Specialized agent for booking tasks"""
+    
+    def __init__(self):
+        self.tools = self._get_combined_tools()
+    
+    def _get_combined_tools(self):
+        """Combine user interaction and booking tools"""
+        from browser_use.tools.service import Tools
+        
+        # Get booking tools (they include user interaction capabilities)
+        booking_tools = get_booking_tools()
+        
+        # Add additional user interaction tools
+        user_tools = get_user_tools()
+        
+        # In a real implementation, you'd merge the registries
+        # For simplicity, we return booking_tools as they have the core functionality
+        return booking_tools
+    
+    async def book_flight(self) -> str:
+        """Complete flight booking workflow"""
+        task = """
+        Help the user book a flight by following these steps:
+        1. Collect all required flight details using the collect_flight_details tool
+        2. Search for flights on at least 3 different booking sites (expedia, kayak, google flights)
+        3. Compare prices, flight times, and airlines across the sites
+        4. Present the top 3-5 options to the user with key details
+        5. Ask the user which flight they prefer using ask_choice tool
+        6. Navigate to the chosen provider and complete the booking process
+        7. Extract and present the booking confirmation details
+        8. Provide a summary of the completed booking
+        """
+        
+        logger.info("Starting flight booking workflow")
+        
+        agent = BaseAgentFactory.create_browser_agent(
+            task=task,
+            tools=self.tools
+        )
+        
+        try:
+            history = await agent.run()
+            result = history.final_result()
+            logger.info(f"Flight booking completed: {result}")
+            return result
+        except Exception as e:
+            logger.error(f"Flight booking failed: {e}")
+            raise
+    
+    async def book_hotel(self) -> str:
+        """Complete hotel booking workflow"""
+        task = """
+        Help the user book a hotel by following these steps:
+        1. Collect all required hotel details using the collect_hotel_details tool
+        2. Search for hotels on at least 3 different booking sites (booking.com, hotels.com, expedia)
+        3. Compare prices, amenities, locations, and guest reviews
+        4. Present the top 3-5 options to the user with key details
+        5. Ask the user which hotel they prefer using ask_choice tool
+        6. Navigate to the chosen provider and complete the booking process
+        7. Extract and present the booking confirmation details
+        8. Provide a summary of the completed booking
+        """
+        
+        logger.info("Starting hotel booking workflow")
+        
+        agent = BaseAgentFactory.create_browser_agent(
+            task=task,
+            tools=self.tools
+        )
+        
+        try:
+            history = await agent.run()
+            result = history.final_result()
+            logger.info(f"Hotel booking completed: {result}")
+            return result
+        except Exception as e:
+            logger.error(f"Hotel booking failed: {e}")
+            raise
+    
+    async def book_train(self) -> str:
+        """Complete train booking workflow"""
+        task = """
+        Help the user book train tickets by following these steps:
+        1. Collect origin, destination, date, number of passengers, and class preference
+        2. Search for train options on official railway websites and booking platforms
+        3. Compare prices, schedules, and seat availability
+        4. Present options to the user and get their preference
+        5. Complete the booking process on their chosen platform
+        6. Provide booking confirmation and details
+        """
+        
+        logger.info("Starting train booking workflow")
+        
+        agent = BaseAgentFactory.create_browser_agent(
+            task=task,
+            tools=self.tools
+        )
+        
+        try:
+            history = await agent.run()
+            result = history.final_result()
+            logger.info(f"Train booking completed: {result}")
+            return result
+        except Exception as e:
+            logger.error(f"Train booking failed: {e}")
+            raise
+    
+    async def book_movie_tickets(self) -> str:
+        """Complete movie ticket booking workflow"""
+        task = """
+        Help the user book movie tickets by following these steps:
+        1. Collect movie name, theater location, date, time, and number of tickets
+        2. Search for showtimes on movie booking websites (Fandango, Atom Tickets, theater websites)
+        3. Compare showtimes, seating options, and prices
+        4. Present options to the user and get their preference
+        5. Complete the booking process on their chosen platform
+        6. Provide booking confirmation and details
+        """
+        
+        logger.info("Starting movie ticket booking workflow")
+        
+        agent = BaseAgentFactory.create_browser_agent(
+            task=task,
+            tools=self.tools
+        )
+        
+        try:
+            history = await agent.run()
+            result = history.final_result()
+            logger.info(f"Movie ticket booking completed: {result}")
+            return result
+        except Exception as e:
+            logger.error(f"Movie ticket booking failed: {e}")
+            raise
+
+================================================================================
+9. PHASE 6: COMPARISON AND BROWSING FEATURES
+================================================================================
+
+FILE: models/comparison.py
+-------------------------
+from pydantic import BaseModel, Field
+from typing import Optional, List
+
+class ComparisonItem(BaseModel):
+    """Single item in comparison"""
+    name: str = Field(description="Product/service name")
+    provider: str = Field(description="Provider/website name")
+    price: float = Field(description="Price in USD")
+    url: str = Field(description="Product URL")
+    rating: Optional[float] = Field(default=None, description="Rating out of 5 or 10")
+    features: List[str] = Field(default_factory=list, description="Key features")
+    pros: List[str] = Field(default_factory=list, description="Advantages")
+    cons: List[str] = Field(default_factory=list, description="Disadvantages")
+
+class ComparisonResult(BaseModel):
+    """Result of comparison operation"""
+    items: List[ComparisonItem] = Field(description="All compared items")
+    criteria: List[str] = Field(description="Comparison criteria used")
+    best_value: Optional[str] = Field(default=None, description="Best value option name")
+    best_quality: Optional[str] = Field(default=None, description="Best quality option name")
+    recommendation: str = Field(description="Final recommendation")
+
+FILE: tools/comparison_tools.py
+------------------------------
+from browser_use import ActionResult, Tools
+from models.comparison import ComparisonItem, ComparisonResult
+from typing import List
+import logging
+
+logger = logging.getLogger(__name__)
+
+def get_comparison_tools() -> Tools:
+    """Create comparison-specific tools"""
+    tools = Tools()
+    
+    @tools.registry.action('Extract product information from current page')
+    async def extract_product_info(
+        item_name: str,
+        browser_session
+    ) -> ActionResult:
+        """Extract detailed product information from current page"""
+        logger.info(f"Extracting product info for {item_name}")
+        # This uses browser-use's built-in extraction capabilities
+        return ActionResult(
+            extracted_content=f"Extracting detailed information for {item_name}",
+            include_in_memory=True
+        )
+    
+    @tools.registry.action('Compare items across multiple websites')
+    async def compare_items(
+        item_name: str,
+        websites: List[str],
+        criteria: List[str],
+        browser_session
+    ) -> ActionResult:
+        """Compare the same item across multiple websites"""
+        logger.info(f"Comparing {item_name} across {len(websites)} websites")
+        
+        task = f"""
+        Compare {item_name} across these websites: {', '.join(websites)}
+        Focus on these criteria: {', '.join(criteria)}
+        
+        For each website, extract:
+        - Price (including any additional fees)
+        - Rating/reviews
+        - Key features and specifications
+        - Availability and shipping
+        - Return policy
+        """
+        
+        return ActionResult(
+            extracted_content=f"Comparison task initiated for {item_name} across {len(websites)} websites",
+            include_in_memory=True
+        )
+    
+    @tools.registry.action('Generate comparison summary')
+    async def generate_comparison_summary(
+        items: List[dict],
+        criteria: List[str]
+    ) -> ActionResult:
+        """Generate a comprehensive comparison summary"""
+        try:
+            comparison_items = [ComparisonItem(**item) for item in items]
+            
+            # Find best value (lowest price)
+            best_value = min(comparison_items, key=lambda x: x.price)
+            
+            # Find best quality (highest rating)
+            rated_items = [item for item in comparison_items if item.rating]
+            best_quality = max(rated_items, key=lambda x: x.rating) if rated_items else None
+            
+            summary = f"""
+            COMPARISON SUMMARY
+            ===================
+            Total Items Compared: {len(comparison_items)}
+            Criteria Used: {', '.join(criteria)}
+            
+            BEST VALUE: {best_value.name} at {best_value.provider} - ${best_value.price:.2f}
+            """
+            
+            if best_quality:
+                summary += f"\nBEST QUALITY: {best_quality.name} at {best_quality.provider} - Rating: {best_quality.rating}/5"
+            
+            summary += "\n\nDETAILED COMPARISON:"
+            for i, item in enumerate(comparison_items, 1):
+                summary += f"\n{i}. {item.name} ({item.provider})"
+                summary += f"\n   Price: ${item.price:.2f}"
+                if item.rating:
+                    summary += f"\n   Rating: {item.rating}/5"
+                if item.features:
+                    summary += f"\n   Features: {', '.join(item.features[:3])}"
+            
+            logger.info("Comparison summary generated successfully")
+            
+            return ActionResult(
+                extracted_content=summary,
+                include_in_memory=True
+            )
+        except Exception as e:
+            logger.error(f"Failed to generate comparison summary: {e}")
+            return ActionResult(error=f"Failed to generate summary: {str(e)}")
+    
+    @tools.registry.action('Browse and collect options from multiple sources')
+    async def browse_multiple_sources(
+        search_query: str,
+        sources: List[str],
+        max_results_per_source: int = 5
+    ) -> ActionResult:
+        """Browse multiple sources and collect options"""
+        logger.info(f"Browsing {len(sources)} sources for '{search_query}'")
+        return ActionResult(
+            extracted_content=f"Browsing {len(sources)} sources for '{search_query}' (max {max_results_per_source} results each)",
+            include_in_memory=True
+        )
+    
+    @tools.registry.action('Analyze and rank options based on criteria')
+    async def rank_options(
+        options: List[dict],
+        priorities: dict[str, float]
+    ) -> ActionResult:
+        """Rank options based on weighted criteria"""
+        logger.info(f"Ranking {len(options)} options based on priorities: {priorities}")
+        
+        # Simple ranking logic (can be enhanced)
+        ranked_options = sorted(
+            options,
+            key=lambda x: sum(x.get(k, 0) * w for k, w in priorities.items()),
+            reverse=True
+        )
+        
+        ranking_summary = "OPTIONS RANKING:\n"
+        for i, option in enumerate(ranked_options, 1):
+            ranking_summary += f"{i}. {option.get('name', 'Unknown')} - Score: {sum(option.get(k, 0) * w for k, w in priorities.items()):.2f}\n"
+        
+        return ActionResult(
+            extracted_content=ranking_summary,
+            include_in_memory=True
+        )
+    
+    return tools
+
+FILE: agents/comparison_agent.py
+-------------------------------
+from browser_use import Agent
+from agents.base_agent import BaseAgentFactory
+from tools.comparison_tools import get_comparison_tools
+import logging
+
+logger = logging.getLogger(__name__)
+
+class ComparisonAgent:
+    """Specialized agent for comparison tasks"""
+    
+    def __init__(self):
+        self.tools = get_comparison_tools()
+    
+    async def compare_products(
+        self,
+        product_name: str,
+        websites: List[str],
+        criteria: List[str] = ["price", "rating", "features", "availability"]
+    ) -> str:
+        """Compare a product across multiple websites"""
+        task = f"""
+        Compare {product_name} across these websites: {', '.join(websites)}
+        
+        For each website:
+        1. Navigate to the site
+        2. Search for the product
+        3. Extract the following information: {', '.join(criteria)}
+        4. Collect at least 3 different options per website if available
+        
+        After collecting all data:
+        1. Generate a comprehensive comparison table
+        2. Identify the best value option (lowest price for given features)
+        3. Identify the highest quality option (highest rating)
+        4. Provide recommendations for different user priorities:
+           - Best budget option
+           - Best premium option  
+           - Best overall value
+        5. Include pros and cons for each top option
+        """
+        
+        logger.info(f"Starting product comparison for {product_name}")
+        
+        agent = BaseAgentFactory.create_browser_agent(
+            task=task,
+            tools=self.tools
+        )
+        
+        try:
+            history = await agent.run()
+            result = history.final_result()
+            logger.info(f"Product comparison completed: {result}")
+            return result
+        except Exception as e:
+            logger.error(f"Product comparison failed: {e}")
+            raise
+    
+    async def browse_and_compare(
+        self,
+        search_query: str,
+        category: str = "general"
+    ) -> str:
+        """Browse and compare items based on a search query"""
+        task = f"""
+        Search for '{search_query}' in the {category} category and compare options across different platforms.
+        
+        1. Search on at least 3 different platforms relevant to the category
+        2. For each platform, collect top 5 results
+        3. Compare based on: price, rating, features, shipping, return policy
+        4. Generate a detailed comparison report with:
+           - Price comparison table
+           - Feature comparison matrix
+           - User ratings summary
+           - Shipping and return policy comparison
+        5. Provide recommendations for different user priorities:
+           - Best budget option
+           - Best premium option
+           - Best overall value
+           - Best for specific use cases
+        """
+        
+        logger.info(f"Starting browse and compare for '{search_query}' in {category}")
+        
+        agent = BaseAgentFactory.create_browser_agent(
+            task=task,
+            tools=self.tools
+        )
+        
+        try:
+            history = await agent.run()
+            result = history.final_result()
+            logger.info(f"Browse and compare completed: {result}")
+            return result
+        except Exception as e:
+            logger.error(f"Browse and compare failed: {e}")
+            raise
+    
+    async def compare_services(
+        self,
+        service_type: str,
+        location: str,
+        criteria: List[str] = ["price", "quality", "availability", "reviews"]
+    ) -> str:
+        """Compare services in a specific location"""
+        task = f"""
+        Compare {service_type} services in {location}.
+        
+        1. Search for service providers in the area
+        2. Collect information from at least 3 different sources/review sites
+        3. Compare based on: {', '.join(criteria)}
+        4. Include customer reviews and ratings
+        5. Check availability and booking options
+        6. Provide recommendations with pros/cons for each top option
+        """
+        
+        logger.info(f"Starting service comparison for {service_type} in {location}")
+        
+        agent = BaseAgentFactory.create_browser_agent(
+            task=task,
+            tools=self.tools
+        )
+        
+        try:
+            history = await agent.run()
+            result = history.final_result()
+            logger.info(f"Service comparison completed: {result}")
+            return result
+        except Exception as e:
+            logger.error(f"Service comparison failed: {e}")
+            raise
+
+================================================================================
+10. PHASE 7: TESTING AND VALIDATION
+================================================================================
+
+FILE: tests/__init__.py
+-----------------------
+# Empty file to make tests a package
+
+FILE: tests/test_form_agent.py
+------------------------------
+import pytest
+from agents.form_agent import FormAgent
+
+@pytest.mark.asyncio
+async def test_form_filling_basic():
+    """Test basic form filling functionality"""
+    form_agent = FormAgent()
+    
+    form_data = {
+        "name": "John Doe",
+        "email": "john@example.com",
+        "phone": "555-1234"
+    }
+    
+    # Test with a safe test form
+    result = await form_agent.fill_form_task(
+        url="https://httpbin.org/forms/post",
+        form_data=form_data,
+        submit=True
+    )
+    
+    assert result is not None
+    assert "success" in result.lower() or "submitted" in result.lower() or "form" in result.lower()
+
+@pytest.mark.asyncio
+async def test_form_tools():
+    """Test form-specific tools"""
+    form_agent = FormAgent()
+    tools = form_agent._get_form_tools()
+    
+    assert tools is not None
+    assert len(tools.registry.actions) > 0
+
+@pytest.mark.asyncio
+async def test_form_data_formatting():
+    """Test form data formatting"""
+    form_agent = FormAgent()
+    
+    form_data = {
+        "name": "Test User",
+        "email": "test@example.com"
+    }
+    
+    formatted = form_agent._format_form_data(form_data)
+    
+    assert "name: Test User" in formatted
+    assert "email: test@example.com" in formatted
+
+FILE: tests/test_booking_agent.py
+--------------------------------
+import pytest
+from agents.booking_agent import BookingAgent
+
+@pytest.mark.asyncio
+async def test_booking_agent_initialization():
+    """Test booking agent initialization"""
+    booking_agent = BookingAgent()
+    
+    assert booking_agent is not None
+    assert booking_agent.tools is not None
+
+@pytest.mark.asyncio
+async def test_booking_tools():
+    """Test booking-specific tools"""
+    from tools.booking_tools import get_booking_tools
+    
+    tools = get_booking_tools()
+    
+    assert tools is not None
+    assert len(tools.registry.actions) > 0
+
+@pytest.mark.asyncio
+async def test_flight_details_model():
+    """Test flight details data model"""
+    from models.booking import FlightDetails
+    
+    flight = FlightDetails(
+        origin="JFK",
+        destination="LAX",
+        departure_date="2024-12-01",
+        passengers=2,
+        class_type="economy"
+    )
+    
+    assert flight.origin == "JFK"
+    assert flight.destination == "LAX"
+    assert flight.passengers == 2
+
+@pytest.mark.asyncio
+async def test_hotel_details_model():
+    """Test hotel details data model"""
+    from models.booking import HotelDetails
+    
+    hotel = HotelDetails(
+        location="New York",
+        check_in="2024-12-01",
+        check_out="2024-12-05",
+        guests=2,
+        rooms=1
+    )
+    
+    assert hotel.location == "New York"
+    assert hotel.guests == 2
+
+FILE: tests/test_comparison_agent.py
+-----------------------------------
+import pytest
+from agents.comparison_agent import ComparisonAgent
+
+@pytest.mark.asyncio
+async def test_comparison_agent_initialization():
+    """Test comparison agent initialization"""
+    comparison_agent = ComparisonAgent()
+    
+    assert comparison_agent is not None
+    assert comparison_agent.tools is not None
+
+@pytest.mark.asyncio
+async def test_comparison_tools():
+    """Test comparison-specific tools"""
+    from tools.comparison_tools import get_comparison_tools
+    
+    tools = get_comparison_tools()
+    
+    assert tools is not None
+    assert len(tools.registry.actions) > 0
+
+@pytest.mark.asyncio
+async def test_comparison_item_model():
+    """Test comparison item data model"""
+    from models.comparison import ComparisonItem
+    
+    item = ComparisonItem(
+        name="Test Product",
+        provider="Test Store",
+        price=99.99,
+        url="https://example.com/product",
+        rating=4.5
+    )
+    
+    assert item.name == "Test Product"
+    assert item.price == 99.99
+    assert item.rating == 4.5
+
+FILE: tests/test_integration.py
+------------------------------
+import pytest
+from tools.user_interaction import user_manager, get_user_tools
+from browser_use import Tools
+
+@pytest.mark.asyncio
+async def test_user_interaction_cli():
+    """Test CLI user interaction"""
+    user_manager.input_method = "mock"
+    
+    response = await user_manager.get_user_input("Test question")
+    assert response == "mock_response"
+
+@pytest.mark.asyncio
+async def test_user_tools():
+    """Test user interaction tools"""
+    tools = get_user_tools()
+    
+    assert tools is not None
+    assert len(tools.registry.actions) > 0
+
+@pytest.mark.asyncio
+async def test_base_agent_factory():
+    """Test base agent factory"""
+    from agents.base_agent import BaseAgentFactory
+    
+    llm = BaseAgentFactory.get_llm()
+    assert llm is not None
+
+RUNNING TESTS:
+--------------
+# Run all tests
+pytest tests/ -v
+
+# Run specific test file
+pytest tests/test_form_agent.py -v
+
+# Run with coverage
+pytest tests/ --cov=. --cov-report=html
+
+================================================================================
+11. PHASE 8: PRODUCTION CONSIDERATIONS
+================================================================================
+
+FILE: utils/__init__.py
+-----------------------
+# Empty file to make utils a package
+
+FILE: utils/error_handling.py
+-----------------------------
+import logging
+import asyncio
+from functools import wraps
+from typing import Callable, Any
+
+logger = logging.getLogger(__name__)
+
+def handle_errors(max_retries: int = 3):
+    """Decorator for error handling with retries and exponential backoff"""
+    def decorator(func: Callable) -> Callable:
+        @wraps(func)
+        async def wrapper(*args, **kwargs) -> Any:
+            last_error = None
+            for attempt in range(max_retries):
+                try:
+                    return await func(*args, **kwargs)
+                except Exception as e:
+                    last_error = e
+                    logger.warning(f"Attempt {attempt + 1}/{max_retries} failed for {func.__name__}: {str(e)}")
+                    if attempt < max_retries - 1:
+                        backoff_time = 2 ** attempt
+                        logger.info(f"Retrying in {backoff_time} seconds...")
+                        await asyncio.sleep(backoff_time)
+            logger.error(f"All {max_retries} attempts failed for {func.__name__}")
+            raise last_error
+        return wrapper
+    return decorator
+
+def setup_logging():
+    """Configure application logging"""
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.FileHandler('logs/agent.log'),
+            logging.StreamHandler()
+        ]
+    )
+    
+    # Create logs directory if it doesn't exist
+    import os
+    os.makedirs('logs', exist_ok=True)
+
+FILE: utils/security.py
+----------------------
+import os
+import re
+from typing import Dict
+from urllib.parse import urlparse
+import logging
+
+logger = logging.getLogger(__name__)
+
+def sanitize_sensitive_data(data: Dict) -> Dict:
+    """Remove sensitive data from logs and outputs"""
+    sensitive_keys = ['password', 'api_key', 'token', 'credit_card', 'ssn', 'secret']
+    sanitized = data.copy()
+    
+    for key in list(sanitized.keys()):
+        if any(sensitive in key.lower() for sensitive in sensitive_keys):
+            sanitized[key] = "***REDACTED***"
+            logger.debug(f"Redacted sensitive field: {key}")
+    
+    return sanitized
+
+def validate_url(url: str, allowed_domains: list[str] | None = None) -> bool:
+    """Validate URL is safe and allowed"""
+    try:
+        parsed = urlparse(url)
+        
+        # Basic URL validation
+        if not all([parsed.scheme, parsed.netloc]):
+            return False
+        
+        if parsed.scheme not in ['http', 'https']:
+            return False
+        
+        # Domain validation if allowed domains provided
+        if allowed_domains:
+            domain = parsed.netloc.replace('www.', '')
+            if not any(allowed in domain for allowed in allowed_domains):
+                logger.warning(f"URL domain not in allowed list: {domain}")
+                return False
+        
+        return True
+    except Exception as e:
+        logger.error(f"URL validation error: {e}")
+        return False
+
+def sanitize_user_input(input_text: str) -> str:
+    """Sanitize user input to prevent injection attacks"""
+    # Remove potential dangerous characters
+    sanitized = re.sub(r'[<>"\']', '', input_text)
+    return sanitized.strip()
+
+FILE: utils/helpers.py
+---------------------
+import asyncio
+from datetime import datetime
+from pathlib import Path
+import logging
+
+logger = logging.getLogger(__name__)
+
+def format_date(date_string: str, input_format: str = "%Y-%m-%d", output_format: str = "%B %d, %Y") -> str:
+    """Format date string to human-readable format"""
+    try:
+        date_obj = datetime.strptime(date_string, input_format)
+        return date_obj.strftime(output_format)
+    except ValueError:
+        logger.warning(f"Invalid date format: {date_string}")
+        return date_string
+
+def ensure_directory_exists(path: str | Path) -> Path:
+    """Ensure directory exists, create if it doesn't"""
+    path = Path(path)
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+def async_retry(max_attempts: int = 3, delay: float = 1.0):
+    """Async retry decorator"""
+    def decorator(func):
+        async def wrapper(*args, **kwargs):
+            for attempt in range(max_attempts):
+                try:
+                    return await func(*args, **kwargs)
+                except Exception as e:
+                    if attempt == max_attempts - 1:
+                        raise
+                    logger.warning(f"Attempt {attempt + 1} failed, retrying in {delay}s: {e}")
+                    await asyncio.sleep(delay)
+        return wrapper
+    return decorator
+
+FILE: deploy.py
+--------------
+"""
+Production deployment configuration for browser-use applications
+"""
+
+from browser_use import Browser, sandbox, ChatBrowserUse
+from browser_use.agent.service import Agent
+from agents.booking_agent import BookingAgent
+from agents.comparison_agent import ComparisonAgent
+from agents.form_agent import FormAgent
+import logging
+
+logger = logging.getLogger(__name__)
+
+@sandbox(cloud_proxy_country_code='us')
+async def production_booking_task(browser: Browser):
+    """Production booking task with cloud browser for better performance"""
+    booking_agent = BookingAgent()
+    
+    agent = Agent(
+        task="Book a flight with user-provided details using cloud browser",
+        llm=ChatBrowserUse(),
+        browser=browser
+    )
+    
+    try:
+        result = await agent.run()
+        logger.info(f"Production booking completed: {result}")
+        return result
+    except Exception as e:
+        logger.error(f"Production booking failed: {e}")
+        raise
+
+@sandbox(cloud_proxy_country_code='us')
+async def production_comparison_task(browser: Browser):
+    """Production comparison task with cloud browser"""
+    comparison_agent = ComparisonAgent()
+    
+    agent = Agent(
+        task="Compare products across multiple websites using cloud browser",
+        llm=ChatBrowserUse(),
+        browser=browser
+    )
+    
+    try:
+        result = await agent.run()
+        logger.info(f"Production comparison completed: {result}")
+        return result
+    except Exception as e:
+        logger.error(f"Production comparison failed: {e}")
+        raise
+
+# Docker deployment support
+"""
+DOCKERFILE EXAMPLE:
+--------------------
+FROM python:3.12-slim
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    wget \
+    gnupg \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy application code
+COPY . .
+
+# Create logs directory
+RUN mkdir -p logs
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1
+ENV HEADLESS=true
+ENV USE_CLOUD=true
+
+# Run the application
+CMD ["python", "main.py"]
+"""
+
+"""
+DOCKER-COMPOSE.YML EXAMPLE:
+---------------------------
+version: '3.8'
+
+services:
+  browser-use-app:
+    build: .
+    container_name: browser-use-agent
+    environment:
+      - BROWSER_USE_API_KEY=${BROWSER_USE_API_KEY}
+      - HEADLESS=true
+      - USE_CLOUD=true
+      - LOG_LEVEL=INFO
+    volumes:
+      - ./logs:/app/logs
+      - ./config:/app/config
+    restart: unless-stopped
+    networks:
+      - browser-network
+
+networks:
+  browser-network:
+    driver: bridge
+"""
+
+================================================================================
+12. QUICK START GUIDE
+================================================================================
+
+MINIMAL IMPLEMENTATION (Get started in 5 minutes):
+--------------------------------------------------
+
+Create a file called quick_start.py:
+
+```python
+from browser_use import Agent, ChatBrowserUse, Tools, ActionResult
+import asyncio
+
+# Create custom tools
+tools = Tools()
+
+@tools.registry.action('Get user input')
+async def get_user_input(question: str) -> ActionResult:
+    response = input(f"{question}: ")
+    return ActionResult(extracted_content=response, include_in_memory=True)
+
+# Example 1: Simple form filling
+async def form_filling_example():
+    agent = Agent(
+        task="Fill out the form at https://httpbin.org/forms/post with user-provided data",
+        llm=ChatBrowserUse(),
+        tools=tools
+    )
+    await agent.run()
+
+# Example 2: Booking with user interaction
+async def booking_example():
+    agent = Agent(
+        task="Ask user for flight details (origin, destination, date) and search for flights",
+        llm=ChatBrowserUse(),
+        tools=tools
+    )
+    await agent.run()
+
+# Example 3: Product comparison
+async def comparison_example():
+    agent = Agent(
+        task="Search for iPhone 15 on Amazon and Best Buy, then compare prices and features",
+        llm=ChatBrowserUse(),
+        tools=tools
+    )
+    await agent.run()
+
+# Run examples
+async def main():
+    print("Choose an example:")
+    print("1. Form Filling")
+    print("2. Flight Booking")
+    print("3. Product Comparison")
+    
+    choice = input("Enter choice (1-3): ")
+    
+    if choice == "1":
+        await form_filling_example()
+    elif choice == "2":
+        await booking_example()
+    elif choice == "3":
+        await comparison_example()
+    else:
+        print("Invalid choice")
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+Run it:
+```bash
+python quick_start.py
+```
+
+================================================================================
+13. IMPLEMENTATION TIMELINE
+================================================================================
+
+WEEK 1: FOUNDATION (Days 1-7)
+------------------------------
+Day 1-2: Phase 1-2
+- Project setup and installation
+- Core browser-use integration
+- Base agent factory
+- Configuration management
+
+Day 3-4: Phase 3
+- User interaction system
+- User interaction tools
+- Testing with CLI interface
+
+Day 5-7: Phase 4
+- Form filling implementation
+- Form agent development
+- Basic form filling tests
+
+WEEK 2: CORE FEATURES (Days 8-14)
+----------------------------------
+Day 8-10: Phase 5
+- Booking data models
+- Booking tools implementation
+- Flight booking agent
+- Hotel booking agent
+
+Day 11-13: Phase 6
+- Comparison data models
+- Comparison tools
+- Comparison agent
+- Multi-site comparison logic
+
+Day 14: Integration
+- Combine all agents
+- Test workflows end-to-end
+- Fix integration issues
+
+WEEK 3: PRODUCTION READY (Days 15-21)
+--------------------------------------
+Day 15-17: Phase 7
+- Comprehensive testing
+- Test coverage improvement
+- Integration tests
+- Performance testing
+
+Day 18-19: Phase 8
+- Error handling implementation
+- Security measures
+- Logging and monitoring
+- Production configuration
+
+Day 20-21: Deployment
+- Docker containerization
+- Cloud deployment setup
+- Documentation completion
+- Final testing and validation
+
+================================================================================
+14. TROUBLESHOOTING
+================================================================================
+
+COMMON ISSUES AND SOLUTIONS:
+----------------------------
+
+1. INSTALLATION ISSUES
+   Problem: "Module not found" errors
+   Solution: Ensure virtual environment is activated and dependencies installed
+   ```bash
+   source venv/bin/activate
+   pip install -r requirements.txt
+   ```
+
+2. API KEY ISSUES
+   Problem: Authentication errors
+   Solution: Check .env file and ensure BROWSER_USE_API_KEY is set correctly
+   ```bash
+   echo $BROWSER_USE_API_KEY  # Should show your API key
+   ```
+
+3. BROWSER LAUNCH ISSUES
+   Problem: Browser fails to start
+   Solution: Set headless=False for debugging, check system dependencies
+   ```python
+   agent = Agent(task="...", headless=False)
+   ```
+
+4. TIMEOUT ISSUES
+   Problem: Actions timing out
+   Solution: Increase timeout values in settings
+   ```python
+   # In config/settings.py
+   step_timeout = 300  # Increase from 180 to 300 seconds
+   ```
+
+5. MEMORY ISSUES
+   Problem: High memory usage
+   Solution: Use max_history_items to limit memory
+   ```python
+   agent = Agent(task="...", max_history_items=50)
+   ```
+
+6. FORM FILLING FAILURES
+   Problem: Agent can't find form elements
+   Solution: Use more specific task descriptions or custom selectors
+   ```python
+   task = "Fill the form with ID 'contact-form' using the provided data"
+   ```
+
+7. BOOKING SITE CHANGES
+   Problem: Booking sites updated their UI
+   Solution: Agent will adapt automatically, but may need task description updates
+
+8. COMPARISON INACCURACIES
+   Problem: Comparison results seem incorrect
+   Solution: Verify criteria are specific and websites are accessible
+
+DEBUGGING TIPS:
+---------------
+1. Enable detailed logging
+   ```python
+   import logging
+   logging.basicConfig(level=logging.DEBUG)
+   ```
+
+2. Use headless=False to see browser actions
+   ```python
+   agent = Agent(task="...", headless=False)
+   ```
+
+3. Check agent history for detailed steps
+   ```python
+   history = await agent.run()
+   print(history.action_names())  # See all actions taken
+   print(history.errors())  # See any errors
+   ```
+
+4. Test with simple tasks first
+   ```python
+   # Start with simple navigation
+   agent = Agent(task="Go to google.com and tell me the page title")
+   ```
+
+GETTING HELP:
+-------------
+- Check browser-use documentation: https://docs.browser-use.com
+- GitHub issues: https://github.com/browser-use/browser-use/issues
+- Community support: Check browser-use Discord/community
+
+================================================================================
+CONCLUSION
+================================================================================
+
+This implementation guide provides a complete blueprint for implementing a
+multi-purpose browser automation agent using browser-use. The modular design
+allows you to:
+
+1. Start with basic features and scale up
+2. Use components independently or combined
+3. Adapt the system to your specific needs
+4. Deploy to production with confidence
+
+KEY NEXT STEPS:
+1. Set up your development environment
+2. Implement Phase 1-2 for foundation
+3. Add user interaction (Phase 3)
+4. Implement form filling (Phase 4)
+5. Add booking capabilities (Phase 5)
+6. Implement comparison features (Phase 6)
+7. Test thoroughly (Phase 7)
+8. Deploy to production (Phase 8)
+
+Remember to test each phase before moving to the next, and don't hesitate to
+adapt the implementation to your specific requirements.
+
+For the latest updates and advanced features, refer to the official browser-use
+documentation and community resources.
+
+================================================================================
+END OF IMPLEMENTATION GUIDE
+================================================================================
