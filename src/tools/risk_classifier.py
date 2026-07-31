@@ -26,6 +26,8 @@ HIGH_RISK_TOOLS = {
                            # execution risk as code_executor, plus the code itself
                            # hasn't been reviewed by anyone until this exact approval
     "start_server",       # Can start network services
+    "browser_use",        # Can navigate and interact with third-party websites
+    "browser-use",        # Alias accepted by graph routing
 }
 
 LOW_RISK_TOOLS = {
