@@ -59,6 +59,7 @@ def handle_interrupt_cli(interrupt_data):
         command = payload.get("command")
         path = payload.get("path")
         file_path = payload.get("file_path")
+        browser_task = payload.get("browser_task")
         
         print(f"\n{'='*80}")
         print(f"🔒 APPROVAL REQUIRED (Step {step_id})")
@@ -80,6 +81,9 @@ def handle_interrupt_cli(interrupt_data):
             else:
                 print(f"\nCommand to execute:")
                 print(f'delete_file_tool(path="<workspace>", recursive=True)')
+        elif browser_task:
+            print("\nBrowser action to execute:")
+            print(browser_task)
         
         print(f"\n{'='*80}")
         

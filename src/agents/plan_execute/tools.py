@@ -56,9 +56,15 @@ Notes:
     "delete_file"      - delete a file or directory inside the project workspace, or clear
                           everything in the workspace (e.g. "delete all files in the project")
     "start_server"     - start a dev server (use as LAST step of app-building tasks)
+    "browser_use"      - browse and interact with a website when rendered UI is required
     "none"             - pure reasoning, no external tool
 - "status": always "PENDING"
 - "sensitive": true only if human confirmation should be required before this step runs
+
+Use "browser_use" only when a task requires navigating a rendered website, filling a
+form, comparing live UI results, or another browser interaction that web_search cannot
+perform. Mark it sensitive=true for any form submission, purchase, account change,
+message, or other external side effect. Browser tasks always require approval.
 
 For most one-off computation (unit conversions, data transforms, calculations), prefer
 "code_executor" — it already handles arbitrary Python computation directly. Only use a

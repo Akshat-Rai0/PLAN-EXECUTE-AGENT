@@ -4,6 +4,7 @@ from langgraph.graph import END, START, StateGraph
 from .nodes import (
     plan_node, executor_node, tavily_search_node, synthesize_node,
     replaner, reason_node, code_executor_node, synthesize_tool_node,
+    browser_use_node,
     setup_workspace_node, shell_node, write_file_node, delete_file_node, start_server_node,
     approval_node, ask_human_node, extract_user_info_node,
     MAX_TOTAL_STEPS,
@@ -85,6 +86,8 @@ def _route_to_tool(state: State) -> str:
         return "delete_file"
     if tool_hint == "start_server":
         return "start_server"
+    if tool_hint in ("browser_use", "browser-use"):
+        return "browser_use"
 
     # Any other/unrecognized tool hint means no fixed tool matches — route
     # to synthesis rather than the dead-end stub (which used to mark these
@@ -120,6 +123,8 @@ def _route_after_approval(state: State) -> str:
         return "delete_file"
     if tool_hint == "start_server":
         return "start_server"
+    if tool_hint in ("browser_use", "browser-use"):
+        return "browser_use"
 
     # Any other/unrecognized tool_hint means synthesis was the route taken
     # to get here (see _route_to_tool) — send it on to synthesize_tool now
@@ -174,6 +179,7 @@ def build_graph():
     graph.add_node("plan", plan_node)
     graph.add_node("executor", executor_node)
     graph.add_node("tavily_search", tavily_search_node)
+    graph.add_node("browser_use", browser_use_node)
     graph.add_node("code_executor", code_executor_node)
     graph.add_node("synthesize_tool", synthesize_tool_node)
     graph.add_node("reason", reason_node)
@@ -229,6 +235,7 @@ def build_graph():
             "write_file": "write_file",
             "delete_file": "delete_file",
             "start_server": "start_server",
+            "browser_use": "browser_use",
             "approval": "approval",
             "end": END,
         },
@@ -246,6 +253,7 @@ def build_graph():
             "write_file": "write_file",
             "delete_file": "delete_file",
             "start_server": "start_server",
+            "browser_use": "browser_use",
             "executor": "executor",
         },
     )
@@ -253,6 +261,15 @@ def build_graph():
     # After tool execution, conditionally route to replaner, executor, or synthesize
     graph.add_conditional_edges(
         "tavily_search",
+        _route_after_tool,
+        {
+            "replaner": "replaner",
+            "executor": "executor",
+            "synthesize": "synthesize",
+        },
+    )
+    graph.add_conditional_edges(
+        "browser_use",
         _route_after_tool,
         {
             "replaner": "replaner",
