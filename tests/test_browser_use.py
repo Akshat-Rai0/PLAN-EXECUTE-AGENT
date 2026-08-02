@@ -10,7 +10,7 @@ from src.tools.browser_use.runner import BrowserTaskResult, run_browser_task
 
 
 @pytest.mark.asyncio
-async def test_runner_uses_openrouter_gemma_in_text_only_mode(monkeypatch):
+async def test_runner_uses_openrouter_ling_in_text_only_mode(monkeypatch):
     calls = []
 
     async def fake_run(task, *, config):
@@ -58,5 +58,5 @@ def test_browser_node_uses_read_only_policy_and_records_model(monkeypatch):
 
     assert "This is a read-only task" in captured["task"]
     assert plan.subtasks[0].status == StepStatus.DONE
-    assert "model=google/gemma-4-31b-it:free" in plan.subtasks[0].result
+    assert f"model={BROWSER_MODEL}" in plan.subtasks[0].result
     assert result["steps_executed"] == 1
