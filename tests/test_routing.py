@@ -195,6 +195,19 @@ def test_code_executor_routes_to_approval():
     assert result == "approval", f"Expected 'approval' for code_executor hint, got '{result}'"
 
 
+def test_browser_use_routes_to_approval():
+    """Browser automation is an approval-gated fixed tool, not synthesized code."""
+    plan = Plan(
+        goal="compare products",
+        subtasks=[
+            Step(id=1, task="open product pages", tool_hint="browser_use", status=StepStatus.RUNNING)
+        ]
+    )
+    state: State = {"input": "test", "plan": plan}
+
+    assert _route_to_tool(state) == "approval"
+
+
 def test_route_after_tool_failed_step():
     """
     Test that _route_after_tool routes to replaner when any step fails.

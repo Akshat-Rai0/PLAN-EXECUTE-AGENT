@@ -24,20 +24,6 @@ Constraints:
 - Avoid assumptions about event completion when dealing with time-sensitive topics
 - If the goal references "the most recent match," treat that literally as the latest completed fixture — do not assume it means the tournament final unless the goal says so explicitly
 -while doing a web search if results are too generic or broad, narrow the query using any concrete details already surfaced in other steps' results (exact team/entity names, exact dates, tournament stage, match ID, etc.) rather than re-describing the same broad question in different words.
--while using use_browser give the prompt containing all the steps in deatil and ask the model to perform the steps in order, one at a time, and return the results of each step before moving on to the next step. If a step fails, do not proceed to the next step until the failed step is resolved. if the failed step is reccuring then replan the step
-
-CRITICAL for use_browser steps: Each use_browser step must be COMPLETELY SELF-CONTAINED. The task text must include:
-- The EXACT URL to navigate to (never rely on a previous step having left the browser on the right page)
-- All CONCRETE field values, form data, or parameters (never use phrases like "the given details", "as described above", or "the values from the previous step")
-- Any specific selectors, element descriptions, or page identifiers needed
-
-BAD example (DO NOT DO THIS):
-"Fill out the practice form with the given details"
-- This is ambiguous and will fail if the session is rebuilt mid-plan
-
-GOOD example (DO THIS):
-"Navigate to https://demoqa.com/automation-practice-form, then fill out the form with: First Name: John, Last Name: Doe, Email: john.doe@example.com, Mobile: 1234567890, then submit the form"
-- This is self-contained and can be executed by a fresh agent with no memory of prior steps
 
 Goal:
 {goal}
@@ -60,8 +46,6 @@ Return ONLY a valid JSON object with this exact structure, no markdown fences, n
 Notes:
 - "tool_hint": suggest a tool from this list:
     "web_search"       - search the web for information
-    "use_browser"      - automate browser interactions (web scraping, form filling, navigation, etc.)
-                          CRITICAL: NEVER write Python scripts (Selenium/Playwright) for browser tasks. ALWAYS use this tool.
     "code_executor"    - write and execute a Python script
     "setup_workspace"  - create a project directory (use as FIRST step of any app/coding task)
     "shell_command"    - run a CLI command (npm init, npm install, npx create-vite, mkdir, git, etc.)
@@ -72,9 +56,15 @@ Notes:
     "delete_file"      - delete a file or directory inside the project workspace, or clear
                           everything in the workspace (e.g. "delete all files in the project")
     "start_server"     - start a dev server (use as LAST step of app-building tasks)
+    "browser_use"      - browse and interact with a website when rendered UI is required
     "none"             - pure reasoning, no external tool
 - "status": always "PENDING"
 - "sensitive": true only if human confirmation should be required before this step runs
+
+Use "browser_use" only when a task requires navigating a rendered website, filling a
+form, comparing live UI results, or another browser interaction that web_search cannot
+perform. Mark it sensitive=true for any form submission, purchase, account change,
+message, or other external side effect. Browser tasks always require approval.
 
 For most one-off computation (unit conversions, data transforms, calculations), prefer
 "code_executor" — it already handles arbitrary Python computation directly. Only use a

@@ -35,14 +35,6 @@ class Plan(BaseModel):
     cancelled_steps: list[Step] = Field(default_factory=list)
 
 
-class BrowserSubTask(BaseModel):
-    id: int
-    description: str
-    status: StepStatus = StepStatus.PENDING
-    result: Optional[str] = None
-    target: Optional[str] = None
-
-
 def replace_plan(existing: Optional[Plan], new: Optional[Plan]) -> Optional[Plan]:
     """Reducer function to replace the plan with the new value."""
     return new
@@ -110,18 +102,6 @@ def add_human_question(existing: list[dict], new: list[dict]) -> list[dict]:
     return existing + new
 
 
-def replace_browser_task_type(existing: Optional[str], new: Optional[str]) -> Optional[str]:
-    return new if new is not None else existing
-
-
-def replace_browser_targets(existing: Optional[list[str]], new: Optional[list[str]]) -> Optional[list[str]]:
-    return new if new is not None else existing
-
-
-def replace_browser_subtasks(existing: Optional[list[BrowserSubTask]], new: Optional[list[BrowserSubTask]]) -> Optional[list[BrowserSubTask]]:
-    return new if new is not None else existing
-
-
 class State(ExtTypedDict):
     input: str
     plan: Annotated[Optional[Plan], replace_plan]
@@ -138,7 +118,3 @@ class State(ExtTypedDict):
     pending_approval: Annotated[Optional[dict], replace_pending_approval]
     approval_events: Annotated[list[dict], add_approval_event]
     human_questions: Annotated[list[dict], add_human_question]
-    # Browser pipeline state
-    browser_task_type: Annotated[Optional[str], replace_browser_task_type]
-    browser_targets: Annotated[Optional[list[str]], replace_browser_targets]
-    browser_subtasks: Annotated[Optional[list[BrowserSubTask]], replace_browser_subtasks]
