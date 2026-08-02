@@ -1,4 +1,5 @@
-"""Configuration for Browser Use with OpenRouter's Gemma model."""
+"""Configuration for Browser Use with OpenRouter's Gemini Flash model."""
+
 
 from __future__ import annotations
 
@@ -14,7 +15,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
-BROWSER_MODEL = "google/gemma-4-31b-it:free"
+# google/gemma-4-26b-a4b-it:free natively supports structured outputs (response_format) on OpenRouter
+BROWSER_MODEL = "google/gemma-4-26b-a4b-it:free"
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 
 

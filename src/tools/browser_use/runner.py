@@ -1,4 +1,4 @@
-"""Run Browser Use agents through OpenRouter."""
+"""Run Browser Use agents through OpenRouter using FreeOpenRouterChat adapter."""
 
 from __future__ import annotations
 
@@ -23,16 +23,16 @@ class BrowserTaskResult:
     provider: str
 
 
-def _load_dependencies() -> tuple[Any, Any]:
-    """Delay optional imports so normal graph startup needs no browser stack."""
+def _load_agent() -> Any:
+    """Delay optional import so normal graph startup needs no browser stack."""
     try:
-        from browser_use import Agent, ChatOpenAI
+        from browser_use import Agent
     except ImportError as exc:
         raise BrowserUseConfigurationError(
             "Browser Use is not installed. Run `pip install -r requirements.txt` "
             "and then install its browser runtime with `browser-use install`."
         ) from exc
-    return Agent, ChatOpenAI
+    return Agent
 
 
 async def _run_with_model(
@@ -40,39 +40,26 @@ async def _run_with_model(
     *,
     config: BrowserUseConfig,
 ) -> str:
-    """Create a Browser Use agent backed by OpenRouter's OpenAI-compatible API."""
-    Agent, ChatOpenAI = _load_dependencies()
-    llm = ChatOpenAI(
+    """Create a Browser Use agent backed by the FreeOpenRouterChat adapter."""
+    from .free_openrouter import FreeOpenRouterChat
+
+    Agent = _load_agent()
+
+    llm = FreeOpenRouterChat(
         model=config.model,
         api_key=config.api_key,
         base_url=config.base_url,
         temperature=0,
-        frequency_penalty=None,
-        # OpenRouter Gemma does not accept response_format=json_schema. Browser Use
-        # appends its action schema to the system prompt and validates the
-        # returned JSON locally instead.
-        add_schema_to_system_prompt=True,
-        dont_force_structured_output=True,
     )
+
     agent = Agent(
         task=task,
         llm=llm,
-        # google/gemma-4-31b-it:free is text-only, so Browser Use relies on its DOM
-        # and accessibility representation instead of screenshots.
-        use_vision=False,
+        use_vision=True,
         max_failures=config.max_failures,
-        # The OpenRouter free tier for this Gemma model permits limited TPM. The
-        # Browser Use default exposes up to 40k characters of clickable DOM
-        # state, which makes even the first form step exceed that quota.
-        # DemoQA's relevant fields appear near the top of the accessibility
-        # tree, so a compact slice is sufficient and keeps each agent turn
-        # within the provider limit.
-        max_clickable_elements_length=4_000,
-        max_history_items=6,
-        # Shrink Browser Use's output schema as well as the page state. Gemma
-        # does not need a multi-action plan to complete a straightforward
-        # form, and OpenRouter counts the schema against its TPM budget.
-        max_actions_per_step=1,
+        max_clickable_elements_length=8_000,
+        max_history_items=8,
+        max_actions_per_step=3,
         use_thinking=False,
         enable_planning=False,
     )
@@ -85,7 +72,7 @@ async def run_browser_task(
     task: str,
     config: BrowserUseConfig | None = None,
 ) -> BrowserTaskResult:
-    """Run a Browser Use task with OpenRouter's Gemma model."""
+    """Run a Browser Use task through OpenRouter free model adapter."""
     config = config or BrowserUseConfig.from_env()
     if not config.api_key:
         raise BrowserUseConfigurationError(
