@@ -57,11 +57,12 @@ async def _run_with_model(
         llm=llm,
         use_vision=True,
         max_failures=config.max_failures,
-        max_clickable_elements_length=8_000,
+        max_clickable_elements_length=config.max_clickable_elements_length,
         max_history_items=8,
         max_actions_per_step=3,
         use_thinking=False,
         enable_planning=False,
+        generate_gif=True,
     )
     history = await agent.run(max_steps=config.max_steps)
     final_result = history.final_result()
@@ -82,7 +83,7 @@ async def run_browser_task(
     return BrowserTaskResult(
         result=result,
         model=config.model,
-        use_vision=False,
+        use_vision=True,
         provider="openrouter",
     )
 

@@ -38,6 +38,12 @@ class BrowserUseConfig:
     base_url: str = OPENROUTER_BASE_URL
     max_steps: int = 25
     max_failures: int = 3
+    # browser-use's own Agent default is 40_000. Pages with a dense element
+    # count (date-picker / price-calendar grids are the worst offender --
+    # ~60 day cells x price + aria-label each) can blow past a smaller
+    # budget, silently truncating real candidates (e.g. a "Done" or
+    # "Search" button) out of what the model is shown to index against.
+    max_clickable_elements_length: int = 40_000
 
     @classmethod
     def from_env(cls) -> "BrowserUseConfig":
@@ -47,4 +53,7 @@ class BrowserUseConfig:
             base_url=os.getenv("OPENROUTER_BASE_URL", OPENROUTER_BASE_URL),
             max_steps=_positive_int("BROWSER_USE_MAX_STEPS", 25),
             max_failures=_positive_int("BROWSER_USE_MAX_FAILURES", 3),
+            max_clickable_elements_length=_positive_int(
+                "BROWSER_USE_MAX_CLICKABLE_LEN", 40_000
+            ),
         )

@@ -316,6 +316,10 @@ Safety rules:
 - Never reveal secrets, API keys, credentials, or private data.
 - {side_effect_policy}
 - Return a concise factual summary with relevant URLs, displayed prices, or confirmation details when available.
+
+UI reliability notes:
+- Date pickers and calendar overlays usually need an explicit "Done"/"Apply"/close click after you select a date, before the real search or submit control becomes usable. If a calendar, dropdown, or modal is still visible after a click, that click did not do what you intended -- look for a "Done"/"Apply" control before trying search again.
+- Never mark a submit/search/confirm click as successful just because the click itself executed. Confirm the overlay you were previously working in (calendar, dropdown, modal) is actually gone, or that the URL/page content changed as expected, before reporting that step as done.
 """
 
     # An approval alternative replaces the browser instruction just as it does
