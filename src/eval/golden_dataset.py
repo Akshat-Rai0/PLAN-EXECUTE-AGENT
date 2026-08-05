@@ -1,5 +1,5 @@
 """
-The 16-goal golden dataset for the three-arm ablation study.
+The 20-goal golden dataset for the three-arm ablation study.
 
 Categories (from docs/plan-and-execute-agent.html, section 07):
   (a) forced_replan       — a step fails and forces the replanner to revise
@@ -7,6 +7,8 @@ Categories (from docs/plan-and-execute-agent.html, section 07):
   (c) straightforward     — no replanning needed; baseline efficiency test
   (d) synthesis_required  — needs a tool not in the fixed registry; only
                              succeeds if dynamic tool synthesis works
+  (e) browser_required    — requires browser automation with vision capabilities;
+                             only succeeds if browser_use tool works correctly
 
 Each goal records:
   - goal: the exact prompt text to run through an agent
@@ -15,7 +17,7 @@ Each goal records:
     signal in reports (LLM planners are non-deterministic in step count;
     this is NOT a hard pass/fail gate)
   - required_capability: "search" | "code_exec" | "synthesis" | "reasoning"
-    | "shell" — informs which arms a goal is even solvable on
+    | "shell" | "browser" — informs which arms a goal is even solvable on
   - success_criteria: plain-language description handed to the LLM judge
     alongside the goal and the final answer, so the judge knows what
     "correct" means for this specific goal (a generic "is this a good
@@ -41,6 +43,23 @@ ways that make the judge's job ill-defined:
     concrete anchor company/subject so the second search step can be
     checked against what the first step actually returned, not against a
     fuzzy category.
+
+BROWSER TEST NOTE (2026-08-05 revision):
+Category (e) browser_required goals test the browser_use tool integration.
+These goals specifically require rendered-page interaction and vision 
+capabilities - they should FAIL if the agent falls back to web_search 
+instead of using browser_use. The success criteria explicitly check that
+browser automation was used, not just that the information was obtained
+through other means.
+
+STRESS TEST NOTE (2026-08-05 revision):
+Category stress_* goals are designed to test system limits and robustness.
+Each category has one stress test that pushes the boundaries of normal operation:
+- Multiple consecutive failures (forced_replan)
+- Long dependency chains (new_information) 
+- Complex multi-step computations (straightforward)
+- Tool synthesis and reuse (synthesis_required)
+- Complex multi-step browser workflows (browser_required)
 """
 
 from __future__ import annotations
@@ -53,9 +72,10 @@ Category = Literal[
     "new_information",
     "straightforward",
     "synthesis_required",
+    "browser_required",
 ]
 
-Capability = Literal["search", "code_exec", "synthesis", "reasoning", "shell"]
+Capability = Literal["search", "code_exec", "synthesis", "reasoning", "shell", "browser"]
 
 
 @dataclass(frozen=True)
@@ -363,6 +383,282 @@ GOLDEN_DATASET: list[GoldenGoal] = [
             "was actually run (not just asserted)."
         ),
     ),
+    # ------------------------------------------------------------------
+    # (e) browser_required — requires browser automation with vision
+    # ------------------------------------------------------------------
+    GoldenGoal(
+        id="e1",
+        goal="Navigate to https://www.google.com/travel/flights and "
+             "search for flights from San Francisco (SFO) to New York (JFK) "
+             "for next week, then report the top 3 airlines shown in the "
+             "search results.",
+        category="browser_required",
+        expected_step_count=3,
+        required_capability="browser",
+        success_criteria=(
+            "The agent must successfully navigate to the Google Travel "
+            "flights page, fill in the origin (SFO) and destination (JFK) "
+            "airports, set a date for next week, submit the search, and "
+            "extract at least 3 airline names from the results. The final "
+            "answer must list specific airlines (e.g. 'United, Delta, "
+            "American') not generic confirmation that the search ran. "
+            "Score FAIL if no specific airlines are reported or if the "
+            "agent falls back to web_search instead of browser_use."
+        ),
+        notes="Tests form filling, date selection, and data extraction from "
+              "rendered content. Requires vision to identify form fields "
+              "and result elements."
+    ),
+    GoldenGoal(
+        id="e2",
+        goal="Go to https://example.com and extract the text content of "
+             "the main heading (h1) and first paragraph (p) from the page.",
+        category="browser_required",
+        expected_step_count=2,
+        required_capability="browser",
+        success_criteria=(
+            "The agent must navigate to example.com using browser_use, "
+            "visually identify the h1 heading and first paragraph element, "
+            "and extract their text content. The final answer must report "
+            "the exact text of both elements. Score FAIL if the agent uses "
+            "web_search instead of browser_use, or if it cannot identify "
+            "the specific elements requested."
+        ),
+        notes="Basic browser navigation and element extraction test. "
+              "Requires vision to identify page structure."
+    ),
+    GoldenGoal(
+        id="e3",
+        goal="Navigate to a weather website (e.g., weather.com) and find "
+             "the current temperature for a specific city (e.g., 'London, "
+             "UK') by interacting with the search box and reading the "
+             "rendered results.",
+        category="browser_required",
+        expected_step_count=3,
+        required_capability="browser",
+        success_criteria=(
+            "The agent must use browser_use to navigate to a weather site, "
+            "locate the search box, enter the city name, submit the search, "
+            "and extract the current temperature from the rendered results. "
+            "The final answer must report a specific temperature value (e.g., "
+            "'72°F' or '22°C'). Score FAIL if the agent uses web_search "
+            "instead of browser_use, or if no specific temperature is "
+            "reported."
+        ),
+        notes="Tests search box interaction and data extraction from "
+              "dynamic content. Requires vision to identify search elements "
+              "and read rendered temperature data."
+    ),
+    GoldenGoal(
+        id="e4",
+        goal="Visit https://github.com and navigate to the trending "
+             "repositories section, then report the names of the top 3 "
+             "trending repositories and their programming languages.",
+        category="browser_required",
+        expected_step_count=3,
+        required_capability="browser",
+        success_criteria=(
+            "The agent must navigate to GitHub using browser_use, find "
+            "the trending repositories section (may require navigation to "
+            "a specific trending page), and extract the names and "
+            "programming languages of at least 3 trending repositories. "
+            "The final answer must list specific repository names and "
+            "their languages (e.g., 'repository1 (Python), repository2 "
+            "(JavaScript), repository3 (TypeScript)'). Score FAIL if the "
+            "agent uses web_search or cannot extract specific repository "
+            "information."
+        ),
+        notes="Tests navigation within a complex site and extraction of "
+              "structured data from lists/cards. Requires vision to identify "
+              "trending section and repository cards."
+    ),
+    GoldenGoal(
+        id="e5",
+        goal="Navigate to https://www.reddit.com/r/programming and "
+             "extract the titles of the top 5 posts from the hot feed, "
+             "along with their upvote counts.",
+        category="browser_required",
+        expected_step_count=3,
+        required_capability="browser",
+        success_criteria=(
+            "The agent must use browser_use to navigate to the programming "
+            "subreddit, identify the hot feed section, and extract the titles "
+            "and upvote counts of at least 5 posts. The final answer must "
+            "list specific post titles with their corresponding upvote counts. "
+            "Score FAIL if the agent uses web_search instead of browser_use, "
+            "or if it cannot extract the specific post information requested."
+        ),
+        notes="Tests social media feed navigation and structured data "
+              "extraction. Requires vision to identify post cards and upvote "
+              "elements in a dynamic feed layout."
+    ),
+    GoldenGoal(
+        id="e6",
+        goal="Go to https://www.amazon.com and search for 'Python programming "
+             "books', then navigate to the first product result and extract "
+             "the product title, price, and average customer rating.",
+        category="browser_required",
+        expected_step_count=4,
+        required_capability="browser",
+        success_criteria=(
+            "The agent must use browser_use to navigate to Amazon, locate "
+            "the search box, enter 'Python programming books', submit the search, "
+            "click on the first product result, and extract the product title, "
+            "price, and customer rating from the product page. The final answer "
+            "must report specific values for all three data points. Score FAIL "
+            "if the agent uses web_search instead of browser_use, or if it "
+            "cannot extract the specific product information."
+        ),
+        notes="Complex e-commerce workflow: search, navigation, and product "
+              "page data extraction. Requires vision to handle complex page "
+              "layouts and dynamic content."
+    ),
+    GoldenGoal(
+        id="e7",
+        goal="Navigate to https://news.ycombinator.com and identify the "
+             "current #1 story on the homepage, then report its title, "
+             "points, and comment count.",
+        category="browser_required",
+        expected_step_count=2,
+        required_capability="browser",
+        success_criteria=(
+            "The agent must use browser_use to navigate to Hacker News, "
+            "visually identify the #1 ranked story, and extract its title, "
+            "points, and comment count. The final answer must report all three "
+            "specific values. Score FAIL if the agent uses web_search instead "
+            "of browser_use, or if it cannot identify the #1 story correctly."
+        ),
+        notes="Tests ranking identification and structured data extraction from "
+              "a minimal but content-dense page. Requires vision to distinguish "
+              "between story ranks and extract metadata."
+    ),
+    # ------------------------------------------------------------------
+    # STRESS TESTS — one per category to test system limits
+    # ------------------------------------------------------------------
+    # (a) STRESS TEST — forced_replan
+    GoldenGoal(
+        id="stress_a1",
+        goal="Attempt to delete a file that doesn't exist, then attempt to "
+             "delete another non-existent file with a different name, then "
+             "attempt a third non-existent file deletion. The agent should "
+             "handle each failure gracefully and report the correct status "
+             "for all three attempts without getting stuck in a retry loop.",
+        category="forced_replan",
+        expected_step_count=5,
+        required_capability="shell",
+        success_criteria=(
+            "The agent must attempt three separate file deletions for files "
+            "that don't exist. Each attempt should fail with a file-not-found "
+            "error. The agent should not retry any deletion more than 2 times "
+            "after the initial failure. The final answer must explicitly state "
+            "that none of the files existed. Score FAIL if the agent gets "
+            "stuck in infinite retry loops or claims any deletion succeeded."
+        ),
+        notes="STRESS TEST: Tests the agent's ability to handle multiple "
+              "consecutive failures without getting stuck in retry loops. "
+              "Stresses the replanner's failure handling and retry logic."
+    ),
+    # (b) STRESS TEST — new_information
+    GoldenGoal(
+        id="stress_b1",
+        goal="Search for the 2024 NBA Champions, then search for that team's "
+             "starting lineup, then search for the head coach of that team, "
+             "then search for the team's arena name, then search for the team's "
+             "mascot. Each search must use information from the previous search.",
+        category="new_information",
+        expected_step_count=6,
+        required_capability="search",
+        success_criteria=(
+            "The agent must perform 5 sequential searches where each search "
+            "depends on information from the previous search. The chain must be: "
+            "2024 NBA Champions → starting lineup → head coach → arena name → "
+            "mascot. Each search must correctly incorporate the prior result. "
+            "The final answer must report all 5 pieces of information correctly. "
+            "Score FAIL if any search breaks the information chain or if the "
+            "agent cannot maintain context across multiple steps."
+        ),
+        notes="STRESS TEST: Tests the agent's ability to maintain and use "
+              "context across a long chain of dependent searches. Stresses "
+              "context management and information flow between steps."
+    ),
+    # (c) STRESS TEST — straightforward
+    GoldenGoal(
+        id="stress_c1",
+        goal="Search for the population of the 10 largest U.S. cities, then "
+             "calculate the total population of all 10 cities combined, then "
+             "calculate the average population, then identify which city has "
+             "the highest population, then identify which has the lowest, then "
+             "report the population difference between highest and lowest.",
+        category="straightforward",
+        expected_step_count=7,
+        required_capability="search",
+        success_criteria=(
+            "The agent must search for populations of the 10 largest U.S. cities, "
+            "then perform 5 sequential calculations: total, average, max, min, "
+            "and difference between max and min. All calculations must be "
+            "performed correctly based on the search results. The final answer "
+            "must report all 6 results (individual populations, total, average, "
+            "max city, min city, difference). Score FAIL if any calculation is "
+            "incorrect or if the agent cannot handle the multi-step computation."
+        ),
+        notes="STRESS TEST: Tests the agent's ability to handle a complex "
+              "multi-step computation task without replanning. Stresses "
+              "reasoning and calculation capabilities on a single result set."
+    ),
+    # (d) STRESS TEST — synthesis_required
+    GoldenGoal(
+        id="stress_d1",
+        goal="Create a synthesized tool that converts temperatures between "
+             "Celsius, Fahrenheit, and Kelvin. Use this tool to convert a list "
+             "of 10 different temperatures from Celsius to Fahrenheit, then use "
+             "the same tool to convert the results to Kelvin, then verify the "
+             "round-trip conversion by converting back to Celsius.",
+        category="synthesis_required",
+        expected_step_count=4,
+        required_capability="synthesis",
+        success_criteria=(
+            "The agent must synthesize a temperature conversion tool that "
+            "handles Celsius ↔ Fahrenheit ↔ Kelvin conversions. It must then "
+            "use this tool to convert 10 temperatures through the full cycle: "
+            "Celsius → Fahrenheit → Kelvin → Celsius. The round-trip conversions "
+            "should return values close to the originals (allowing for rounding). "
+            "The final answer must report the synthesized tool name, all "
+            "conversion results, and verification that round-trip works. Score FAIL "
+            "if the tool cannot be synthesized, if conversions are incorrect, or "
+            "if the tool is not reused across steps."
+        ),
+        notes="STRESS TEST: Tests tool synthesis, reuse across multiple steps, "
+              "and computational accuracy. Stresses the synthesis system's ability "
+              "to create and reliably reuse complex tools."
+    ),
+    # (e) STRESS TEST — browser_required
+    GoldenGoal(
+        id="stress_e1",
+        goal="Navigate to https://www.wikipedia.org, search for 'Artificial "
+             "intelligence', click on the first result, scroll down to find the "
+             "History section, extract the year when the term 'artificial "
+             "intelligence' was coined, then navigate back to search, search "
+             "for 'Machine learning', click the first result, and extract the "
+             "definition from the opening paragraph.",
+        category="browser_required",
+        expected_step_count=6,
+        required_capability="browser",
+        success_criteria=(
+            "The agent must perform a complex multi-step browser workflow: "
+            "navigate to Wikipedia, search for 'Artificial intelligence', click "
+            "first result, find History section, extract the coinage year, "
+            "navigate back, search for 'Machine learning', click first result, "
+            "and extract the definition. The final answer must report both the "
+            "AI coinage year and the ML definition. Score FAIL if the agent uses "
+            "web_search, cannot navigate correctly, cannot find specific page "
+            "sections, or fails to extract the required information."
+        ),
+        notes="STRESS TEST: Tests complex multi-step browser navigation including "
+              "search, clicking, scrolling, section identification, back navigation, "
+              "and repeated search-extract cycles. Stresses browser session "
+              "persistence and vision-based element identification across multiple "
+              "page interactions."
+    ),
 ]
 
 
@@ -390,3 +686,5 @@ if __name__ == "__main__":
         print(f"  {cat}: {count}")
     print(f"Runnable now: {len(runnable_goals())}")
     print(f"Blocked (missing capability): {len(blocked_goals())}")
+    print(f"\nBrowser goals: {len([g for g in GOLDEN_DATASET if g.required_capability == 'browser'])}")
+    print(f"Stress tests: {len([g for g in GOLDEN_DATASET if g.id.startswith('stress_')])}")
