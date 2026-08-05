@@ -997,6 +997,36 @@ def reason_node(state: State) -> dict:
     no external tool call (e.g. "determine the current date", "plan the
     itinerary", "create a budget", "identify the winner from prior results").
 
+    WHEN TO USE:
+    - For analysis, planning, or synthesis of existing information
+    - When you have all necessary context and just need to process it
+    - For decision-making based on prior step results
+    - For summarizing or combining information from multiple sources
+    - When the task requires logical reasoning but no external data
+    - For planning itineraries, budgets, or strategies based on gathered info
+
+    WHEN NOT TO USE:
+    - When you need to gather new information (use tavily_search instead)
+    - For calculations or data processing (use code_executor instead)
+    - When you need to interact with files or systems (use appropriate tools)
+    - When the task requires external APIs or services
+    - For tasks that need visual understanding (use browser_use)
+
+    EXAMPLES:
+    - "Analyze the search results and identify the best option"
+    - "Plan a 3-day itinerary based on the gathered information"
+    - "Create a budget from the price information collected"
+    - "Determine the winner from the tournament results"
+    - "Summarize the key findings from the research"
+    - "Compare the options and recommend the best choice"
+
+    CAPABILITIES:
+    - Grounded in current date (recency-aware reasoning)
+    - Access to all prior step results for context
+    - Can synthesize information from multiple sources
+    - Makes real LLM calls (not silent no-ops)
+    - LOW-risk classification (no external side effects)
+
     Previously these steps were routed to `stub_node`, which just marked them
     DONE with a placeholder string and did no actual work. That silently
     dropped steps the planner considered load-bearing — e.g. "determine the
@@ -1101,6 +1131,54 @@ def _is_fixable_error(error_message: str) -> bool:
 def code_executor_node(state: State) -> dict:
     """
     Execute a step whose tool_hint is "code_executor" — generates and runs Python code.
+
+    WHEN TO USE:
+    - For one-off calculations, data processing, or computational tasks
+    - When you need to manipulate or analyze data from prior steps
+    - For mathematical computations, statistical analysis, or data transformations
+    - When standard library operations suffice (no external dependencies needed)
+    - For generating test data, samples, or synthetic content
+    - When the task is a single-use calculation (not needing reusability)
+
+    WHEN NOT TO USE:
+    - For reusable functionality across multiple steps (use synthesize_tool instead)
+    - When the same logic needs to be applied to different inputs repeatedly
+    - For file operations (use write_file_tool, delete_file_tool instead)
+    - For network operations (use shell_command_tool or search instead)
+    - When the task requires persistent tools or complex dependencies
+
+    EXAMPLES:
+    - "Calculate the compound interest for a loan over 5 years"
+    - "Convert the temperature data from Celsius to Fahrenheit"
+    - "Generate a list of 100 random numbers and calculate statistics"
+    - "Parse the CSV data and filter rows where age > 25"
+    - "Calculate the SHA-256 hash of a given string"
+    - "Perform linear regression on the dataset and report the R-squared value"
+
+    CAPABILITIES:
+    - Full Python standard library access (math, json, re, datetime, etc.)
+    - Automatic error detection and retry (up to 2 retries for fixable errors)
+    - Sandbox execution with timeout (default: 15 seconds) and memory limits
+    - Access to workspace files for reading/writing
+    - Command-line argument support for dynamic input values
+    - Comprehensive error reporting with stderr capture
+
+    CONSTRAINTS:
+    - No external package imports (standard library only)
+    - No network access (security restriction)
+    - No interactive input() calls (non-interactive execution)
+    - Timeout enforced (prevents infinite loops)
+    - Memory limits prevent resource exhaustion
+    - Results must be printed to stdout for capture
+
+    WORKFLOW:
+    1. Analyze step task and prior context
+    2. Determine if command-line arguments are needed
+    3. Generate Python code via LLM
+    4. Execute in sandboxed environment
+    5. Capture stdout/stderr and handle errors
+    6. Retry on fixable errors (import errors, syntax errors, etc.)
+    7. Mark step DONE with result or FAILED with error
 
     This node:
     1. Uses the LLM to generate Python code based on the step's task description
@@ -1320,10 +1398,56 @@ Instructions:
 
 def setup_workspace_node(state: State) -> dict:
     """
-    Create a fresh project workspace directory and store its path in state.
+    Execute a step whose tool_hint is "setup_workspace" — creates a project directory.
 
-    This is always the FIRST step for any app-building task. Subsequent nodes
-    read workspace_path from state so they all operate inside the same directory.
+    WHEN TO USE:
+    - As the FIRST step in any app/coding task
+    - When creating a new project structure
+    - Before scaffolding, file creation, or development work
+    - When the task requires a dedicated working directory
+    - For organizing project files and keeping workspace clean
+
+    WHEN NOT TO USE:
+    - When a workspace already exists (check state first)
+    - For simple file operations that don't need a project structure
+    - When working with temporary files (use temp directories instead)
+    - For operations that don't require file system organization
+
+    EXAMPLES:
+    - "Create a new React project workspace"
+    - "Set up a Python project directory structure"
+    - "Initialize a workspace for the web application"
+    - "Create a project folder for the new API"
+    - "Set up a directory for the data processing pipeline"
+
+    CAPABILITIES:
+    - Creates timestamped workspace directories
+    - Manages workspace lifecycle across steps
+    - Prevents workspace conflicts between runs
+    - Provides clean slate for each new project
+    - Integrates with all file and shell operations
+    - Automatic workspace path management
+
+    WORKFLOW:
+    1. Check if workspace already exists in state
+    2. Create new workspace directory with timestamp
+    3. Store workspace path in state for subsequent steps
+    4. Make workspace available to all file/shell operations
+    5. Workspace persists until task completion or cleanup
+
+    INTEGRATION:
+    - File operations (write_file_tool, delete_file_tool) use this workspace
+    - Shell commands (shell_command_tool) run in this workspace
+    - Code execution (code_executor_node) has access to workspace files
+    - Dev server (start_server_tool) runs from this workspace
+    - Provides consistent working directory across all project steps
+
+    SAFETY:
+    - Workspace isolation prevents file conflicts
+    - Timestamped directories prevent overwriting
+    - Scoped to current task/run only
+    - Automatic cleanup on task completion
+    - No access to files outside workspace
     """
     plan = state["plan"]
     if plan is None:
@@ -1348,6 +1472,12 @@ def setup_workspace_node(state: State) -> dict:
 
     return {"plan": plan, "steps_executed": 1, "workspace_path": workspace_path, **log_update}
 
+    current_step.status = StepStatus.DONE
+    current_step.result = f"Project workspace created at: {workspace_path}"
+    print(f"✅ Workspace created: {workspace_path}")
+
+    return {"plan": plan, "steps_executed": 1, "workspace_path": workspace_path, **log_update}
+
 
 def _build_coding_context(plan, current_step) -> str:
     """Build a short prior-steps context block for coding node prompts."""
@@ -1364,6 +1494,51 @@ def _build_coding_context(plan, current_step) -> str:
 def synthesize_tool_node(state: State) -> dict:
     """
     Handle a step whose tool_hint matched no fixed tool (tool_hint='synthesize_tool').
+
+    WHEN TO USE (triggered automatically by graph routing):
+    - When the planner requests a capability not in the fixed tool registry
+    - When a step's tool_hint doesn't match any standard tool
+    - When reusable functionality is needed across multiple steps
+    - For specialized calculations, transformations, or integrations
+    - When the same logic needs to be applied to different inputs repeatedly
+
+    WHEN NOT TO USE:
+    - For one-off calculations (use code_executor instead)
+    - When standard tools suffice (search, shell, file operations)
+    - For simple operations that don't need reusability
+    - When the task can be accomplished with existing fixed tools
+
+    EXAMPLES of synthesized capabilities:
+    - "convert_temperature_units" - Reusable temperature conversion
+    - "fetch_exchange_rate" - Currency rate fetching with caching
+    - "calculate_business_metrics" - Domain-specific calculations
+    - "parse_custom_data_format" - Proprietary data format parsing
+    - "apply_pricing_logic" - Business rule implementation
+
+    WORKFLOW:
+    1. Check if tool already exists in registry (reuse if found)
+    2. If new tool needed, declare schema via LLM (input/output contract)
+    3. Generate Python code implementation via LLM
+    4. Validate code in sandbox (test with example input)
+    5. Register successful tool for reuse across steps
+    6. Execute tool with actual step input
+    7. Return result or mark step FAILED if validation fails
+
+    CAPABILITIES:
+    - Dynamic tool creation based on step requirements
+    - Tool registry for reuse across steps and runs
+    - Schema-first approach (declare before implementation)
+    - Sandbox validation for security
+    - Automatic retry on validation failures
+    - Integration with existing tool ecosystem
+
+    SECURITY:
+    - Code runs in sandboxed environment
+    - No file I/O or network access (pure computation)
+    - Standard library only (no external dependencies)
+    - Validation before registration
+    - Memory and timeout limits
+    - HIGH-risk classification (requires approval)
 
     Previously these steps fell through to stub_node, which marked the step
     DONE with a placeholder message — silently pretending success when

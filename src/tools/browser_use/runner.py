@@ -73,7 +73,57 @@ async def run_browser_task(
     task: str,
     config: BrowserUseConfig | None = None,
 ) -> BrowserTaskResult:
-    """Run a Browser Use task through OpenRouter free model adapter."""
+    """
+    Run a Browser Use task through OpenRouter free model adapter.
+
+    WHEN TO USE:
+    - When you need to interact with rendered websites (not just scrape HTML)
+    - For form filling and submission on web pages
+    - When visual page understanding is required (identifying elements by sight)
+    - For multi-step interactions requiring page state persistence
+    - When JavaScript-rendered content needs to be accessed
+    - For tasks that require human-like browsing behavior
+
+    WHEN NOT TO USE:
+    - For simple information retrieval (use tavily_search instead)
+    - When static HTML scraping would suffice (use search/code_executor)
+    - For API calls or data fetching (use code_executor with requests library)
+    - When the task doesn't require visual element identification
+    - For high-volume automated scraping (browser is resource-intensive)
+
+    EXAMPLES:
+    - "Navigate to Google Travel flights and search for SFO to JFK flights"
+    - "Go to example.com and extract the main heading text"
+    - "Fill out a contact form with name, email, and message"
+    - "Navigate to weather.com and find current temperature for London"
+    - "Go to GitHub and find trending repositories with their languages"
+    - "Login to a dashboard and navigate to the settings page"
+
+    CAPABILITIES:
+    - Vision-enabled page understanding (identifies elements visually)
+    - Form filling and submission
+    - Multi-step navigation with session persistence
+    - Dynamic content interaction (JavaScript-heavy sites)
+    - Element identification using visual cues and DOM structure
+    - Screenshot generation for debugging
+
+    TECHNICAL DETAILS:
+    - Uses OpenRouter's Gemma model with structured outputs
+    - Vision capabilities enabled for rendered page analysis
+    - Session persistence across steps within a single task
+    - Configurable step limits and failure tolerance
+    - HIGH-risk classification (requires approval before execution)
+
+    Args:
+        task: Natural language description of the browser task to perform
+        config: Optional BrowserUseConfig (uses environment defaults if not provided)
+
+    Returns:
+        BrowserTaskResult containing the task result, model used, vision status, and provider
+
+    Raises:
+        BrowserUseConfigurationError: If OPENROUTER_API_KEY is not configured
+    """
     config = config or BrowserUseConfig.from_env()
     if not config.api_key:
         raise BrowserUseConfigurationError(
