@@ -161,7 +161,8 @@ graph TD
     executor -->|tool_hint: write_file/file_editor| write_file[write_file]
     executor -->|tool_hint: start_server| start_server[start_server]
     executor -->|tool_hint: delete_file| delete_file[delete_file]
-    executor -->|unimplemented hint| stub[stub]
+    executor -->|tool_hint: browser_use/browser-use| browser_use[browser_use]
+    executor -->|unimplemented hint| synthesize_tool[synthesize_tool]
     executor -->|no RUNNING step| synthesize[synthesize]
 
     executor -->|HIGH-risk tool| approval[approval]
@@ -176,7 +177,8 @@ graph TD
     write_file --> after_tool
     start_server --> after_tool
     delete_file --> after_tool
-    stub --> after_tool
+    browser_use --> after_tool
+    synthesize_tool --> after_tool
 
     after_tool -->|step cap exceeded| synthesize
     after_tool -->|step CANCELLED| synthesize
@@ -197,8 +199,9 @@ graph TD
     style write_file fill:#e1ffe1
     style start_server fill:#e1ffe1
     style delete_file fill:#e1ffe1
+    style browser_use fill:#f5e1ff
+    style synthesize_tool fill:#f5e1ff
     style after_tool fill:#fff4e1
-    style stub fill:#f5e1ff
     style replaner fill:#ffe1e1
     style synthesize fill:#e1f5ff
     style END fill:#e1f5ff
@@ -219,6 +222,8 @@ graph TD
     <p>Phases now map 1:1 to the spec's Section 06 timeline (Jul 7 – Aug 10, 35 days). This roadmap is the phase-by-phase execution view of that timeline, not a separate plan.</p>
     <h4>5. New: gap fixes folded into relevant phases</h4>
     <p>Phase 4 adds an LLM-call budget cap and cross-run tool-registry caching (previously unaddressed — tools were only cached within a single run). Phase 5 adds an explicit sandbox-alternative decision note (subprocess+seccomp vs. microVM/managed sandbox). Phase 7 adds a prompt-injection defense for browser-sourced content, and its HITL gate now surfaces generated source code for review, not just the step description. Phase 0 adds a lightweight testing/CI task that v1 omitted entirely.</p>
+    <h4>6. Phase 7 Complete — Browser Automation with Vision (August 2026)</h4>
+    <p>Phase 7 is now complete with full browser automation capabilities including vision-enabled page understanding. The integration uses OpenRouter's Gemma model with structured outputs, comprehensive risk classification as HIGH-risk operations, and full approval gating. The system can now interact with rendered websites, fill forms, and navigate complex UI flows that require visual understanding.</p>
   </div>
 </div>
 
@@ -242,12 +247,12 @@ graph TD
     <div class="overview-seg" style="background:var(--green)"><span>P4</span></div>
     <div class="overview-seg" style="background:var(--green)"><span>P5</span></div>
     <div class="overview-seg" style="background:var(--green)"><span>P6</span></div>
-    <div class="overview-seg" style="background:var(--amber)"><span>P7</span></div>
-    <div class="overview-seg" style="background:var(--amber)"><span>P8</span></div>
+    <div class="overview-seg" style="background:var(--green)"><span>P7</span></div>
+    <div class="overview-seg" style="background:var(--accent)"><span>P8</span></div>
     <div class="overview-seg" style="background:var(--ink-3)"><span>P9</span></div>
   </div>
   <div class="callout">
-    <p><strong>Status note:</strong> Phase numbers/statuses below are left as "future" placeholders since this is a template regenerated from the spec — update the <code>phase-num</code> and <code>phase-status</code> classes (<code>done</code> / <code>active</code> / <code>future</code>) as you actually complete each phase.</p>
+    <p><strong>Status note:</strong> Phase 7 is now complete. The system has full browser automation capabilities with vision support. Phase 8 (ReAct baseline + evaluation) is currently in progress. Phase 9 (Web UI + deployment) remains pending.</p>
   </div>
 </div>
 
@@ -649,13 +654,13 @@ graph TD
   <div class="section-label">Phase 7 · Aug 1–4</div>
   <div class="phase">
     <div class="phase-header">
-      <div class="phase-num active">7</div>
+      <div class="phase-num done">7</div>
       <div class="phase-title">
         <h3>Browser Automation</h3>
         <div class="phase-meta">4 days · CLI only</div>
         <div class="phase-arm">Arm 3 complete at end of this phase</div>
       </div>
-      <div class="phase-status active">In Progress</div>
+      <div class="phase-status done">Complete</div>
     </div>
     <div class="phase-body">
       <div class="phase-col">
