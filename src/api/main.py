@@ -77,6 +77,9 @@ async def create_run(body: CreateRunRequest) -> RunSummary:
 
     run_id = f"run-{uuid.uuid4().hex[:12]}"
     _active_chat_run = run_id  # Set as active chat run
+
+    # Persist the run immediately so websocket stream / status queries can find it instantly
+    store.create_run(run_id, body.arm, body.task[:120])
     
     # Store the user's message
     user_message = ChatMessage(
@@ -167,7 +170,15 @@ def get_run_messages(run_id: str) -> list[ChatMessage]:
 @app.websocket("/runs/{run_id}/stream")
 async def stream_run(websocket: WebSocket, run_id: str) -> None:
     await websocket.accept()
-    detail = store.get_run(run_id)
+    
+    # Grace period to allow run insertion
+    detail = None
+    for _ in range(10):
+        detail = store.get_run(run_id)
+        if detail is not None:
+            break
+        await asyncio.sleep(0.05)
+
     if detail is None:
         await websocket.close(code=4404)
         return

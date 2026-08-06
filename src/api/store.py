@@ -77,6 +77,7 @@ class RunStore:
                 """
                 INSERT INTO runs (run_id, arm, task_name, status, started_at)
                 VALUES (?, ?, ?, 'running', ?)
+                ON CONFLICT(run_id) DO NOTHING
                 """,
                 (run_id, arm, task_name, started_at or utc_now_iso()),
             )
