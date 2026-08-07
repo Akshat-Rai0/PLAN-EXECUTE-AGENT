@@ -1,0 +1,75 @@
+{
+  "timestamp_utc": "20260806-071906",
+  "arms_evaluated": [
+    "plan_execute_no_synthesis",
+    "plan_execute_full"
+  ],
+  "goals_evaluated": [
+    "b1"
+  ],
+  "blocked_goals_excluded": [],
+  "total_elapsed_seconds": 133.7004300839908,
+  "aggregate_by_arm": {
+    "plan_execute_no_synthesis": {
+      "total_goals": 1,
+      "succeeded_runs": 0,
+      "success_rate": 0.0,
+      "avg_step_count": 0.0,
+      "avg_replan_count": 0.0,
+      "avg_synthesis_count": 0.0,
+      "avg_wall_clock_seconds": 3.7588906250020955,
+      "avg_completeness_score": 0.0,
+      "avg_correctness_score": 0.0
+    },
+    "plan_execute_full": {
+      "total_goals": 1,
+      "succeeded_runs": 1,
+      "success_rate": 1.0,
+      "avg_step_count": 5,
+      "avg_replan_count": 2,
+      "avg_synthesis_count": 0,
+      "avg_wall_clock_seconds": 107.11878937500296,
+      "avg_completeness_score": 0.0,
+      "avg_correctness_score": 0.0
+    }
+  },
+  "synthesis_isolation_check": null,
+  "per_goal_results": {
+    "b1": {
+      "plan_execute_no_synthesis": {
+        "success": false,
+        "step_count": 0,
+        "replan_count": 0,
+        "synthesis_count": 0,
+        "approval_count": 0,
+        "wall_clock_seconds": 3.7588906250020955,
+        "final_answer": null,
+        "error": "ValueError: {'message': 'Upstream error from Nvidia: ResourceExhausted: Worker local total request limit reached (32/32)', 'code': 502}\nTraceback (most recent call last):\n  File \"/Users/bipinkumarrai/Desktop/EVERYTHING/CODING PROJECTS/plan-execute-agent-scaffold/src/eval/arm_runner.py\", line 171, in run_plan_execute_arm\n    result = compiled.invoke(initial_state, config)\n  File \"/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/langgraph/pregel/main.py\", line 3913, in invoke\n    for chunk in self.stream(\n                 ~~~~~~~~~~~^\n        input,\n        ^^^^^^\n    ...<11 lines>...\n        **kwargs,\n        ^^^^^^^^^\n    ):\n    ^\n  File \"/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/langgraph/pregel/main.py\", line 2967, in stream\n    for _ in runner.tick(\n             ~~~~~~~~~~~^\n        [t for t in loop.tasks.values() if not t.writes],\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    ...<2 lines>...\n        schedule_task=loop.accept_push,\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    ):\n    ^\n  File \"/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/langgraph/pregel/_runner.py\", line 207, in tick\n    run_with_retry(\n    ~~~~~~~~~~~~~~^\n        t,\n        ^^\n    ...<10 lines>...\n        },\n        ^^\n    )\n    ^\n  File \"/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/langgraph/pregel/_retry.py\", line 617, in run_with_retry\n    return task.proc.invoke(task.input, config)\n           ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^\n  File \"/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/langgraph/_internal/_runnable.py\", line 684, in invoke\n    input = context.run(step.invoke, input, config, **kwargs)\n  File \"/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/langgraph/_internal/_runnable.py\", line 426, in invoke\n    ret = self.func(*args, **kwargs)\n  File \"/Users/bipinkumarrai/Desktop/EVERYTHING/CODING PROJECTS/plan-execute-agent-scaffold/src/agents/plan_execute/nodes.py\", line 232, in plan_node\n    plan = breakdown_task(goal)\n  File \"/Users/bipinkumarrai/Desktop/EVERYTHING/CODING PROJECTS/plan-execute-agent-scaffold/src/agents/plan_execute/tools.py\", line 231, in breakdown_task\n    response = llm.invoke(messages)\n  File \"/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/langchain_core/language_models/chat_models.py\", line 476, in invoke\n    self.generate_prompt(\n    ~~~~~~~~~~~~~~~~~~~~^\n        [self._convert_input(input)],\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    ...<6 lines>...\n        **kwargs,\n        ^^^^^^^^^\n    ).generations[0][0],\n    ^\n  File \"/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/langchain_core/language_models/chat_models.py\", line 1849, in generate_prompt\n    return self.generate(prompt_messages, stop=stop, callbacks=callbacks, **kwargs)\n           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/langchain_core/language_models/chat_models.py\", line 1656, in generate\n    self._generate_with_cache(\n    ~~~~~~~~~~~~~~~~~~~~~~~~~^\n        m,\n        ^^\n    ...<2 lines>...\n        **kwargs,\n        ^^^^^^^^^\n    )\n    ^\n  File \"/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/langchain_core/language_models/chat_models.py\", line 1994, in _generate_with_cache\n    result = self._generate(\n        messages, stop=stop, run_manager=run_manager, **kwargs\n    )\n  File \"/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/langchain_openai/chat_models/base.py\", line 1749, in _generate\n    return self._create_chat_result(response, generation_info)\n           ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/langchain_openai/chat_models/base.py\", line 1818, in _create_chat_result\n    raise ValueError(response_dict.get(\"error\"))\nValueError: {'message': 'Upstream error from Nvidia: ResourceExhausted: Worker local total request limit reached (32/32)', 'code': 502}\nDuring task with name 'plan' and id 'd60f6f01-8b28-ad86-271c-eeaa5800e72c'\n",
+        "judge": {
+          "completeness_score": 0.0,
+          "correctness_score": 0.0,
+          "reasoning": "Run did not succeed or produced no final answer \u2014 not sent to judge.",
+          "judge_error": null,
+          "exact_match_result": null
+        }
+      },
+      "plan_execute_full": {
+        "success": true,
+        "step_count": 5,
+        "replan_count": 2,
+        "synthesis_count": 0,
+        "approval_count": 1,
+        "wall_clock_seconds": 107.11878937500296,
+        "final_answer": "I could not confirm the requested information. Both search steps returned unverified results:\n\n1. **Latest F1 race and winner**: The search could not verify the name of the most recent completed Grand Prix or the winning driver (Step 3 result: `[UNVERIFIED: could not confirm 'Name of the latest F1 race (Grand Prix name and date) and the winning driver's name' after 2 attempts]`).\n\n2. **Winning margin**: The search could not verify the time margin between the winner and runner-up in that race (Step 4 result: `[UNVERIFIED: could not confirm 'Time margin in seconds (or hours/minutes/seconds) between the winner and second-place finisher' after 2 attempts]`).\n\nThe search snippets returned contained fragmented mentions (e.g., a reference to Norris winning by 15 seconds and Verstappen news from August 4), but none of this information was confirmed or attributable to a specific, verified latest race as of 2026-08-06.",
+        "error": null,
+        "judge": {
+          "completeness_score": 0.0,
+          "correctness_score": 0.0,
+          "reasoning": "The agent's final answer does not identify the winner of the latest Formula 1 race nor provide the winning margin over the runner-up, which are both required by the goal and success criteria. Instead, it reports an inability to confirm the information, leaving the core request unfulfilled.",
+          "judge_error": null,
+          "exact_match_result": null
+        }
+      }
+    }
+  }
+}

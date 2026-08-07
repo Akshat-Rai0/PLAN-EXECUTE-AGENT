@@ -1,0 +1,46 @@
+{
+  "timestamp_utc": "20260806-072241",
+  "arms_evaluated": [
+    "plan_execute_full"
+  ],
+  "goals_evaluated": [
+    "b1"
+  ],
+  "blocked_goals_excluded": [],
+  "total_elapsed_seconds": 3.13249249997898,
+  "aggregate_by_arm": {
+    "plan_execute_full": {
+      "total_goals": 1,
+      "succeeded_runs": 0,
+      "success_rate": 0.0,
+      "avg_step_count": 0.0,
+      "avg_replan_count": 0.0,
+      "avg_synthesis_count": 0.0,
+      "avg_wall_clock_seconds": 2.545880749996286,
+      "avg_completeness_score": 0.0,
+      "avg_correctness_score": 0.0
+    }
+  },
+  "synthesis_isolation_check": null,
+  "per_goal_results": {
+    "b1": {
+      "plan_execute_full": {
+        "success": false,
+        "step_count": 0,
+        "replan_count": 0,
+        "synthesis_count": 0,
+        "approval_count": 0,
+        "wall_clock_seconds": 2.545880749996286,
+        "final_answer": null,
+        "error": "BadRequestError: Error code: 400 - {'error': {'message': 'The model `llama3-70b-8192` has been decommissioned and is no longer supported. Please refer to https://console.groq.com/docs/deprecations for a recommendation on which model to use instead.', 'type': 'invalid_request_error', 'code': 'model_decommissioned'}}\nTraceback (most recent call last):\n  File \"/Users/bipinkumarrai/Desktop/EVERYTHING/CODING PROJECTS/plan-execute-agent-scaffold/src/eval/arm_runner.py\", line 171, in run_plan_execute_arm\n    result = compiled.invoke(initial_state, config)\n  File \"/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/langgraph/pregel/main.py\", line 3913, in invoke\n    for chunk in self.stream(\n                 ~~~~~~~~~~~^\n        input,\n        ^^^^^^\n    ...<11 lines>...\n        **kwargs,\n        ^^^^^^^^^\n    ):\n    ^\n  File \"/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/langgraph/pregel/main.py\", line 2967, in stream\n    for _ in runner.tick(\n             ~~~~~~~~~~~^\n        [t for t in loop.tasks.values() if not t.writes],\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    ...<2 lines>...\n        schedule_task=loop.accept_push,\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    ):\n    ^\n  File \"/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/langgraph/pregel/_runner.py\", line 207, in tick\n    run_with_retry(\n    ~~~~~~~~~~~~~~^\n        t,\n        ^^\n    ...<10 lines>...\n        },\n        ^^\n    )\n    ^\n  File \"/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/langgraph/pregel/_retry.py\", line 617, in run_with_retry\n    return task.proc.invoke(task.input, config)\n           ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^\n  File \"/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/langgraph/_internal/_runnable.py\", line 684, in invoke\n    input = context.run(step.invoke, input, config, **kwargs)\n  File \"/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/langgraph/_internal/_runnable.py\", line 426, in invoke\n    ret = self.func(*args, **kwargs)\n  File \"/Users/bipinkumarrai/Desktop/EVERYTHING/CODING PROJECTS/plan-execute-agent-scaffold/src/agents/plan_execute/nodes.py\", line 232, in plan_node\n    plan = breakdown_task(goal)\n  File \"/Users/bipinkumarrai/Desktop/EVERYTHING/CODING PROJECTS/plan-execute-agent-scaffold/src/agents/plan_execute/tools.py\", line 231, in breakdown_task\n    response = llm.invoke(messages)\n  File \"/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/langchain_core/language_models/chat_models.py\", line 476, in invoke\n    self.generate_prompt(\n    ~~~~~~~~~~~~~~~~~~~~^\n        [self._convert_input(input)],\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    ...<6 lines>...\n        **kwargs,\n        ^^^^^^^^^\n    ).generations[0][0],\n    ^\n  File \"/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/langchain_core/language_models/chat_models.py\", line 1849, in generate_prompt\n    return self.generate(prompt_messages, stop=stop, callbacks=callbacks, **kwargs)\n           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/langchain_core/language_models/chat_models.py\", line 1656, in generate\n    self._generate_with_cache(\n    ~~~~~~~~~~~~~~~~~~~~~~~~~^\n        m,\n        ^^\n    ...<2 lines>...\n        **kwargs,\n        ^^^^^^^^^\n    )\n    ^\n  File \"/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/langchain_core/language_models/chat_models.py\", line 1994, in _generate_with_cache\n    result = self._generate(\n        messages, stop=stop, run_manager=run_manager, **kwargs\n    )\n  File \"/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/langchain_groq/chat_models.py\", line 627, in _generate\n    response = self.client.create(messages=message_dicts, **params)\n  File \"/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/groq/resources/chat/completions.py\", line 461, in create\n    return self._post(\n           ~~~~~~~~~~^\n        \"/openai/v1/chat/completions\",\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    ...<45 lines>...\n        stream_cls=Stream[ChatCompletionChunk],\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    )\n    ^\n  File \"/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/groq/_base_client.py\", line 1242, in post\n    return cast(ResponseT, self.request(cast_to, opts, stream=stream, stream_cls=stream_cls))\n                           ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/groq/_base_client.py\", line 1044, in request\n    raise self._make_status_error_from_response(err.response) from None\ngroq.BadRequestError: Error code: 400 - {'error': {'message': 'The model `llama3-70b-8192` has been decommissioned and is no longer supported. Please refer to https://console.groq.com/docs/deprecations for a recommendation on which model to use instead.', 'type': 'invalid_request_error', 'code': 'model_decommissioned'}}\nDuring task with name 'plan' and id 'e1287088-3b74-e40c-ad92-7ae5437bf3ec'\n",
+        "judge": {
+          "completeness_score": 0.0,
+          "correctness_score": 0.0,
+          "reasoning": "Run did not succeed or produced no final answer \u2014 not sent to judge.",
+          "judge_error": null,
+          "exact_match_result": null
+        }
+      }
+    }
+  }
+}
