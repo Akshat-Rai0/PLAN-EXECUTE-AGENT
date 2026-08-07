@@ -13,7 +13,7 @@ from src.tools.registry import (
 from src.tools.browser_use import run_browser_task_sync
 from src.sandbox.shell_runner import make_project_workspace
 from langchain_core.messages import HumanMessage, SystemMessage
-from .llm import get_llm
+from .llm import get_llm, get_cheap_llm
 from src.sandbox.runner import run_in_sandbox
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.types import interrupt
@@ -22,6 +22,33 @@ from src.synthesis.codegen import declare_schema, generate_function_code
 from src.synthesis.validator import validate_synthesized_function
 from src.synthesis.registry import default_registry
 from src.synthesis.schema import SynthesizedTool
+
+try:
+    from src.api.observer import emit_event as _emit_viz_event, current_run_id, current_arm
+    from src.api.models import RunStepEvent, StepPayload, utc_now_iso as _viz_now
+except ImportError:
+    _emit_viz_event = None  # type: ignore[assignment,misc]
+    current_run_id = lambda: ""  # type: ignore[assignment,misc]
+    current_arm = lambda: "plan_execute_synthesis"  # type: ignore[assignment,misc]
+
+
+def _emit_synthesis_event(step_id: str, title: str, result: dict, status: str = "running") -> None:
+    if _emit_viz_event is None:
+        return
+    _emit_viz_event(
+        RunStepEvent(
+            run_id=current_run_id(),
+            step_id=f"synthesis-{step_id}-{abs(hash(title)) % 100000}",
+            parent_step_id=f"step-{step_id}",
+            arm=current_arm(),
+            type="synthesis",
+            status=status,  # type: ignore[arg-type]
+            title=title,
+            started_at=_viz_now(),
+            ended_at=_viz_now() if status != "running" else None,
+            payload=StepPayload(result=result),
+        )
+    )
 
 
 _YEAR_PATTERN = re.compile(r"\b(19|20)\d{2}\b")
@@ -881,6 +908,44 @@ Before marking any step as complete, verify:
     return {"plan": plan, "steps_executed": 1}
 
 
+def _verify_step_result(step: Step) -> tuple[bool, str, str]:
+    """
+    Returns (is_verified, missing_entities_hint, error_message).
+    If success_criterion is None, always returns True.
+    """
+    if not step.success_criterion:
+        return True, "", ""
+
+    result_text = step.result or ""
+    
+    # Cheap check: if criterion mentions numbers/quantities, ensure digits exist
+    quantity_keywords = {"number", "seconds", "margin", "gap", "points", "score", "count", "amount", "date", "time", "price"}
+    needs_quantity = any(k in step.success_criterion.lower() for k in quantity_keywords)
+    if needs_quantity and not re.search(r'\d', result_text):
+        return False, "", "Result missing numeric data required by success criterion."
+
+    prompt = (
+        f"Does the following text contain this specific information: {step.success_criterion}?\n\n"
+        f"Text: {result_text}\n\n"
+        "Answer ONLY with YES or NO on the first line.\n"
+        "If NO, on the second line, list 1-3 key entities (names, places, etc.) present in the text to help refine the search."
+    )
+    
+    cheap_llm = get_cheap_llm()
+    try:
+        response = cheap_llm.invoke([HumanMessage(content=prompt)])
+        content = response.content.strip().split('\n')
+        is_yes = content[0].strip().upper().startswith("YES")
+        hint = content[1].strip() if len(content) > 1 and not is_yes else ""
+        if not is_yes:
+            return False, hint, f"Failed verification for criterion: {step.success_criterion}"
+        return True, "", ""
+    except Exception as e:
+        # Fallback to True if verification LLM fails to avoid blocking the pipeline
+        print(f"⚠️ Verification check failed: {e}")
+        return True, "", ""
+
+
 def tavily_search_node(state: State) -> dict:
     """
     Execute Tavily search for the current step.
@@ -954,12 +1019,6 @@ def tavily_search_node(state: State) -> dict:
         # A search can succeed (no exception, real content returned) while
         # still being useless for this specific step — e.g. returning a
         # historical winners list when the step needed "has this year's
-        # tournament concluded". Without this check that case looked
-        # identical to a genuinely useful result (status=DONE), so it flowed
-        # straight into synthesis with no opportunity to replan.
-        # Search relevance checking is useful for benchmark/quality runs but
-        # costs an additional model call for every successful search.  Keep it
-        # opt-in; normal interactive runs rely on the planner and replanner.
         if not _search_relevance_validation_enabled():
             current_step.status = StepStatus.DONE
             current_step.result = result
@@ -971,18 +1030,28 @@ def tavily_search_node(state: State) -> dict:
                 current_step.status = StepStatus.DONE
                 current_step.result = result
                 print(f"✅ Search completed (relevance validated)")
-                print(f"👁️  Result: {result[:300]}{'...' if len(result) > 300 else ''}")
             else:
                 current_step.status = StepStatus.FAILED
                 print(f"❌ Search result deemed irrelevant: {reason}")
                 current_step.error = f"Search returned content, but it doesn't answer this step: {reason}"
-                # Keep the raw result too — even an "irrelevant" search can carry
-                # useful signal (e.g. a mention of "semi-finals" that hints at
-                # what to search for next), and the replanner's context-building
-                # step only looks at DONE steps' results, not FAILED ones' raw
-                # result field, so this is preserved for debugging/visibility
-                # without changing replan behavior.
                 current_step.result = result
+                
+        # Verification Check
+        if current_step.status == StepStatus.DONE and current_step.success_criterion:
+            is_verified, hint, err_msg = _verify_step_result(current_step)
+            if not is_verified:
+                current_step.verification_attempts += 1
+                if current_step.verification_attempts < 2:
+                    current_step.status = StepStatus.PENDING
+                    append_hint = f" (Entities from last try: {hint})" if hint else ""
+                    current_step.task = current_step.task + append_hint
+                    print(f"⚠️ Step verification failed. Retrying with augmented task: {current_step.task}")
+                    return {"plan": plan, "steps_executed": 1, "replan_count": 1, **log_update}
+                else:
+                    current_step.status = StepStatus.DONE
+                    current_step.result = f"[UNVERIFIED: could not confirm '{current_step.success_criterion}' after 2 attempts] " + (current_step.result or "")
+                    print(f"⚠️ Step verification failed after 2 attempts. Marking DONE with UNVERIFIED prefix.")
+
     except Exception as e:
         current_step.status = StepStatus.FAILED
         current_step.error = str(e)
@@ -1574,6 +1643,18 @@ def synthesize_tool_node(state: State) -> dict:
     # exact capability already earlier in the run) ---
     try:
         schema = declare_schema(plan.goal, current_step.task, context_block, llm, registry=default_registry)
+        _emit_synthesis_event(
+            str(current_step.id),
+            f"Schema: {schema.capability_name}",
+            {
+                "capability_name": schema.capability_name,
+                "description": schema.description,
+                "input_description": schema.input_description,
+                "output_description": schema.output_description,
+                "example_input": schema.example_input,
+            },
+            status="success",
+        )
     except Exception as e:
         current_step.status = StepStatus.FAILED
         current_step.error = f"synthesize_tool_node: failed to declare schema: {e}"
@@ -1645,6 +1726,12 @@ def synthesize_tool_node(state: State) -> dict:
 
         current_step.status = StepStatus.DONE
         current_step.result = f"[synthesized new tool: {schema.capability_name}] {validation_result.output}"
+        _emit_synthesis_event(
+            str(current_step.id),
+            f"Generated: {schema.capability_name}",
+            {"source_code": generated_code, "example_output": validation_result.output},
+            status="success",
+        )
         print(f"✅ Synthesized and registered new tool '{schema.capability_name}'")
         print(f"   {schema.description}")
 
@@ -2594,7 +2681,8 @@ Step results:
 
 {f'\n✅ A dev server is running at: {state.get("server_url")}\n' if state.get("server_url") else ''}
 
-Provide a clear, direct final answer. For apps, lead with the URL if one is running."""
+Provide a clear, direct final answer. For apps, lead with the URL if one is running.
+If any step result starts with "[UNVERIFIED:", you must explicitly mention in your final answer that you could not confirm that specific piece of information. Do NOT state unverified facts as true or confidently."""
 
     llm = get_llm()
     messages = [

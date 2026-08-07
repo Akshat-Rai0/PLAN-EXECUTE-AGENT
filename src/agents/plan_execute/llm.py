@@ -66,5 +66,28 @@ def get_llm():
     raise ValueError(f"Unknown LLM_PROVIDER={LLM_PROVIDER!r}")
 
 
+def get_cheap_llm():
+    """Return a cheaper/faster model for simple verification tasks."""
+    if LLM_PROVIDER == "groq":
+        from langchain_groq import ChatGroq
+        model = "llama-3.1-8b-instant"
+        api_key = os.getenv("GROQ_API_KEY")
+        return ChatGroq(model=model, api_key=api_key, temperature=0, max_retries=2, timeout=10)
+    elif LLM_PROVIDER == "openrouter":
+        from langchain_openai import ChatOpenAI
+        api_key = os.getenv("OPENROUTER_API_KEY")
+        model = os.getenv("BROWSER_USE_MODEL", "google/gemma-4-31b-it:free")
+        return ChatOpenAI(
+            model=model,
+            api_key=api_key,
+            base_url=os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
+            temperature=0,
+            max_retries=2,
+            timeout=10,
+        )
+    # Fallback to the main LLM if provider isn't specially handled
+    return get_llm()
+
+
 def get_router_llm():
     return get_llm()

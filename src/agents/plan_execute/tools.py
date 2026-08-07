@@ -24,6 +24,7 @@ Constraints:
 - Avoid assumptions about event completion when dealing with time-sensitive topics
 - If the goal references "the most recent match," treat that literally as the latest completed fixture — do not assume it means the tournament final unless the goal says so explicitly
 -while doing a web search if results are too generic or broad, narrow the query using any concrete details already surfaced in other steps' results (exact team/entity names, exact dates, tournament stage, match ID, etc.) rather than re-describing the same broad question in different words.
+- When a step involves fetching a specific fact (numbers, dates, names, margins, quantities) rather than performing an action, optionally include a "success_criterion" describing what a satisfying result looks like (e.g. "time margin in seconds").
 
 Goal:
 {goal}
@@ -38,7 +39,8 @@ Return ONLY a valid JSON object with this exact structure, no markdown fences, n
       "task": "first step description",
       "tool_hint": "none",
       "status": "PENDING",
-      "sensitive": false
+      "sensitive": false,
+      "success_criterion": "optional string describing specific fact needed, or null"
     }}
   ]
 }}

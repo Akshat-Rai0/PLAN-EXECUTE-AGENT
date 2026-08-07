@@ -26,6 +26,8 @@ class Step(BaseModel):
     result: Optional[str] = None
     error: Optional[str] = None
     approval_required: bool = False  # Whether this step requires human approval
+    success_criterion: Optional[str] = None
+    verification_attempts: int = 0
 
 
 class Plan(BaseModel):
