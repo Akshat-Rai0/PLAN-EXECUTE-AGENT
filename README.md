@@ -3,7 +3,7 @@
 A Plan-and-Execute agent with dynamic tool synthesis, benchmarked against a plain
 ReAct baseline via a controlled three-arm ablation.
 
-**Status:** Phase 7 Complete — Browser Automation with Vision ✅
+**Status:** Phase 9 Complete — Claude-like Chat Interface ✅
 
 ## Build Progress
 - **Phase 0** ✅ LangGraph & Tool-Calling Prereq
@@ -14,18 +14,67 @@ ReAct baseline via a controlled three-arm ablation.
 - **Phase 5** ✅ Sandbox Hardening
 - **Phase 6** ✅ Human-in-the-Loop Approval Gates
 - **Phase 7** ✅ Browser Automation (Vision capabilities with OpenRouter Gemma integration)
-- **Phase 8** ⏳ ReAct Baseline + Ablation (Arm 1)
-- **Phase 9** ⏳ Web UI + Deployment
+- **Phase 8** ✅ ReAct Baseline + Ablation (Arm 1)
+- **Phase 9** ✅ Web UI + Deployment (Chat interface + Debugger mode)
 
 ## Architecture
 - [Project spec](docs/plan-and-execute-agent.html) — problem definition, scope, stack, timeline, risks
 - [System wiring](docs/system-wiring.html) — step-by-step flows and wire diagrams for every subsystem
+
+## Usage
+
+### Web Interface (Chat + Debugger)
+
+The project includes a dual-mode web interface for interacting with the agent:
+
+1. **Chat Mode** (Default): Claude-like chat interface for running prompts with human-in-the-loop functionality
+   - Enter tasks via chat input
+   - Real-time streaming of agent execution
+   - Inline interrupt handling (approve/reject buttons for commands, text input for questions)
+   - Persistent chat history across sessions
+   - Single active session at a time
+
+2. **Debugger Mode**: Original three-panel layout for detailed inspection
+   - Run list with filtering
+   - Timeline view of all steps
+   - Context panel with step details
+   - Playback scrubber for run replay
+   - Shared run history with chat mode
+
+To start the web interface:
+```bash
+uvicorn src.api.main:app --host 0.0.0.0 --port 8000
+```
+
+Then open http://localhost:8000 in your browser.
+
+### CLI Execution
+
+You can also run the agent directly via CLI:
+```bash
+python3 -m src.agents.plan_execute.main "your task here"
+```
 
 ## Setup
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env  # add your API keys (ANTHROPIC_API_KEY, TAVILY_API_KEY, GROQ_API_KEY)
+```
+
+## Frontend Development
+
+To build the frontend:
+```bash
+cd frontend
+npm install
+npm run build
+```
+
+For development with hot reload:
+```bash
+cd frontend
+npm run dev
 ```
 
 Required environment variables:
