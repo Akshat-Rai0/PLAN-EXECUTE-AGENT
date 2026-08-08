@@ -8,9 +8,10 @@ export type StepType =
   | 'replan'
   | 'browser_step'
   | 'synthesis'
+  | 'interrupt'
 
-export type StepStatus = 'running' | 'success' | 'failed'
-export type RunStatus = 'running' | 'success' | 'failed'
+export type StepStatus = 'running' | 'success' | 'failed' | 'waiting_for_input'
+export type RunStatus = 'running' | 'success' | 'failed' | 'waiting_for_input'
 
 export interface TokenUsage {
   input: number
@@ -53,6 +54,20 @@ export interface RunSummary {
 export interface RunDetail extends RunSummary {
   ended_at?: string | null
   steps: RunStepEvent[]
+}
+
+export interface ChatMessage {
+  run_id: string
+  message_id: string
+  role: 'user' | 'assistant' | 'system'
+  content: string
+  timestamp: string
+}
+
+export interface InterruptResponse {
+  decision?: 'approve' | 'reject' | 'alternative'
+  alternative_input?: string
+  human_response?: string
 }
 
 export interface NormalizedSteps {
