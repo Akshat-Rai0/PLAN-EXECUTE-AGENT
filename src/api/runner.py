@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from .event_bus import event_bus
-from .models import ArmName, RunStepEvent, StepPayload, TokenUsage, utc_now_iso
+from .models import ArmName, ChatMessage, RunStepEvent, StepPayload, TokenUsage, utc_now_iso
 from .observer import set_emitter, reset_emitter, set_run_context, reset_run_context
 from .store import RunStore
 
@@ -362,11 +362,35 @@ async def execute_run_async(
         ctx = contextvars.copy_context()
         def run_in_context():
             return ctx.run(_run_graph_blocking, run_id, task, arm, tracker, False)  # auto_approve ignored
-        await loop.run_in_executor(None, run_in_context)
+        final_state = await loop.run_in_executor(None, run_in_context)
         elapsed_ms = int((time.monotonic() - start) * 1000)
         store.update_run_status(
             run_id, "success", duration_ms=elapsed_ms, pass_fail=True, ended_at=utc_now_iso()
         )
+        
+        # Add final answer as a chat message if available
+        if final_state and isinstance(final_state, dict):
+            # For plan_execute arm, final answer is in plan.final_answer
+            plan = final_state.get("plan")
+            if plan and hasattr(plan, "final_answer") and plan.final_answer:
+                assistant_message = ChatMessage(
+                    run_id=run_id,
+                    message_id=f"msg-{uuid.uuid4().hex[:12]}",
+                    role="assistant",
+                    content=plan.final_answer,
+                    timestamp=utc_now_iso(),
+                )
+                store.add_message(assistant_message)
+            # For react arm, final answer is in final_answer field
+            elif final_state.get("final_answer"):
+                assistant_message = ChatMessage(
+                    run_id=run_id,
+                    message_id=f"msg-{uuid.uuid4().hex[:12]}",
+                    role="assistant",
+                    content=final_state["final_answer"],
+                    timestamp=utc_now_iso(),
+                )
+                store.add_message(assistant_message)
     except Exception as exc:
         elapsed_ms = int((time.monotonic() - start) * 1000)
         store.update_run_status(
@@ -398,7 +422,7 @@ def _run_graph_blocking(
     arm: ArmName,
     tracker: RunTracker,
     auto_approve: bool,  # Kept for compatibility but ignored
-) -> None:
+) -> dict[str, Any] | None:
     if arm == "react":
         _run_react(task, tracker)
     else:
@@ -406,7 +430,7 @@ def _run_graph_blocking(
         _run_plan_execute(task, tracker, disable_synthesis)
 
 
-def _run_react(task: str, tracker: RunTracker) -> None:
+def _run_react(task: str, tracker: RunTracker) -> dict[str, Any] | None:
     # React agent doesn't use interrupts currently, but we keep the signature consistent
     from src.agents.react.state import ReactState
     from src.agents.react.graph import build_react_graph
@@ -425,26 +449,14 @@ def _run_react(task: str, tracker: RunTracker) -> None:
         for node_name, node_state in update.items():
             tracker.update_from_state(node_state, node_name)
 
-    graph = build_react_graph()
-    state: ReactState = {
-        "goal": task,
-        "history": [],
-        "final_answer": None,
-        "iterations": 0,
-        "workspace_path": None,
-    }
-    config = {"configurable": {"thread_id": f"viz-{uuid.uuid4()}"}}
-
-    for update in graph.stream(state, config, stream_mode="updates"):
-        for node_name, node_state in update.items():
-            tracker.update_from_state(node_state, node_name)
+    return state
 
 
 def _run_plan_execute(
     task: str,
     tracker: RunTracker,
     disable_synthesis: bool,
-) -> None:
+) -> dict[str, Any] | None:
     import sqlite3
     from contextlib import closing
 
@@ -500,10 +512,12 @@ def _run_plan_execute(
         with closing(sqlite3.connect("checkpoints.db", check_same_thread=False)) as conn:
             checkpointer = SqliteSaver(conn, serde=serializer)
             compiled = graph.compile(checkpointer=checkpointer)
-            result = compiled.invoke(initial, config)
 
-            # Register interrupt queue for this run
+            # Register interrupt queue BEFORE first invoke so the API endpoint
+            # can push a response even if an interrupt fires immediately.
             _interrupt_queues[tracker.run_id] = queue.Queue()
+
+            result = compiled.invoke(initial, config)
 
             try:
                 while "__interrupt__" in result:
@@ -560,12 +574,17 @@ def _run_plan_execute(
                     # Flip run status back to running
                     tracker.store.update_run_status(tracker.run_id, "running")
 
-                for update in compiled.stream(result, config, stream_mode="updates"):
-                    for node_name, node_state in update.items():
-                        tracker.update_from_state(node_state, node_name)
+                # NOTE: Do NOT re-stream `result` here — after the interrupt
+                # loop exits, `result` is already the final completed state.
+                # Passing it back into compiled.stream() would restart the
+                # graph from scratch and cause "'Step' object has no attribute
+                # 'get'" when update_from_state tries dict-style access on
+                # Pydantic Step objects returned by a fresh plan node.
             finally:
                 # Clean up interrupt queue
                 _interrupt_queues.pop(tracker.run_id, None)
     finally:
         if patched_module is not None and original_synth is not None:
             patched_module.synthesize_tool_node = original_synth
+    
+    return result

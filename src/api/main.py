@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import asyncio
-import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
+import uuid
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -77,6 +77,16 @@ async def create_run(body: CreateRunRequest) -> RunSummary:
 
     run_id = f"run-{uuid.uuid4().hex[:12]}"
     _active_chat_run = run_id  # Set as active chat run
+    
+    # Store the user's message
+    user_message = ChatMessage(
+        run_id=run_id,
+        message_id=f"msg-{uuid.uuid4().hex[:12]}",
+        role="user",
+        content=body.task,
+        timestamp=utc_now_iso(),
+    )
+    store.add_message(user_message)
 
     async def _run() -> None:
         try:
@@ -165,7 +175,7 @@ async def stream_run(websocket: WebSocket, run_id: str) -> None:
     for step in detail.steps:
         await websocket.send_json(step.model_dump())
 
-    if detail.status == "running":
+    if detail.status in ("running", "waiting_for_input"):
         try:
             async for event in event_bus.subscribe(run_id):
                 await websocket.send_json(event.model_dump())
