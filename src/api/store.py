@@ -7,7 +7,7 @@ from contextlib import closing
 from pathlib import Path
 from typing import Optional
 
-from .models import RunDetail, RunStepEvent, RunSummary, StepPayload, utc_now_iso
+from .models import ChatMessage, RunDetail, RunStepEvent, RunSummary, StepPayload, utc_now_iso
 
 
 class RunStore:
@@ -52,6 +52,15 @@ class RunStore:
                     FOREIGN KEY (run_id) REFERENCES runs(run_id)
                 );
                 CREATE INDEX IF NOT EXISTS idx_steps_run ON steps(run_id, started_at);
+                CREATE TABLE IF NOT EXISTS messages (
+                    message_id TEXT PRIMARY KEY,
+                    run_id TEXT NOT NULL,
+                    role TEXT NOT NULL,
+                    content TEXT NOT NULL,
+                    timestamp TEXT NOT NULL,
+                    FOREIGN KEY (run_id) REFERENCES runs(run_id)
+                );
+                CREATE INDEX IF NOT EXISTS idx_messages_run ON messages(run_id, timestamp);
                 """
             )
             conn.commit()
@@ -186,3 +195,31 @@ class RunStore:
             pass_fail=bool(run_row["pass_fail"]) if run_row["pass_fail"] is not None else None,
             steps=steps,
         )
+
+    def add_message(self, message: ChatMessage) -> None:
+        with self._lock, closing(self._connect()) as conn:
+            conn.execute(
+                """
+                INSERT INTO messages (message_id, run_id, role, content, timestamp)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (message.message_id, message.run_id, message.role, message.content, message.timestamp),
+            )
+            conn.commit()
+
+    def get_messages(self, run_id: str) -> list[ChatMessage]:
+        with closing(self._connect()) as conn:
+            rows = conn.execute(
+                "SELECT * FROM messages WHERE run_id = ? ORDER BY timestamp ASC",
+                (run_id,),
+            ).fetchall()
+        return [
+            ChatMessage(
+                run_id=row["run_id"],
+                message_id=row["message_id"],
+                role=row["role"],
+                content=row["content"],
+                timestamp=row["timestamp"],
+            )
+            for row in rows
+        ]

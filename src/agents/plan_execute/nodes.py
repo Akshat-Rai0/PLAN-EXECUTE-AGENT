@@ -2297,20 +2297,27 @@ def ask_human_node(state: State) -> dict:
         }
         
         human_response = interrupt(question_payload)
-        
+
+        # Extract human_response from dict if present, otherwise use as-is
+        if isinstance(human_response, dict):
+            response_text = human_response.get("human_response", str(human_response))
+        else:
+            response_text = str(human_response)
+
         # Log the question and response
         question_event = {
             "step_id": current_step.id,
             "question": question,
-            "response": human_response,
+            "response": human_response,  # Keep original response for debugging
+            "response_text": response_text,  # Actual text used
             "timestamp": date.today().isoformat(),
         }
-        
+
         print(f"❓ Human question: {question}")
-        print(f"💬 Human response: {human_response}")
-        
+        print(f"💬 Human response: {response_text} (raw: {human_response})")
+
         # Return the human's response as the step result
-        current_step.result = human_response
+        current_step.result = response_text
         current_step.status = StepStatus.DONE
         
         return {

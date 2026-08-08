@@ -16,9 +16,10 @@ StepType = Literal[
     "replan",
     "browser_step",
     "synthesis",
+    "interrupt",
 ]
-StepStatus = Literal["running", "success", "failed"]
-RunStatus = Literal["running", "success", "failed"]
+StepStatus = Literal["running", "success", "failed", "waiting_for_input"]
+RunStatus = Literal["running", "success", "failed", "waiting_for_input"]
 
 
 class TokenUsage(BaseModel):
@@ -74,6 +75,22 @@ class RunDetail(BaseModel):
 class CreateRunRequest(BaseModel):
     task: str
     arm: ArmName = "plan_execute_synthesis"
+
+
+class ChatMessage(BaseModel):
+    run_id: str
+    message_id: str
+    role: Literal["user", "assistant", "system"]
+    content: str
+    timestamp: str
+
+
+class InterruptResponse(BaseModel):
+    # Loose envelope to handle different interrupt types
+    decision: Optional[Literal["approve", "reject", "alternative"]] = None
+    alternative_input: Optional[str] = None
+    human_response: Optional[str] = None
+    # Note: provided_info omitted since user_info_request not implemented yet
 
 
 def utc_now_iso() -> str:

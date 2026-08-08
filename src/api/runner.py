@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+import contextvars
 import json
+import queue
 import re
 import time
 import uuid
@@ -13,6 +15,44 @@ from .event_bus import event_bus
 from .models import ArmName, RunStepEvent, StepPayload, TokenUsage, utc_now_iso
 from .observer import set_emitter, reset_emitter, set_run_context, reset_run_context
 from .store import RunStore
+
+
+# Run-level registry for in-flight interrupt queues
+_interrupt_queues: dict[str, queue.Queue] = {}
+
+
+def get_interrupt_queues() -> dict[str, queue.Queue]:
+    """Expose interrupt queues for API access."""
+    return _interrupt_queues
+
+
+def _unwrap_interrupt_payload(interrupt_data: Any) -> dict[str, Any]:
+    """
+    Shared helper for unwrapping LangGraph interrupt data.
+
+    Handles Interrupt objects, tuples, and raw dicts by normalizing
+    to a dict format. Ports logic from src/agents/plan_execute/main.py:33-50.
+    """
+    if interrupt_data is None:
+        return {"type": "unknown"}
+
+    # Handle Interrupt object (has value attribute)
+    if hasattr(interrupt_data, 'value'):
+        payload = interrupt_data.value
+    elif isinstance(interrupt_data, (list, tuple)) and len(interrupt_data) > 0:
+        payload = interrupt_data[0]
+        if hasattr(payload, 'value'):
+            payload = payload.value
+    else:
+        payload = interrupt_data
+
+    # Convert to dict if it's not already
+    if hasattr(payload, 'model_dump'):
+        return payload.model_dump()
+    elif isinstance(payload, dict):
+        return payload
+    else:
+        return {"value": str(payload)}
 
 
 def _map_arm_for_eval(arm: str) -> ArmName:
@@ -304,7 +344,6 @@ async def execute_run_async(
     task: str,
     arm: ArmName,
     store: RunStore,
-    auto_approve: bool = True,
 ) -> None:
     loop = asyncio.get_running_loop()
     tracker = RunTracker(run_id, arm, store)
@@ -319,10 +358,11 @@ async def execute_run_async(
     store.create_run(run_id, arm, task[:120])
 
     try:
-        await loop.run_in_executor(
-            None,
-            lambda: _run_graph_blocking(run_id, task, arm, tracker, auto_approve),
-        )
+        # Copy context to ensure contextvars work in the executor thread
+        ctx = contextvars.copy_context()
+        def run_in_context():
+            return ctx.run(_run_graph_blocking, run_id, task, arm, tracker, False)  # auto_approve ignored
+        await loop.run_in_executor(None, run_in_context)
         elapsed_ms = int((time.monotonic() - start) * 1000)
         store.update_run_status(
             run_id, "success", duration_ms=elapsed_ms, pass_fail=True, ended_at=utc_now_iso()
@@ -357,18 +397,33 @@ def _run_graph_blocking(
     task: str,
     arm: ArmName,
     tracker: RunTracker,
-    auto_approve: bool,
+    auto_approve: bool,  # Kept for compatibility but ignored
 ) -> None:
     if arm == "react":
-        _run_react(task, tracker, auto_approve)
+        _run_react(task, tracker)
     else:
         disable_synthesis = arm == "plan_execute"
-        _run_plan_execute(task, tracker, disable_synthesis, auto_approve)
+        _run_plan_execute(task, tracker, disable_synthesis)
 
 
-def _run_react(task: str, tracker: RunTracker, auto_approve: bool) -> None:
+def _run_react(task: str, tracker: RunTracker) -> None:
+    # React agent doesn't use interrupts currently, but we keep the signature consistent
     from src.agents.react.state import ReactState
     from src.agents.react.graph import build_react_graph
+
+    graph = build_react_graph()
+    state: ReactState = {
+        "goal": task,
+        "history": [],
+        "final_answer": None,
+        "iterations": 0,
+        "workspace_path": None,
+    }
+    config = {"configurable": {"thread_id": f"viz-{uuid.uuid4()}"}}
+
+    for update in graph.stream(state, config, stream_mode="updates"):
+        for node_name, node_state in update.items():
+            tracker.update_from_state(node_state, node_name)
 
     graph = build_react_graph()
     state: ReactState = {
@@ -389,7 +444,6 @@ def _run_plan_execute(
     task: str,
     tracker: RunTracker,
     disable_synthesis: bool,
-    auto_approve: bool,
 ) -> None:
     import sqlite3
     from contextlib import closing
@@ -448,16 +502,70 @@ def _run_plan_execute(
             compiled = graph.compile(checkpointer=checkpointer)
             result = compiled.invoke(initial, config)
 
-            while "__interrupt__" in result:
-                if auto_approve:
-                    response = {"decision": "approve"}
-                else:
-                    raise RuntimeError("Run interrupted — approval required")
-                result = compiled.invoke(Command(resume=response), config)
+            # Register interrupt queue for this run
+            _interrupt_queues[tracker.run_id] = queue.Queue()
 
-            for update in compiled.stream(result, config, stream_mode="updates"):
-                for node_name, node_state in update.items():
-                    tracker.update_from_state(node_state, node_name)
+            try:
+                while "__interrupt__" in result:
+                    # Parse interrupt data using shared helper
+                    interrupt_data = result["__interrupt__"]
+                    payload = _unwrap_interrupt_payload(interrupt_data)
+                    interrupt_type = payload.get("type", "unknown")
+
+                    # Emit interrupt event
+                    interrupt_step_id = f"{tracker.run_id}-interrupt-{uuid.uuid4().hex[:8]}"
+                    tracker.handle_event(
+                        RunStepEvent(
+                            run_id=tracker.run_id,
+                            step_id=interrupt_step_id,
+                            parent_step_id=None,
+                            arm=tracker.arm,
+                            type="interrupt",
+                            status="running",
+                            title=f"Interrupt: {interrupt_type}",
+                            started_at=utc_now_iso(),
+                            payload=StepPayload(result=payload),
+                        )
+                    )
+
+                    # Flip run status to waiting_for_input
+                    tracker.store.update_run_status(tracker.run_id, "waiting_for_input")
+
+                    # Block on queue until response arrives
+                    try:
+                        response = _interrupt_queues[tracker.run_id].get()
+                    except Exception as e:
+                        # Queue was removed or error occurred, treat as reject
+                        response = {"decision": "reject"}
+
+                    # Resume with response
+                    result = compiled.invoke(Command(resume=response), config)
+
+                    # Flip interrupt step to success
+                    tracker.handle_event(
+                        RunStepEvent(
+                            run_id=tracker.run_id,
+                            step_id=interrupt_step_id,
+                            parent_step_id=None,
+                            arm=tracker.arm,
+                            type="interrupt",
+                            status="success",
+                            title=f"Interrupt: {interrupt_type}",
+                            started_at=utc_now_iso(),
+                            ended_at=utc_now_iso(),
+                            payload=StepPayload(result=payload),
+                        )
+                    )
+
+                    # Flip run status back to running
+                    tracker.store.update_run_status(tracker.run_id, "running")
+
+                for update in compiled.stream(result, config, stream_mode="updates"):
+                    for node_name, node_state in update.items():
+                        tracker.update_from_state(node_state, node_name)
+            finally:
+                # Clean up interrupt queue
+                _interrupt_queues.pop(tracker.run_id, None)
     finally:
         if patched_module is not None and original_synth is not None:
             patched_module.synthesize_tool_node = original_synth
