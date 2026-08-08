@@ -8,6 +8,7 @@ import {
   Sparkles,
   Wrench,
   Brain,
+  AlertTriangle,
 } from 'lucide-react'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
@@ -26,6 +27,7 @@ const TYPE_ICONS: Record<StepType, typeof Map> = {
   replan: RefreshCw,
   browser_step: Globe,
   synthesis: Sparkles,
+  interrupt: AlertTriangle,
 }
 
 interface StepNodeProps {
