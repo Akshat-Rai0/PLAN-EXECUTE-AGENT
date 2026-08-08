@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { ChatMessage } from './ChatMessage'
 import { ChatInput } from './ChatInput'
 import { InterruptPrompt } from './InterruptPrompt'
+import { StepNode } from './StepNode'
 import type { ChatMessage as ChatMessageType, InterruptResponse, NormalizedSteps } from '../lib/types'
 
 interface ChatInterfaceProps {
@@ -55,6 +56,21 @@ export function ChatInterface({
         {messages.map((message) => (
           <ChatMessage key={message.message_id} message={message} />
         ))}
+
+        {/* Render non-interrupt steps to show agent progress */}
+        {steps.order
+          .map((id) => steps.byId[id])
+          .filter((s) => s && s.type !== 'interrupt')
+          .map((step) => (
+            <div key={step.step_id} className="my-2">
+              <StepNode
+                step={step}
+                selected={false}
+                onSelect={() => {}}
+                isBranch={!!step.parent_step_id}
+              />
+            </div>
+          ))}
 
         {interruptStep && (
           <InterruptPrompt

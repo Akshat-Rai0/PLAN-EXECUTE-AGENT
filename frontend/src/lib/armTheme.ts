@@ -6,6 +6,8 @@ export interface ArmTheme {
   glow: string
   border: string
   bg: string
+  pulse: string
+  icon: 'Zap' | 'Map' | 'Wand2'
 }
 
 export const ARM_THEMES: Record<ArmName, ArmTheme> = {
@@ -15,6 +17,8 @@ export const ARM_THEMES: Record<ArmName, ArmTheme> = {
     glow: 'rgba(34, 211, 238, 0.35)',
     border: 'rgba(34, 211, 238, 0.35)',
     bg: 'rgba(34, 211, 238, 0.12)',
+    pulse: 'rgba(34, 211, 238, 0.6)',
+    icon: 'Zap',
   },
   plan_execute: {
     label: 'Plan & Execute',
@@ -22,6 +26,8 @@ export const ARM_THEMES: Record<ArmName, ArmTheme> = {
     glow: 'rgba(167, 139, 250, 0.35)',
     border: 'rgba(167, 139, 250, 0.35)',
     bg: 'rgba(167, 139, 250, 0.12)',
+    pulse: 'rgba(167, 139, 250, 0.6)',
+    icon: 'Map',
   },
   plan_execute_synthesis: {
     label: 'P&E + Synthesis',
@@ -29,6 +35,8 @@ export const ARM_THEMES: Record<ArmName, ArmTheme> = {
     glow: 'rgba(251, 191, 36, 0.35)',
     border: 'rgba(251, 191, 36, 0.35)',
     bg: 'rgba(251, 191, 36, 0.12)',
+    pulse: 'rgba(251, 191, 36, 0.6)',
+    icon: 'Wand2',
   },
 }
 
