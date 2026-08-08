@@ -3,6 +3,7 @@ import { Map, RefreshCw, Sparkles, Globe, Wrench } from 'lucide-react'
 import type { ArmName, RunStepEvent } from '../lib/types'
 import { armTheme } from '../lib/armTheme'
 import { useReducedMotion } from '../hooks/useAccessibility'
+import { springEnter } from '../lib/motion'
 
 interface AgentActivityIndicatorProps {
   activeStep: RunStepEvent | null
@@ -34,7 +35,7 @@ export function AgentActivityIndicator({ activeStep, arm }: AgentActivityIndicat
                 }
               />
             </div>
-            <span className="text-xs text-white/70">Planning...</span>
+            <span className="text-xs text-white/70">Planning…</span>
           </div>
         )
 
@@ -47,7 +48,7 @@ export function AgentActivityIndicator({ activeStep, arm }: AgentActivityIndicat
             >
               <RefreshCw size={14} style={{ color: theme.color }} />
             </motion.div>
-            <span className="text-xs text-white/70">Replanning...</span>
+            <span className="text-xs text-white/70">Replanning…</span>
           </div>
         )
 
@@ -64,7 +65,7 @@ export function AgentActivityIndicator({ activeStep, arm }: AgentActivityIndicat
                 }}
               />
             </div>
-            <span className="text-xs text-white/70">Browsing...</span>
+            <span className="text-xs text-white/70">Browsing…</span>
           </div>
         )
 
@@ -77,7 +78,7 @@ export function AgentActivityIndicator({ activeStep, arm }: AgentActivityIndicat
             >
               <Sparkles size={14} style={{ color: theme.color }} />
             </motion.div>
-            <span className="text-xs text-white/70">Synthesizing...</span>
+            <span className="text-xs text-white/70">Synthesizing…</span>
           </div>
         )
 
@@ -87,14 +88,19 @@ export function AgentActivityIndicator({ activeStep, arm }: AgentActivityIndicat
       default:
         return (
           <div className="flex items-center gap-2">
-            <Wrench size={14} style={{ color: theme.color }} />
+            <motion.div
+              animate={reducedMotion ? {} : { scale: [1, 1.2, 1] }}
+              transition={reducedMotion ? {} : { duration: 1.2, repeat: Infinity, ease: 'easeInOut' }}
+            >
+              <Wrench size={14} style={{ color: theme.color }} />
+            </motion.div>
             <motion.div
               className="h-2 w-2 rounded-full"
               style={{ backgroundColor: theme.pulse }}
               animate={reducedMotion ? {} : { opacity: [0.3, 1, 0.3], scale: [0.8, 1.1, 0.8] }}
               transition={reducedMotion ? {} : { duration: 1.2, repeat: Infinity, ease: 'easeInOut' }}
             />
-            <span className="text-xs text-white/70">Using tool...</span>
+            <span className="text-xs text-white/70">Using tool…</span>
           </div>
         )
     }
@@ -102,10 +108,11 @@ export function AgentActivityIndicator({ activeStep, arm }: AgentActivityIndicat
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 5 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: 5 }}
-      className="inline-flex items-center rounded-full border border-white/[0.06] bg-white/[0.02] px-3 py-1.5"
+      initial={reducedMotion ? { opacity: 0 } : { opacity: 0, y: 5 }}
+      animate={reducedMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
+      exit={reducedMotion ? { opacity: 0 } : { opacity: 0, y: 5 }}
+      transition={springEnter(reducedMotion)}
+      className="inline-flex items-center rounded-full border border-white/[0.06] bg-white/[0.02] px-3 py-1.5 backdrop-blur-sm"
       style={{ boxShadow: `0 0 12px ${theme.glow}` }}
     >
       {renderIndicator()}

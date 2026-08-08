@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { ChatMessage, InterruptResponse } from '../lib/types'
-import { fetchRun, fetchRuns, loadRunSteps, useRunStream } from './useRunStream'
+import { useRunStream } from './useRunStream'
+import { toast } from '../components/Toast'
 
 const API_BASE = ''
 
 export function useChatStream(runId: string | null) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
-  const { steps, connected } = useRunStream(runId, true)
+  const { steps, connected, reconnecting } = useRunStream(runId, true)
 
-  // Load chat messages when runId changes
   useEffect(() => {
     if (!runId) {
       setMessages([])
@@ -30,15 +30,12 @@ export function useChatStream(runId: string | null) {
     loadMessages()
   }, [runId])
 
-  // Refetch messages when run completes (to get the final answer)
   useEffect(() => {
     if (!runId) return
 
-    // Check if run has completed by looking for synthesis step or when no steps are running
     const hasRunningSteps = steps.order.some(id => steps.byId[id]?.status === 'running')
     const hasSynthesis = steps.order.some(id => steps.byId[id]?.type === 'synthesis')
-    
-    // If we have a synthesis step (which indicates completion) or no running steps and we have some steps
+
     if ((hasSynthesis || (!hasRunningSteps && steps.order.length > 0)) && steps.order.length > 0) {
       const loadMessages = async () => {
         try {
@@ -52,14 +49,12 @@ export function useChatStream(runId: string | null) {
         }
       }
 
-      // Debounce to avoid excessive refetches
       const timeoutId = setTimeout(loadMessages, 500)
       return () => clearTimeout(timeoutId)
     }
   }, [runId, steps.order, steps.byId])
 
   const sendMessage = useCallback(async (content: string) => {
-    // Add user message to local state immediately
     const tempId = `msg-${Date.now()}`
     const userMessage: ChatMessage = {
       run_id: runId ?? 'pending',
@@ -70,7 +65,6 @@ export function useChatStream(runId: string | null) {
     }
     setMessages((prev) => [...prev, userMessage])
 
-    // Create a new run with the user's message
     try {
       const res = await fetch(`${API_BASE}/runs`, {
         method: 'POST',
@@ -79,16 +73,21 @@ export function useChatStream(runId: string | null) {
       })
 
       if (!res.ok) {
+        if (res.status === 409) {
+          toast('A run is already in progress', 'error')
+        }
         throw new Error('Failed to create run')
       }
 
       const run = await res.json()
-      // The run will be tracked by the parent component via runId state
+      toast('Task submitted — agent is working', 'success')
       return run.run_id
     } catch (error) {
       console.error('Failed to send message:', error)
-      // Remove the user message if run creation failed
       setMessages((prev) => prev.filter((m) => m.message_id !== tempId))
+      if (!(error instanceof Error && error.message === 'Failed to create run')) {
+        toast('Failed to send message', 'error')
+      }
       throw error
     }
   }, [runId])
@@ -104,9 +103,11 @@ export function useChatStream(runId: string | null) {
       })
 
       if (!res.ok) {
+        toast('Failed to submit response', 'error')
         throw new Error('Failed to submit interrupt response')
       }
 
+      toast('Response submitted', 'success')
       return await res.json()
     } catch (error) {
       console.error('Failed to respond to interrupt:', error)
@@ -114,7 +115,6 @@ export function useChatStream(runId: string | null) {
     }
   }, [runId])
 
-  // Check if run is waiting for input
   const isWaitingForInput = steps.order.some(
     (id) => steps.byId[id]?.type === 'interrupt' && steps.byId[id]?.status === 'running'
   )
@@ -123,10 +123,11 @@ export function useChatStream(runId: string | null) {
     messages,
     steps,
     connected,
+    reconnecting,
     sendMessage,
     respondToInterrupt,
     isWaitingForInput,
   }
 }
 
-export { fetchRuns, fetchRun, loadRunSteps }
+export { fetchRuns, fetchRun, loadRunSteps } from './useRunStream'

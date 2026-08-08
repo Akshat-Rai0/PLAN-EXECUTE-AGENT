@@ -1,3 +1,4 @@
+import { useRef, useEffect, useState } from 'react'
 import type { NormalizedSteps, RunStepEvent } from '../lib/types'
 import { StepNode } from './StepNode'
 
@@ -7,9 +8,43 @@ interface TimelineProps {
   selectedStepId: string | null
   onSelectStep: (stepId: string) => void
   highlightStepId?: string | null
+  onHoverStep?: (stepId: string | null) => void
+  newStepIds?: Set<string>
 }
 
-export function Timeline({ steps, visibleIds, selectedStepId, onSelectStep, highlightStepId }: TimelineProps) {
+export function Timeline({
+  steps,
+  visibleIds,
+  selectedStepId,
+  onSelectStep,
+  highlightStepId,
+  onHoverStep,
+  newStepIds,
+}: TimelineProps) {
+  const seenStepIds = useRef<Set<string>>(new Set())
+  const [internalNewIds, setInternalNewIds] = useState<Set<string>>(new Set())
+
+  useEffect(() => {
+    const fresh = new Set<string>()
+    for (const id of steps.order) {
+      if (!seenStepIds.current.has(id)) {
+        seenStepIds.current.add(id)
+        fresh.add(id)
+      }
+    }
+    if (fresh.size > 0) {
+      setInternalNewIds((prev) => new Set([...prev, ...fresh]))
+      const timer = setTimeout(() => {
+        setInternalNewIds((prev) => {
+          const next = new Set(prev)
+          fresh.forEach((id) => next.delete(id))
+          return next
+        })
+      }, 1500)
+      return () => clearTimeout(timer)
+    }
+  }, [steps.order])
+
   const ordered = steps.order
     .map((id) => steps.byId[id])
     .filter((s): s is RunStepEvent => !!s)
@@ -23,6 +58,8 @@ export function Timeline({ steps, visibleIds, selectedStepId, onSelectStep, high
     )
   }
 
+  const effectiveNewIds = newStepIds ?? internalNewIds
+
   return (
     <div className="mx-auto max-w-2xl py-6 pr-4">
       {ordered.map((step) => {
@@ -35,6 +72,8 @@ export function Timeline({ steps, visibleIds, selectedStepId, onSelectStep, high
             onSelect={onSelectStep}
             isBranch={isBranch}
             highlighted={highlightStepId === step.step_id}
+            onHover={onHoverStep}
+            isNew={effectiveNewIds.has(step.step_id)}
           />
         )
       })}

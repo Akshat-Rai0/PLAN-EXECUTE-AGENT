@@ -18,15 +18,22 @@ interface RunListProps {
 }
 
 function StatusDot({ status }: { status: RunSummary['status'] }) {
+  const reducedMotion = useReducedMotion()
   const color =
-    status === 'running' ? '#fbbf24' : status === 'success' ? '#34d399' : '#f87171'
+    status === 'running' || status === 'waiting_for_input'
+      ? '#fbbf24'
+      : status === 'success'
+        ? '#34d399'
+        : '#f87171'
+  const isLive = status === 'running' || status === 'waiting_for_input'
+
   return (
     <span className="relative flex h-2 w-2 shrink-0">
-      {status === 'running' && (
+      {isLive && (
         <motion.span
           className="absolute inline-flex h-full w-full rounded-full opacity-60"
           style={{ backgroundColor: color }}
-          animate={{ scale: [1, 1.8, 1], opacity: [0.7, 0, 0.7] }}
+          animate={reducedMotion ? {} : { scale: [1, 1.8, 1], opacity: [0.7, 0, 0.7] }}
           transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}
         />
       )}
@@ -73,7 +80,7 @@ export function RunList({
         <button
           type="button"
           onClick={onToggleCollapse}
-          className="rounded p-1 text-white/50 transition hover:bg-white/5 hover:text-white/80"
+          className="rounded p-1 text-white/50 transition hover:bg-white/5 hover:text-white/80 active:scale-95 focus-visible:outline focus-visible:outline-1 focus-visible:outline-white/30"
           aria-label={collapsed ? 'Expand run list' : 'Collapse run list'}
         >
           {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
@@ -88,7 +95,7 @@ export function RunList({
                 key={arm}
                 type="button"
                 onClick={() => onArmFilter(arm)}
-                className="rounded px-2 py-0.5 font-sans text-[10px] uppercase tracking-wide transition "
+                className="rounded px-2 py-0.5 font-sans text-[10px] uppercase tracking-wide transition hover:bg-white/[0.06] active:scale-95 focus-visible:outline focus-visible:outline-1 focus-visible:outline-white/30"
                 style={{
                   background: armFilter === arm ? 'rgba(255,255,255,0.1)' : 'transparent',
                   color: arm === 'all' ? 'rgba(255,255,255,0.6)' : armTheme(arm as ArmName).color,
@@ -105,7 +112,7 @@ export function RunList({
                 key={f}
                 type="button"
                 onClick={() => onPassFilter(f)}
-                className="rounded px-2 py-0.5 font-sans text-[10px] uppercase tracking-wide text-white/60 transition "
+                className="rounded px-2 py-0.5 font-sans text-[10px] uppercase tracking-wide text-white/60 transition hover:bg-white/[0.06] active:scale-95 focus-visible:outline focus-visible:outline-1 focus-visible:outline-white/30"
                 style={{
                   background: passFilter === f ? 'rgba(255,255,255,0.08)' : 'transparent',
                   border: '1px solid rgba(255,255,255,0.06)',
@@ -122,21 +129,29 @@ export function RunList({
         {filtered.map((run) => {
           const theme = armTheme(run.arm)
           const selected = run.run_id === selectedId
+          const isLive = run.status === 'running' || run.status === 'waiting_for_input'
           return (
             <button
               key={run.run_id}
               type="button"
               onClick={() => onSelect(run.run_id)}
-              className="flex w-full items-start gap-2 border-b border-white/[0.04] px-3 py-2.5 text-left transition "
+              className="relative flex w-full items-start gap-2 border-b border-white/[0.04] px-3 py-2.5 text-left transition hover:bg-white/[0.03] active:scale-[0.99] focus-visible:outline focus-visible:outline-1 focus-visible:outline-white/20"
               style={{
-                background: selected ? 'rgba(255,255,255,0.04)' : 'transparent',
-                boxShadow: selected ? `inset 2px 0 0 ${theme.color}` : undefined,
+                background: selected ? `${theme.bg}` : 'transparent',
+                boxShadow: selected ? `inset 3px 0 0 ${theme.color}` : undefined,
               }}
             >
               <StatusDot status={run.status} />
               {!collapsed && (
                 <div className="min-w-0 flex-1">
-                  <p className="truncate font-sans text-xs text-white/85">{run.task_name}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="truncate font-sans text-xs text-white/85">{run.task_name}</p>
+                    {isLive && selected && (
+                      <span className="shrink-0 rounded px-1 py-0.5 font-mono text-[8px] uppercase tracking-wider text-amber-300/80" style={{ background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.2)' }}>
+                        live
+                      </span>
+                    )}
+                  </div>
                   <div className="mt-1 flex items-center gap-2">
                     <span
                       className="rounded px-1.5 py-0.5 font-sans text-[10px]"

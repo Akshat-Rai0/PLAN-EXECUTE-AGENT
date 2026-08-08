@@ -1,5 +1,5 @@
-import { useRef } from 'react'
-import { motion, useMotionValue, useTransform, animate } from 'framer-motion'
+import { useRef, useEffect } from 'react'
+import { motion, useMotionValue, useTransform, animate, useSpring } from 'framer-motion'
 import { springScrubber } from '../lib/motion'
 import { useReducedMotion } from '../hooks/useAccessibility'
 
@@ -14,42 +14,51 @@ export function PlaybackScrubber({ progress, onProgress, visible }: PlaybackScru
   const trackRef = useRef<HTMLDivElement>(null)
   const dragging = useRef(false)
   const x = useMotionValue(progress * 100)
-  const widthPct = useTransform(x, (v) => `${Math.max(0, Math.min(100, v))}%`)
-  const thumbLeft = useTransform(x, (v) => `${Math.max(0, Math.min(100, v))}%`)
+  const springX = useSpring(x, reducedMotion ? { duration: 0 } : { stiffness: 400, damping: 30 })
+  const widthPct = useTransform(springX, (v) => `${Math.max(0, Math.min(100, v))}%`)
+  const thumbLeft = useTransform(springX, (v) => `${Math.max(0, Math.min(100, v))}%`)
+
+  useEffect(() => {
+    if (!dragging.current) {
+      if (reducedMotion) {
+        x.set(progress * 100)
+      } else {
+        animate(x, progress * 100, springScrubber(reducedMotion))
+      }
+    }
+  }, [progress, reducedMotion, x])
 
   if (!visible) return null
 
-  const handlePointer = (clientX: number, springOnRelease: boolean) => {
+  const handlePointer = (clientX: number) => {
     const track = trackRef.current
     if (!track) return
     const rect = track.getBoundingClientRect()
     const p = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))
     onProgress(p)
-    if (dragging.current) {
-      x.set(p * 100)
-    } else if (springOnRelease && !reducedMotion) {
-      animate(x, p * 100, springScrubber(reducedMotion))
-    } else {
-      x.set(p * 100)
-    }
+    x.set(p * 100)
   }
 
   return (
     <div className="px-4 py-2">
       <div
         ref={trackRef}
-        className="relative h-2 cursor-pointer rounded-full bg-white/[0.08]"
+        className="relative h-2 cursor-pointer rounded-full bg-white/[0.08] transition hover:bg-white/[0.1]"
         onPointerDown={(e) => {
           dragging.current = true
           e.currentTarget.setPointerCapture(e.pointerId)
-          handlePointer(e.clientX, false)
+          handlePointer(e.clientX)
         }}
         onPointerMove={(e) => {
           if (!dragging.current) return
-          handlePointer(e.clientX, false)
+          handlePointer(e.clientX)
         }}
-        onPointerUp={() => {
+        onPointerUp={(e) => {
           dragging.current = false
+          e.currentTarget.releasePointerCapture(e.pointerId)
+          if (!reducedMotion) {
+            animate(x, progress * 100, springScrubber(reducedMotion))
+          }
         }}
         role="slider"
         aria-valuemin={0}
@@ -59,8 +68,10 @@ export function PlaybackScrubber({ progress, onProgress, visible }: PlaybackScru
       >
         <motion.div className="absolute inset-y-0 left-0 rounded-full bg-white/25" style={{ width: widthPct }} />
         <motion.div
-          className="absolute top-1/2 h-3 w-3 -translate-y-1/2 rounded-full border border-white/30 bg-white/90"
+          className="absolute top-1/2 h-3.5 w-3.5 -translate-y-1/2 rounded-full border border-white/40 bg-white/95 shadow-md"
           style={{ left: thumbLeft, x: '-50%' }}
+          whileHover={reducedMotion ? {} : { scale: 1.15 }}
+          whileTap={reducedMotion ? {} : { scale: 0.9 }}
         />
       </div>
       <p className="mt-1 text-center font-mono text-[10px] text-white/35">

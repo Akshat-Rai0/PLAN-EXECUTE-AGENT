@@ -85,7 +85,7 @@ export function CompareView({ open, onClose, primaryRun, runs }: CompareViewProp
               <select
                 value={secondaryId}
                 onChange={(e) => setSecondaryId(e.target.value)}
-                className="rounded border border-white/[0.1] bg-white/[0.04] px-2 py-1 font-sans text-xs text-white/80"
+                className="rounded border border-white/[0.1] bg-white/[0.04] px-2 py-1 font-sans text-xs text-white/80 focus-visible:outline focus-visible:outline-1 focus-visible:outline-white/30"
               >
                 {candidates.map((r) => (
                   <option key={r.run_id} value={r.run_id}>
@@ -93,7 +93,11 @@ export function CompareView({ open, onClose, primaryRun, runs }: CompareViewProp
                   </option>
                 ))}
               </select>
-              <button type="button" onClick={onClose} className="rounded p-1 text-white/50 transition hover:text-white">
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded p-1 text-white/50 transition hover:bg-white/[0.06] hover:text-white active:scale-95 focus-visible:outline focus-visible:outline-1 focus-visible:outline-white/30"
+              >
                 <X size={18} />
               </button>
             </div>
@@ -115,6 +119,7 @@ export function CompareView({ open, onClose, primaryRun, runs }: CompareViewProp
               onScroll={() => syncScroll('left')}
               steps={leftSteps}
               visibleIds={replayLeft.visibleIds}
+              accentSide="left"
             />
             <ComparePane
               run={runs.find((r) => r.run_id === secondaryId) ?? null}
@@ -122,6 +127,7 @@ export function CompareView({ open, onClose, primaryRun, runs }: CompareViewProp
               onScroll={() => syncScroll('right')}
               steps={rightSteps}
               visibleIds={replayRight.visibleIds}
+              accentSide="right"
             />
           </div>
         </motion.div>
@@ -136,26 +142,41 @@ function ComparePane({
   onScroll,
   steps,
   visibleIds,
+  accentSide,
 }: {
   run: RunSummary | null
   scrollRef: React.RefObject<HTMLDivElement>
   onScroll: () => void
   steps: NormalizedSteps
   visibleIds: Set<string>
+  accentSide: 'left' | 'right'
 }) {
   if (!run) return <div className="p-4 text-white/40">Select a comparison run</div>
   const theme = armTheme(run.arm)
+
   return (
-    <div className="flex min-h-0 flex-col">
+    <motion.div
+      className="flex min-h-0 flex-col"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.2 }}
+    >
       <div
         className="border-b border-white/[0.06] px-4 py-2 font-sans text-xs font-medium"
-        style={{ color: theme.color }}
+        style={{
+          color: theme.color,
+          borderLeft: accentSide === 'left' ? `3px solid ${theme.color}` : undefined,
+          borderRight: accentSide === 'right' ? `3px solid ${theme.color}` : undefined,
+        }}
       >
         {theme.label}
+        <span className="ml-2 font-mono text-[10px] text-white/30">
+          {steps.order.length} steps
+        </span>
       </div>
       <div ref={scrollRef} className="flex-1 overflow-y-auto" onScroll={onScroll}>
         <Timeline steps={steps} visibleIds={visibleIds} selectedStepId={null} onSelectStep={() => {}} />
       </div>
-    </div>
+    </motion.div>
   )
 }

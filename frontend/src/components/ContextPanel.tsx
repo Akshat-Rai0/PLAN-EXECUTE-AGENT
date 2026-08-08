@@ -10,14 +10,25 @@ interface ContextPanelProps {
   run: RunSummary | null
   steps: RunStepEvent[]
   selectedStep: RunStepEvent | null
+  previewStep: RunStepEvent | null
   collapsed: boolean
   onToggleCollapse: () => void
 }
 
-export function ContextPanel({ run, steps, selectedStep, collapsed, onToggleCollapse }: ContextPanelProps) {
+export function ContextPanel({
+  run,
+  steps,
+  selectedStep,
+  previewStep,
+  collapsed,
+  onToggleCollapse,
+}: ContextPanelProps) {
   const reducedMotion = useReducedMotion()
   const reducedTransparency = useReducedTransparency()
   const panelBg = reducedTransparency ? 'rgba(17,17,20,0.95)' : 'rgba(17,17,20,0.75)'
+
+  const displayStep = selectedStep ?? previewStep
+  const isPreview = !selectedStep && !!previewStep
 
   const tokens = totalTokens(steps)
   const totalLatency = steps.reduce((acc, s) => acc + (latencyMs(s) ?? 0), 0)
@@ -37,7 +48,7 @@ export function ContextPanel({ run, steps, selectedStep, collapsed, onToggleColl
         <button
           type="button"
           onClick={onToggleCollapse}
-          className="rounded p-1 text-white/50 transition hover:bg-white/5"
+          className="rounded p-1 text-white/50 transition hover:bg-white/5 hover:text-white/80 active:scale-95 focus-visible:outline focus-visible:outline-1 focus-visible:outline-white/30"
         >
           {collapsed ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
         </button>
@@ -48,8 +59,20 @@ export function ContextPanel({ run, steps, selectedStep, collapsed, onToggleColl
         <div className="flex-1 overflow-y-auto p-4">
           {!run ? (
             <p className="font-sans text-xs text-white/40">No run selected</p>
-          ) : selectedStep ? (
-            <StepDetail step={selectedStep} retryCount={retryCount} />
+          ) : displayStep ? (
+            <motion.div
+              key={displayStep.step_id}
+              initial={reducedMotion ? { opacity: 0 } : { opacity: 0, x: 8 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: reducedMotion ? 0.01 : 0.15 }}
+            >
+              {isPreview && (
+                <p className="mb-2 font-sans text-[10px] uppercase tracking-wide text-white/35">
+                  Preview — click step to pin
+                </p>
+              )}
+              <StepDetail step={displayStep} retryCount={retryCount} />
+            </motion.div>
           ) : (
             <RunSummaryPanel run={run} stepCount={steps.length} tokens={tokens} totalLatency={totalLatency} />
           )}
