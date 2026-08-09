@@ -16,7 +16,7 @@ interface InterruptPromptProps {
 export function InterruptPrompt({ interrupt, onResponse, isWaitingForInput }: InterruptPromptProps) {
   const [alternativeInput, setAlternativeInput] = useState('')
   const [humanResponse, setHumanResponse] = useState('')
-  const [submitting, setSubmitting] = useState(false)
+  const [submittingDecision, setSubmittingDecision] = useState<string | null>(null)
   const reducedMotion = useReducedMotion()
   const theme = armTheme(interrupt.arm)
   const titleId = useId()
@@ -25,12 +25,12 @@ export function InterruptPrompt({ interrupt, onResponse, isWaitingForInput }: In
   const payload = interrupt.payload.result as Record<string, unknown> | undefined
   const interruptType = payload?.type as string | undefined
 
-  const handleResponse = async (response: InterruptResponse) => {
-    setSubmitting(true)
+  const handleResponse = async (response: InterruptResponse, decisionKey: string) => {
+    setSubmittingDecision(decisionKey)
     try {
       await onResponse(response)
     } finally {
-      setSubmitting(false)
+      setSubmittingDecision(null)
     }
   }
 
@@ -66,7 +66,7 @@ export function InterruptPrompt({ interrupt, onResponse, isWaitingForInput }: In
                 <code className="mt-1 block rounded bg-black/30 p-2 text-xs text-amber-100/90">{command}</code>
               </div>
             )}
-            {file_path && (
+            {file_path && tool === 'write_file_tool' && (
               <div className="mt-2">
                 <div className="text-white/45">File:</div>
                 <code className="mt-1 block rounded bg-black/30 p-2 text-xs text-amber-100/90">
@@ -74,7 +74,7 @@ export function InterruptPrompt({ interrupt, onResponse, isWaitingForInput }: In
                 </code>
               </div>
             )}
-            {path !== undefined && (
+            {path !== undefined && tool === 'delete_file_tool' && (
               <div className="mt-2">
                 <div className="text-white/45">Delete:</div>
                 <code className="mt-1 block rounded bg-black/30 p-2 text-xs text-amber-100/90">
@@ -92,17 +92,17 @@ export function InterruptPrompt({ interrupt, onResponse, isWaitingForInput }: In
           <div className="flex flex-wrap gap-2">
             <PressableButton
               variant="success"
-              disabled={submitting}
-              onClick={() => handleResponse({ decision: 'approve' })}
+              disabled={submittingDecision !== null}
+              onClick={() => handleResponse({ decision: 'approve' }, 'approve')}
             >
-              Approve
+              {submittingDecision === 'approve' ? 'Approving...' : 'Approve'}
             </PressableButton>
             <PressableButton
               variant="danger"
-              disabled={submitting}
-              onClick={() => handleResponse({ decision: 'reject' })}
+              disabled={submittingDecision !== null}
+              onClick={() => handleResponse({ decision: 'reject' }, 'reject')}
             >
-              Reject
+              {submittingDecision === 'reject' ? 'Rejecting...' : 'Reject'}
             </PressableButton>
             <div className="flex flex-1 gap-2">
               <input
@@ -110,7 +110,7 @@ export function InterruptPrompt({ interrupt, onResponse, isWaitingForInput }: In
                 value={alternativeInput}
                 onChange={(e) => setAlternativeInput(e.target.value)}
                 placeholder="Alternative..."
-                disabled={submitting}
+                disabled={submittingDecision !== null}
                 className={`${inputClass} min-w-0 flex-1`}
                 style={{ '--tw-ring-color': theme.color } as React.CSSProperties}
                 onFocus={(e) => (e.currentTarget.style.boxShadow = `0 0 0 2px ${theme.color}40`)}
@@ -119,10 +119,10 @@ export function InterruptPrompt({ interrupt, onResponse, isWaitingForInput }: In
               <PressableButton
                 variant="primary"
                 accentColor={theme.color}
-                disabled={!alternativeInput.trim() || submitting}
-                onClick={() => handleResponse({ decision: 'alternative', alternative_input: alternativeInput })}
+                disabled={!alternativeInput.trim() || submittingDecision !== null}
+                onClick={() => handleResponse({ decision: 'alternative', alternative_input: alternativeInput }, 'alternative')}
               >
-                Alternative
+                {submittingDecision === 'alternative' ? 'Sending...' : 'Alternative'}
               </PressableButton>
             </div>
           </div>
@@ -148,24 +148,24 @@ export function InterruptPrompt({ interrupt, onResponse, isWaitingForInput }: In
               value={humanResponse}
               onChange={(e) => setHumanResponse(e.target.value)}
               placeholder="Your answer..."
-              disabled={submitting}
+              disabled={submittingDecision !== null}
               className={`${inputClass} flex-1`}
               style={{ '--tw-ring-color': theme.color } as React.CSSProperties}
               onFocus={(e) => (e.currentTarget.style.boxShadow = `0 0 0 2px ${theme.color}40`)}
               onBlur={(e) => (e.currentTarget.style.boxShadow = '')}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && humanResponse.trim()) {
-                  handleResponse({ human_response: humanResponse })
+                  handleResponse({ human_response: humanResponse }, 'send')
                 }
               }}
             />
             <PressableButton
               variant="primary"
               accentColor={theme.color}
-              disabled={!humanResponse.trim() || submitting}
-              onClick={() => handleResponse({ human_response: humanResponse })}
+              disabled={!humanResponse.trim() || submittingDecision !== null}
+              onClick={() => handleResponse({ human_response: humanResponse }, 'send')}
             >
-              Send
+              {submittingDecision === 'send' ? 'Sending...' : 'Send'}
             </PressableButton>
           </div>
         </>

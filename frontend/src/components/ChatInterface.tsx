@@ -30,7 +30,7 @@ interface ChatInterfaceProps {
 }
 
 type TimelineItem =
-  | { kind: 'message'; id: string; timestamp: string; message: ChatMessageType }
+  | { kind: 'message'; id: string; timestamp: string; message: ChatMessageType; isStreaming?: boolean }
   | { kind: 'step'; id: string; timestamp: string; step: RunStepEvent }
   | { kind: 'interrupt-active'; id: string; timestamp: string; step: RunStepEvent }
   | { kind: 'interrupt-resolved'; id: string; timestamp: string; step: RunStepEvent; responseSummary?: string }
@@ -134,6 +134,37 @@ export function ChatInterface({
         continue
       }
 
+      if (step.type === 'synthesis') {
+        const hasCorrespondingMessage = messages.some(
+          (m) => m.role === 'assistant' && new Date(m.timestamp) >= new Date(step.started_at)
+        )
+        if (!hasCorrespondingMessage) {
+          let content = ''
+          if (typeof step.payload.result === 'string') {
+            content = step.payload.result
+          } else if (step.payload.result && typeof step.payload.result === 'object' && 'source_code' in (step.payload.result as any)) {
+            content = String((step.payload.result as any).source_code ?? '')
+          }
+
+          if (content || step.status === 'running') {
+            items.push({
+              kind: 'message',
+              id: `synth-msg-${step.step_id}`,
+              timestamp: step.started_at,
+              message: {
+                run_id: step.run_id,
+                message_id: `synth-msg-${step.step_id}`,
+                role: 'assistant',
+                content: content,
+                timestamp: step.started_at,
+              },
+              isStreaming: step.status === 'running'
+            } as TimelineItem)
+          }
+          continue
+        }
+      }
+
       items.push({
         kind: 'step',
         id: step.step_id,
@@ -185,7 +216,7 @@ export function ChatInterface({
 
         {timeline.map((item) => {
           if (item.kind === 'message') {
-            return <ChatMessage key={item.id} message={item.message} arm={arm} />
+            return <ChatMessage key={item.id} message={item.message} arm={arm} isStreaming={item.isStreaming} />
           }
 
           if (item.kind === 'interrupt-active') {

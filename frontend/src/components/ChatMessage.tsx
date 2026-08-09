@@ -8,6 +8,7 @@ import { springEnter } from '../lib/motion'
 interface ChatMessageProps {
   message: ChatMessageType
   arm?: ArmName
+  isStreaming?: boolean
 }
 
 function TypedText({ text }: { text: string }) {
@@ -40,7 +41,7 @@ function TypedText({ text }: { text: string }) {
   return <span>{displayed}</span>
 }
 
-export function ChatMessage({ message, arm = 'plan_execute_synthesis' }: ChatMessageProps) {
+export function ChatMessage({ message, arm = 'plan_execute_synthesis', isStreaming = false }: ChatMessageProps) {
   const reducedMotion = useReducedMotion()
   const isUser = message.role === 'user'
   const isSystem = message.role === 'system'
@@ -70,7 +71,7 @@ export function ChatMessage({ message, arm = 'plan_execute_synthesis' }: ChatMes
           </div>
         )}
         <div className="whitespace-pre-wrap break-words text-[13px] leading-relaxed">
-          {!isUser && !isSystem ? <TypedText text={message.content} /> : message.content}
+          {!isUser && !isSystem && !isStreaming ? <TypedText text={message.content} /> : message.content}
         </div>
       </div>
     </motion.div>
