@@ -29,8 +29,12 @@ export function InterruptPrompt({ interrupt, onResponse, isWaitingForInput }: In
     setSubmittingDecision(decisionKey)
     try {
       await onResponse(response)
-    } finally {
+      // Do not reset submittingDecision on success. We want the button to stay
+      // in a loading state until the websocket updates the step status and this
+      // component is unmounted.
+    } catch (e) {
       setSubmittingDecision(null)
+      throw e
     }
   }
 
