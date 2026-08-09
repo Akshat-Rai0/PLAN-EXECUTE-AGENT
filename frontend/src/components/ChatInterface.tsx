@@ -160,6 +160,7 @@ export function ChatInterface({
 
   const isEmpty = messages.length === 0 && steps.order.length === 0
   const isAgentWorking = !!activeStep && !isWaitingForInput
+  const isThinking = activeStep?.type === 'reflection' && !isWaitingForInput
 
   return (
     <div className="flex h-full flex-col bg-canvas text-white">
@@ -236,6 +237,8 @@ export function ChatInterface({
         onSend={onSendMessage}
         disabled={disabled}
         isWaitingForInput={isWaitingForInput}
+        isThinking={isThinking}
+        thinkingArm={activeStep?.arm}
       />
     </div>
   )

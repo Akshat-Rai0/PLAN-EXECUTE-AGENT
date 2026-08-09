@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import { Map, RefreshCw, Sparkles, Globe, Wrench } from 'lucide-react'
+import { Map, RefreshCw, Sparkles, Globe, Wrench, Brain } from 'lucide-react'
 import type { ArmName, RunStepEvent } from '../lib/types'
 import { armTheme } from '../lib/armTheme'
 import { useReducedMotion } from '../hooks/useAccessibility'
@@ -82,9 +82,41 @@ export function AgentActivityIndicator({ activeStep, arm }: AgentActivityIndicat
           </div>
         )
 
+      case 'reflection':
+        return (
+          <div className="flex items-center gap-2">
+            <motion.div
+              animate={reducedMotion ? {} : { scale: [1, 1.15, 1], opacity: [0.7, 1, 0.7] }}
+              transition={reducedMotion ? {} : { duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
+            >
+              <Brain size={14} style={{ color: theme.color }} />
+            </motion.div>
+            <div className="flex gap-1">
+              <motion.div
+                className="h-1.5 w-1.5 rounded-full"
+                style={{ backgroundColor: theme.color }}
+                animate={reducedMotion ? {} : { opacity: [0.3, 1, 0.3], scale: [0.8, 1.2, 0.8] }}
+                transition={reducedMotion ? {} : { duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
+              />
+              <motion.div
+                className="h-1.5 w-1.5 rounded-full"
+                style={{ backgroundColor: theme.color }}
+                animate={reducedMotion ? {} : { opacity: [0.3, 1, 0.3], scale: [0.8, 1.2, 0.8] }}
+                transition={reducedMotion ? {} : { duration: 1.5, repeat: Infinity, ease: 'easeInOut', delay: 0.2 }}
+              />
+              <motion.div
+                className="h-1.5 w-1.5 rounded-full"
+                style={{ backgroundColor: theme.color }}
+                animate={reducedMotion ? {} : { opacity: [0.3, 1, 0.3], scale: [0.8, 1.2, 0.8] }}
+                transition={reducedMotion ? {} : { duration: 1.5, repeat: Infinity, ease: 'easeInOut', delay: 0.4 }}
+              />
+            </div>
+            <span className="text-xs text-white/70">Thinking…</span>
+          </div>
+        )
+
       case 'tool_call':
       case 'tool_result':
-      case 'reflection':
       default:
         return (
           <div className="flex items-center gap-2">
