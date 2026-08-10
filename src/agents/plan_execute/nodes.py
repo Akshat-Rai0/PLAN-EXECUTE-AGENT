@@ -12,7 +12,8 @@ from src.tools.registry import (
 )
 from src.tools.browser_use import run_browser_task_sync
 from src.sandbox.shell_runner import make_project_workspace
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import SystemMessage, HumanMessage
+from langchain_core.runnables.config import RunnableConfig
 from .llm import get_llm, get_cheap_llm
 from src.sandbox.runner import run_in_sandbox
 from langgraph.checkpoint.sqlite import SqliteSaver
@@ -2645,7 +2646,7 @@ def executor_node(state: State) -> dict:
     return {"plan": plan}
 
 
-def synthesize_node(state: State) -> dict:
+def synthesize_node(state: State, config: RunnableConfig | None = None) -> dict:
     """
     Synthesize all step results into a final answer using the LLM.
 
@@ -2696,13 +2697,77 @@ If any step result starts with "[UNVERIFIED:", you must explicitly mention in yo
         SystemMessage(content="You are a helpful synthesis assistant that combines information from multiple sources."),
         HumanMessage(content=synthesis_prompt),
     ]
-    response = llm.invoke(messages)
+
+    tracker = None
+    synthesis_step_id = None
+    if config and "configurable" in config and "tracker" in config["configurable"]:
+        tracker = config["configurable"]["tracker"]
+        synthesis_step_id = f"{tracker.run_id}-synthesis"
+        from src.api.models import RunStepEvent, StepPayload
+        from src.api.models import utc_now_iso
+        
+        # Pre-emit the running step
+        tracker.handle_event(
+            RunStepEvent(
+                run_id=tracker.run_id,
+                step_id=synthesis_step_id,
+                parent_step_id=None,
+                arm=tracker.arm,
+                type="synthesis",
+                status="running",
+                title="Synthesizing final answer",
+                started_at=utc_now_iso(),
+                payload=StepPayload(result=""),
+            )
+        )
+    
+    response_content = ""
+    for chunk in llm.stream(messages):
+        if hasattr(chunk, "content"):
+            response_content += chunk.content
+        elif isinstance(chunk, str):
+            response_content += chunk
+            
+        if tracker and synthesis_step_id:
+            from src.api.models import RunStepEvent, StepPayload
+            from src.api.models import utc_now_iso
+            tracker.handle_event(
+                RunStepEvent(
+                    run_id=tracker.run_id,
+                    step_id=synthesis_step_id,
+                    parent_step_id=None,
+                    arm=tracker.arm,
+                    type="synthesis",
+                    status="running",
+                    title="Synthesizing final answer",
+                    started_at=utc_now_iso(),
+                    payload=StepPayload(result=response_content),
+                )
+            )
 
     # Store the synthesis result directly on the plan. This no longer depends
     # on a step having tool_hint="none" existing in the plan — the planner
     # prompt isn't guaranteed to always emit one, and when it doesn't, the
     # synthesized answer was previously silently discarded.
-    plan.final_answer = response.content
+    plan.final_answer = response_content
+    
+    if tracker and synthesis_step_id:
+        from src.api.models import RunStepEvent, StepPayload
+        from src.api.models import utc_now_iso
+        tracker.handle_event(
+            RunStepEvent(
+                run_id=tracker.run_id,
+                step_id=synthesis_step_id,
+                parent_step_id=None,
+                arm=tracker.arm,
+                type="synthesis",
+                status="success",
+                title="Synthesizing final answer",
+                started_at=utc_now_iso(),
+                ended_at=utc_now_iso(),
+                payload=StepPayload(result=response_content),
+            )
+        )
 
     return {"plan": plan}
 

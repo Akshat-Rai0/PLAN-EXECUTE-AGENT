@@ -443,7 +443,7 @@ def _run_react(task: str, tracker: RunTracker) -> dict[str, Any] | None:
         "iterations": 0,
         "workspace_path": None,
     }
-    config = {"configurable": {"thread_id": f"viz-{uuid.uuid4()}"}}
+    config = {"configurable": {"thread_id": f"viz-{uuid.uuid4()}", "tracker": tracker}}
 
     for update in graph.stream(state, config, stream_mode="updates"):
         for node_name, node_state in update.items():
@@ -501,7 +501,7 @@ def _run_plan_execute(
             "approval_events": [],
             "human_questions": [],
         }
-        config = {"configurable": {"thread_id": f"viz-{uuid.uuid4()}"}}
+        config = {"configurable": {"thread_id": f"viz-{uuid.uuid4()}", "tracker": tracker}}
         serializer = JsonPlusSerializer(
             allowed_msgpack_modules=[
                 ("src.agents.plan_execute.state", "StepStatus"),
