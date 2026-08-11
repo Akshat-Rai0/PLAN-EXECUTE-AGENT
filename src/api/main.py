@@ -179,10 +179,12 @@ async def stream_run(websocket: WebSocket, run_id: str) -> None:
         try:
             async for event in event_bus.subscribe(run_id):
                 await websocket.send_json(event.model_dump())
+            # Event stream ended (run completed) — close normally
+            await websocket.close(code=1000, reason="run_completed")
         except WebSocketDisconnect:
             return
     else:
-        await websocket.close()
+        await websocket.close(code=1000, reason="run_already_finished")
 
 
 frontend_dist = REPO_ROOT / "frontend" / "dist"

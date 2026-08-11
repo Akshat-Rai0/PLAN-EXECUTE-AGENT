@@ -46,6 +46,13 @@ export function useRunStream(runId: string | null, isLive: boolean) {
       return
     }
 
+    // If not live, don't open a WebSocket at all — just fetch the run data once
+    if (!isLive) {
+      setConnected(false)
+      setReconnecting(false)
+      return
+    }
+
     let cancelled = false
     let ws: WebSocket | null = null
 
@@ -69,11 +76,19 @@ export function useRunStream(runId: string | null, isLive: boolean) {
         scheduleFlush()
       }
 
-      ws.onclose = () => {
+      ws.onclose = (event) => {
         if (cancelled) return
         setConnected(false)
         flushBuffer()
 
+        // Normal close (server finished sending data) — don't reconnect
+        const normalClose = event.code === 1000 || event.code === 1001 || event.code === 4404
+        if (normalClose) {
+          setReconnecting(false)
+          return
+        }
+
+        // Abnormal close while run is live — attempt reconnect
         if (isLive && reconnectAttemptRef.current < MAX_RECONNECT_ATTEMPTS) {
           setReconnecting(true)
           const delay = BASE_RECONNECT_MS * Math.pow(1.5, reconnectAttemptRef.current)
@@ -85,7 +100,10 @@ export function useRunStream(runId: string | null, isLive: boolean) {
       }
 
       ws.onerror = () => {
-        ws?.close()
+        // Only close if the socket isn't already closing/closed
+        if (ws && ws.readyState !== WebSocket.CLOSED && ws.readyState !== WebSocket.CLOSING) {
+          ws.close()
+        }
       }
     }
 
@@ -93,7 +111,9 @@ export function useRunStream(runId: string | null, isLive: boolean) {
 
     return () => {
       cancelled = true
-      ws?.close()
+      if (ws && ws.readyState !== WebSocket.CLOSED && ws.readyState !== WebSocket.CLOSING) {
+        ws.close()
+      }
       if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current)
       if (rafRef.current) cancelAnimationFrame(rafRef.current)
       reconnectAttemptRef.current = 0

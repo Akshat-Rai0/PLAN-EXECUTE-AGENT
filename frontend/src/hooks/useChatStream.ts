@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ChatMessage, InterruptResponse } from '../lib/types'
 import { useRunStream } from './useRunStream'
 import { toast } from '../components/Toast'
@@ -7,7 +7,50 @@ const API_BASE = ''
 
 export function useChatStream(runId: string | null) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
-  const { steps, connected, reconnecting } = useRunStream(runId, true)
+  const [isLive, setIsLive] = useState(false)
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  // Poll the run status to determine if it's actually live
+  useEffect(() => {
+    if (!runId) {
+      setIsLive(false)
+      return
+    }
+
+    // Assume live initially when we get a new runId (just submitted)
+    setIsLive(true)
+
+    const checkStatus = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/runs/${runId}`)
+        if (res.ok) {
+          const run = await res.json()
+          const live = run.status === 'running' || run.status === 'waiting_for_input'
+          setIsLive(live)
+          // Stop polling once the run is no longer live
+          if (!live && pollingRef.current) {
+            clearInterval(pollingRef.current)
+            pollingRef.current = null
+          }
+        }
+      } catch {
+        // If fetch fails, don't change isLive — let the WebSocket handle reconnection
+      }
+    }
+
+    // Check immediately, then poll every 3s
+    checkStatus()
+    pollingRef.current = setInterval(checkStatus, 3000)
+
+    return () => {
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current)
+        pollingRef.current = null
+      }
+    }
+  }, [runId])
+
+  const { steps, connected, reconnecting } = useRunStream(runId, isLive)
 
   useEffect(() => {
     if (!runId) {
