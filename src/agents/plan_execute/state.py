@@ -94,6 +94,25 @@ def replace_pending_approval(existing: Optional[dict], new: Optional[dict]) -> O
     return new if new is not None else existing
 
 
+def accumulate_context(existing: Optional[list], new: Optional[list]) -> list:
+    """Reducer: append new context entries to the running cumulative list."""
+    if existing is None:
+        existing = []
+    if new is None:
+        return existing
+    return existing + new
+
+
+def replace_bool(existing: Optional[bool], new: Optional[bool]) -> bool:
+    """Reducer: replace a boolean flag with the new value, defaulting to False."""
+    return new if new is not None else (existing if existing is not None else False)
+
+
+def replace_str(existing: Optional[str], new: Optional[str]) -> Optional[str]:
+    """Reducer: replace a string value, keeping existing if new is None."""
+    return new if new is not None else existing
+
+
 def add_approval_event(existing: list[dict], new: list[dict]) -> list[dict]:
     """Reducer: append approval events to the list."""
     return existing + new
@@ -120,3 +139,13 @@ class State(ExtTypedDict):
     pending_approval: Annotated[Optional[dict], replace_pending_approval]
     approval_events: Annotated[list[dict], add_approval_event]
     human_questions: Annotated[list[dict], add_human_question]
+    # Dynamic success-based replanning fields
+    # Running list of all completed step results — used by check_new_info_node
+    # to compare the latest step against prior context for novelty detection.
+    cumulative_context: Annotated[Optional[list], accumulate_context]
+    # Boolean flag set by check_new_info_node; read by _route_after_check to
+    # decide whether to route to replaner after a successful step.
+    last_step_new_info: Annotated[Optional[bool], replace_bool]
+    # "failure" or "success_new_info" — threaded into replaner so it can choose
+    # the right prompt and logging label for the replan.
+    replan_reason: Annotated[Optional[str], replace_str]

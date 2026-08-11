@@ -2840,22 +2840,164 @@ REASON: one short sentence explaining why"""
     return has_new_info, reason
 
 
+def _detect_new_information(step_result: str, cumulative_context: list[str]) -> tuple[bool, str]:
+    """
+    Use LLM to determine if a single completed step's result contains
+    substantially new information compared to all prior step results.
+
+    This is used by check_new_info_node to decide whether to route to the
+    replaner for optimisation after a successful step.
+
+    Args:
+        step_result: The result string of the just-completed step.
+        cumulative_context: List of all prior step result strings accumulated
+            in state["cumulative_context"].
+
+    Returns (has_new_info, reason).
+    """
+    if not cumulative_context:
+        # First completed step always has new info by definition — nothing to
+        # compare against, and we don't want to replan after every first step,
+        # so treat first step as NOT triggering a success replan.
+        return False, "First step — no prior context to compare against"
+
+    prior_str = "\n".join(cumulative_context)
+    prior_excerpt = prior_str[:3000]
+    step_excerpt = step_result[:2000]
+
+    novelty_prompt = f"""Prior step results (everything completed before this step):
+{prior_excerpt}
+
+New step result (just completed):
+{step_excerpt}
+
+Does the new step result contain genuinely new, actionable information that was NOT already present in the prior results? Consider:
+- Are there new specific facts (names, dates, numbers, URLs, IDs) not seen before?
+- Does it meaningfully change what the remaining steps should look like?
+- Or is it essentially the same information already known, or a minor elaboration?
+
+Respond in EXACTLY this format, nothing else:
+HAS_NEW_INFO: yes or no
+REASON: one short sentence explaining why"""
+
+    llm = get_llm()
+    messages = [
+        SystemMessage(content="You are a strict novelty checker. Be skeptical — rephrased or marginally different content counts as NOT having new information. Only return 'yes' if the new result would materially change how remaining steps should be planned."),
+        HumanMessage(content=novelty_prompt),
+    ]
+    response = llm.invoke(messages)
+    content = response.content.strip()
+
+    has_new_info = True
+    reason = ""
+    for line in content.splitlines():
+        line = line.strip()
+        if line.upper().startswith("HAS_NEW_INFO:"):
+            has_new_info = "yes" in line.lower()
+        elif line.upper().startswith("REASON:"):
+            reason = line.split(":", 1)[1].strip() if ":" in line else ""
+
+    if not reason:
+        reason = "Could not determine novelty — assuming new information" if has_new_info else "No meaningful new information detected"
+
+    return has_new_info, reason
+
+
+# Tool hints that can surface new knowledge and are worth checking for novelty.
+# Write/delete/server steps never return new external information so we skip
+# the LLM novelty call for them to save cost and latency.
+_INFO_GATHERING_TOOL_HINTS = {
+    "web_search", "tavily_search", "browser_use", "browser-use",
+    "code_executor", "none", "synthesize_tool",
+}
+
+
+def check_new_info_node(state: State) -> dict:
+    """
+    Thin node inserted between every tool node and the post-tool routing
+    decision. Evaluates whether the just-completed step's result contains
+    new information that warrants replanning the remaining steps.
+
+    Sets in state:
+        last_step_new_info (bool): True if new info was detected.
+        replan_reason (str): "success_new_info" or "failure" — read by replaner.
+        cumulative_context (list[str]): Accumulates step results for future
+            novelty comparisons (reducer appends, never overwrites).
+    """
+    plan = state["plan"]
+    if plan is None:
+        return {"last_step_new_info": False, "replan_reason": "failure"}
+
+    # Find the step that just finished (DONE or FAILED).
+    # executor_node sets a step to RUNNING then the tool node marks it DONE/FAILED.
+    last_done = next(
+        (s for s in reversed(plan.subtasks)
+         if s.status in (StepStatus.DONE, StepStatus.FAILED)),
+        None,
+    )
+
+    # If the step failed, signal failure routing immediately — no novelty check needed.
+    if last_done is None or last_done.status == StepStatus.FAILED:
+        return {
+            "last_step_new_info": False,
+            "replan_reason": "failure",
+        }
+
+    # Skip novelty detection for non-information-gathering steps (write, delete,
+    # start_server, setup_workspace, shell_command) — they never return new
+    # external knowledge.
+    tool_hint = (last_done.tool_hint or "none").lower()
+    if tool_hint not in _INFO_GATHERING_TOOL_HINTS:
+        step_entry = f"Step {last_done.id}: {last_done.task}\nResult: {last_done.result or ''}"
+        return {
+            "last_step_new_info": False,
+            "replan_reason": "failure",
+            "cumulative_context": [step_entry],
+        }
+
+    step_result = last_done.result or ""
+    step_entry = f"Step {last_done.id}: {last_done.task}\nResult: {step_result}"
+    cumulative_context = state.get("cumulative_context") or []
+
+    print(f"\n🔍 Checking for new information after step {last_done.id} ({tool_hint})...")
+    has_new_info, reason = _detect_new_information(step_result, cumulative_context)
+
+    if has_new_info:
+        print(f"  ✨ New information detected: {reason}")
+    else:
+        print(f"  ⏭️  No new information: {reason}")
+
+    return {
+        "last_step_new_info": has_new_info,
+        "replan_reason": "success_new_info" if has_new_info else "failure",
+        "cumulative_context": [step_entry],
+    }
+
+
 def replaner(state: State) -> dict:
     """
     Replan the remaining steps in the plan.
 
-    This function is called when a step fails (status=FAILED) and it will evaluate
-    the output of steps that are finished and will decied to continue or revies. It will
-    generate a new plan for the remaining tasks, replacing the old plan
-    in the state. The new plan will only include steps that are still
-    PENDING or RUNNING, and will re-evaluate how to achieve the goal.
+    This function is called either when:
+    - A step fails (status=FAILED) — replan_reason="failure". Focuses on
+      error recovery (finding a different approach to achieve the same goal).
+    - A successful step reveals new information — replan_reason="success_new_info".
+      Focuses on optimising/refining remaining steps using what was just learned.
+
+    In both cases it preserves all DONE steps and only rewrites PENDING steps.
     """
     plan = state["plan"]
     if plan is None:
         raise RuntimeError("replaner called with no plan in state")
 
+    replan_reason = state.get("replan_reason") or "failure"
+    reason_label = (
+        "optimizing after new info" if replan_reason == "success_new_info"
+        else "failure recovery"
+    )
+
     print(f"\n{'='*80}")
-    print(f"🔄 Replanning")
+    print(f"🔄 Replanning ({reason_label})")
     print(f"{'='*80}")
 
     # Check for consecutive identical replans - early termination
@@ -2924,7 +3066,7 @@ def replaner(state: State) -> dict:
             has_new_info, novelty_reason = _check_replan_novelty(previous_context, completed_results)
 
         # Generate a new plan based on the original goal and the results of completed steps.
-        new_plan = breakdown_task(plan.goal, context=completed_results)
+        new_plan = breakdown_task(plan.goal, context=completed_results, replan_reason=replan_reason)
 
         # Merge DONE steps back to preserve execution history and results for synthesis
         next_id = 1
@@ -2940,7 +3082,7 @@ def replaner(state: State) -> dict:
 
         new_plan.subtasks = done_steps + new_plan.subtasks
 
-        print(f"✅ New plan generated with {len(new_plan.subtasks)} steps")
+        print(f"✅ New plan generated with {len(new_plan.subtasks)} steps ({reason_label})")
         if not has_new_info:
             print(f"⚠️  No new information found (consecutive: {consecutive_count + 1})")
 

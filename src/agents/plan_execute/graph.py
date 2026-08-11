@@ -7,6 +7,7 @@ from .nodes import (
     browser_use_node,
     setup_workspace_node, shell_node, write_file_node, delete_file_node, start_server_node,
     approval_node, ask_human_node, extract_user_info_node,
+    check_new_info_node,
     MAX_TOTAL_STEPS,
 )
 from .state import State, StepStatus
@@ -138,9 +139,9 @@ def _route_after_tool(state: State) -> str:
     """
     Route after tool execution:
     - Force termination if step cap exceeded.
-    - Route to "replaner" if any step failed (status=FAILED).
+    - Route to "check_new_info" always (it will set last_step_new_info and
+      replan_reason before the actual routing decision is made).
     - Route to "synthesize" if any step cancelled (status=CANCELLED).
-    - Otherwise, route back to "executor".
     """
     plan = state["plan"]
     if plan is None:
@@ -159,9 +160,29 @@ def _route_after_tool(state: State) -> str:
     if any(s.status == StepStatus.CANCELLED for s in plan.subtasks):
         return "synthesize"
     
+    # Always route through check_new_info_node first. That node determines
+    # whether the step result is novel enough to trigger replanning and sets
+    # last_step_new_info / replan_reason in state accordingly.
+    return "check_new_info"
+
+
+def _route_after_check(state: State) -> str:
+    """
+    Route after check_new_info_node has evaluated novelty:
+    - Route to "replaner" if any step FAILED (failure recovery).
+    - Route to "replaner" if last_step_new_info is True (success-based optimisation).
+    - Otherwise route back to "executor" for the next step.
+    """
+    plan = state["plan"]
+    if plan is None:
+        return "executor"
+
     if any(s.status == StepStatus.FAILED for s in plan.subtasks):
         return "replaner"
-        
+
+    if state.get("last_step_new_info", False):
+        return "replaner"
+
     return "executor"
 
 
@@ -185,6 +206,7 @@ def build_graph():
     graph.add_node("reason", reason_node)
     graph.add_node("synthesize", synthesize_node)
     graph.add_node("replaner", replaner)
+    graph.add_node("check_new_info", check_new_info_node)
     graph.add_node("setup_workspace", setup_workspace_node)
     graph.add_node("shell", shell_node)
     graph.add_node("write_file", write_file_node)
@@ -258,69 +280,26 @@ def build_graph():
         },
     )
     
-    # After tool execution, conditionally route to replaner, executor, or synthesize
-    graph.add_conditional_edges(
-        "tavily_search",
-        _route_after_tool,
-        {
-            "replaner": "replaner",
-            "executor": "executor",
-            "synthesize": "synthesize",
-        },
-    )
-    graph.add_conditional_edges(
-        "browser_use",
-        _route_after_tool,
-        {
-            "replaner": "replaner",
-            "executor": "executor",
-            "synthesize": "synthesize",
-        },
-    )
-    graph.add_conditional_edges(
-        "code_executor",
-        _route_after_tool,
-        {
-            "replaner": "replaner",
-            "executor": "executor",
-            "synthesize": "synthesize",
-        },
-    )
-    graph.add_conditional_edges(
-        "synthesize_tool",
-        _route_after_tool,
-        {
-            "replaner": "replaner",
-            "executor": "executor",
-            "synthesize": "synthesize",
-        },
-    )
-    graph.add_conditional_edges(
-        "reason",
-        _route_after_tool,
-        {
-            "replaner": "replaner",
-            "executor": "executor",
-            "synthesize": "synthesize",
-        },
-    )
-    graph.add_conditional_edges(
-        "stub",
-        _route_after_tool,
-        {
-            "replaner": "replaner",
-            "executor": "executor",
-            "synthesize": "synthesize",
-        },
-    )
+    # After tool execution, route to check_new_info_node which detects novelty,
+    # then _route_after_check decides replaner vs executor vs synthesize.
+    _tool_to_check = {"check_new_info": "check_new_info", "synthesize": "synthesize"}
+    graph.add_conditional_edges("tavily_search", _route_after_tool, _tool_to_check)
+    graph.add_conditional_edges("browser_use", _route_after_tool, _tool_to_check)
+    graph.add_conditional_edges("code_executor", _route_after_tool, _tool_to_check)
+    graph.add_conditional_edges("synthesize_tool", _route_after_tool, _tool_to_check)
+    graph.add_conditional_edges("reason", _route_after_tool, _tool_to_check)
+    graph.add_conditional_edges("stub", _route_after_tool, _tool_to_check)
 
-    # Coding-agent nodes — all share the same post-execution routing
-    _coding_routing = {"replaner": "replaner", "executor": "executor", "synthesize": "synthesize"}
-    graph.add_conditional_edges("setup_workspace", _route_after_tool, _coding_routing)
-    graph.add_conditional_edges("shell", _route_after_tool, _coding_routing)
-    graph.add_conditional_edges("write_file", _route_after_tool, _coding_routing)
-    graph.add_conditional_edges("delete_file", _route_after_tool, _coding_routing)
-    graph.add_conditional_edges("start_server", _route_after_tool, _coding_routing)
+    # Coding-agent nodes — same routing through check_new_info
+    graph.add_conditional_edges("setup_workspace", _route_after_tool, _tool_to_check)
+    graph.add_conditional_edges("shell", _route_after_tool, _tool_to_check)
+    graph.add_conditional_edges("write_file", _route_after_tool, _tool_to_check)
+    graph.add_conditional_edges("delete_file", _route_after_tool, _tool_to_check)
+    graph.add_conditional_edges("start_server", _route_after_tool, _tool_to_check)
+
+    # check_new_info_node routes to replaner (on failure or new info) or executor
+    _after_check_routing = {"replaner": "replaner", "executor": "executor"}
+    graph.add_conditional_edges("check_new_info", _route_after_check, _after_check_routing)
     
     # After replaning, route back to executor to run the new plan
     graph.add_edge("replaner", "executor")

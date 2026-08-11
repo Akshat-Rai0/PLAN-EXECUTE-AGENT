@@ -203,11 +203,41 @@ list:
 """
 
 
-def breakdown_task(goal: str, context: list[str] = None) -> Plan:
+SUCCESS_REPLAN_INSTRUCTIONS = """
+
+Context of completed steps (a recent step revealed new information):
+{context_str}
+
+A just-completed step has surfaced new information not anticipated by the original plan.
+Your job is to OPTIMIZE the remaining steps by incorporating this new information.
+
+Guidelines:
+- Preserve the overall goal — do not change what the plan is trying to achieve.
+- Eliminate steps that are now redundant given what was just learned (e.g., if a step
+  was going to search for data that is already in the results above, drop it).
+- Sharpen specificity of remaining search/research steps using concrete details now
+  known (exact names, dates, IDs, URLs, etc.) rather than generic descriptions.
+- Add any new steps that the new information implies are necessary to fully satisfy
+  the goal (e.g., a follow-up search for a specific entity now identified).
+- Keep only PENDING steps in the returned subtasks list — do not re-include DONE steps.
+- Prefer fewer, more targeted steps over many broad ones.
+- Do NOT include failure-recovery logic — all completed steps succeeded.
+"""
+
+
+def breakdown_task(goal: str, context: list[str] = None, replan_reason: str = "failure") -> Plan:
     """
     Break down a goal into a validated Plan of Steps.
     Retries up to MAX_RETRIES times if the model returns invalid JSON
     or JSON that doesn't satisfy the Plan/Step schema.
+
+    Args:
+        goal: The overall goal to plan for.
+        context: Optional list of completed/failed step result strings to guide
+            replanning. If None, a fresh plan is generated from scratch.
+        replan_reason: "failure" (default) uses REPLAN_INSTRUCTIONS focused on
+            error recovery; "success_new_info" uses SUCCESS_REPLAN_INSTRUCTIONS
+            focused on optimizing remaining steps with newly discovered info.
 
     Raises RuntimeError if no valid plan is produced after all retries —
     callers must handle this rather than receiving silently broken data.
@@ -218,7 +248,12 @@ def breakdown_task(goal: str, context: list[str] = None) -> Plan:
         # function, so never trust them to have already bounded the context.
         context = bound_replan_context(context)
         context_str = "\n".join(context)
-        prompt = PROMPT_TEMPLATE.format(goal=goal) + REPLAN_INSTRUCTIONS.format(context_str=context_str)
+        instructions = (
+            SUCCESS_REPLAN_INSTRUCTIONS
+            if replan_reason == "success_new_info"
+            else REPLAN_INSTRUCTIONS
+        )
+        prompt = PROMPT_TEMPLATE.format(goal=goal) + instructions.format(context_str=context_str)
     else:
         prompt = PROMPT_TEMPLATE.format(goal=goal)
     last_error = None
@@ -238,7 +273,7 @@ def breakdown_task(goal: str, context: list[str] = None) -> Plan:
         except (json.JSONDecodeError, ValidationError) as e:
             last_error = e
             if context:
-                prompt = PROMPT_TEMPLATE.format(goal=goal) + REPLAN_INSTRUCTIONS.format(context_str=context_str) + RETRY_SUFFIX.format(error=str(e))
+                prompt = PROMPT_TEMPLATE.format(goal=goal) + instructions.format(context_str=context_str) + RETRY_SUFFIX.format(error=str(e))
             else:
                 prompt = PROMPT_TEMPLATE.format(goal=goal) + RETRY_SUFFIX.format(error=str(e))
             continue
