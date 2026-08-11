@@ -2771,7 +2771,7 @@ If any step result starts with "[UNVERIFIED:", you must explicitly mention in yo
 
     return {"plan": plan}
 
-MAX_REPLAN = 4
+MAX_REPLAN = 8
 MAX_TOTAL_STEPS = 15
 MAX_CONSECUTIVE_IDENTICAL_REPLANS = 2
 
