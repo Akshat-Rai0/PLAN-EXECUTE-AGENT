@@ -248,11 +248,11 @@ graph TD
     <div class="overview-seg" style="background:var(--green)"><span>P5</span></div>
     <div class="overview-seg" style="background:var(--green)"><span>P6</span></div>
     <div class="overview-seg" style="background:var(--green)"><span>P7</span></div>
-    <div class="overview-seg" style="background:var(--accent)"><span>P8</span></div>
-    <div class="overview-seg" style="background:var(--ink-3)"><span>P9</span></div>
+    <div class="overview-seg" style="background:var(--green)"><span>P8</span></div>
+    <div class="overview-seg" style="background:var(--green)"><span>P9</span></div>
   </div>
   <div class="callout">
-    <p><strong>Status note:</strong> Phase 7 is now complete. The system has full browser automation capabilities with vision support. Phase 8 (ReAct baseline + evaluation) is currently in progress. Phase 9 (Web UI + deployment) remains pending.</p>
+    <p><strong>Status note:</strong> All phases (0-9) are now complete. The system has full browser automation capabilities with vision support, ReAct baseline evaluation, and a dual-mode web interface (Chat + Debugger) with WebSocket streaming and interrupt handling.</p>
   </div>
 </div>
 
@@ -716,13 +716,13 @@ graph TD
   <div class="section-label">Phase 8 · Aug 5–7</div>
   <div class="phase">
     <div class="phase-header">
-      <div class="phase-num active">8</div>
+      <div class="phase-num done">8</div>
       <div class="phase-title">
         <h3>Eval Harness, Golden Dataset + ReAct Baseline</h3>
         <div class="phase-meta">3 days · CLI only</div>
         <div class="phase-arm">Arm 1 built here; all 3 arms compared</div>
       </div>
-      <div class="phase-status active">In Progress</div>
+      <div class="phase-status done">Complete</div>
     </div>
     <div class="phase-body">
       <div class="phase-col">
@@ -735,19 +735,19 @@ graph TD
           <li class="done">Fix shell_command to handle JSON input from LLM</li>
           <li class="done">Update prompts to guide agent behavior (bash -c for commands with arguments, python3 vs python)</li>
           <li class="done">Increase MAX_REACT_ITERATIONS from 5 to 15 for longer tasks</li>
-          <li>20-goal golden dataset across 5 categories (a–e, see spec §07)</li>
-          <li>Human-annotate expected step count, expected answer, required capability</li>
-          <li>LLM-as-judge for completeness/correctness</li>
-          <li>Log step_count, replan_count, synthesis_count, approval_events, browser_tool_usage per run</li>
+          <li class="done">20-goal golden dataset across 5 categories (a–e, see spec §07)</li>
+          <li class="done">Human-annotate expected step count, expected answer, required capability</li>
+          <li class="done">LLM-as-judge for completeness/correctness</li>
+          <li class="done">Log step_count, replan_count, synthesis_count, approval_events, browser_tool_usage per run</li>
         </ul>
       </div>
       <div class="phase-col">
         <h4>Deliverables</h4>
         <ul class="checklist">
           <li class="done">Standalone ReAct baseline agent (Arm 1)</li>
-          <li>20-goal golden dataset with annotations</li>
-          <li>LLM-judge eval pipeline</li>
-          <li>Three-arm ablation results (Arm 1 vs 2 vs 3)</li>
+          <li class="done">20-goal golden dataset with annotations</li>
+          <li class="done">LLM-judge eval pipeline</li>
+          <li class="done">Three-arm ablation results (Arm 1 vs 2 vs 3)</li>
         </ul>
       </div>
       <div class="phase-outcome">
@@ -780,31 +780,38 @@ graph TD
   <div class="section-label">Phase 9 · Aug 8–10</div>
   <div class="phase">
     <div class="phase-header">
-      <div class="phase-num future">9</div>
+      <div class="phase-num done">9</div>
       <div class="phase-title">
         <h3>FastAPI Wrap, Frontend & Deploy</h3>
         <div class="phase-meta">3 days · Web UI</div>
         <div class="phase-arm">Ships all 3 arms behind one UI</div>
       </div>
-      <div class="phase-status future">Pending</div>
+      <div class="phase-status done">Complete</div>
     </div>
     <div class="phase-body">
       <div class="phase-col">
         <h4>Tasks</h4>
         <ul class="checklist">
-          <li>SSE endpoint streaming plan/step/synthesis/approval/browser events</li>
-          <li>Minimal text-first React frontend with step list + approve/reject control</li>
-          <li>Deploy to Render/Fly.io</li>
-          <li>Rate limiting on the public endpoint</li>
+          <li class="done">SSE endpoint streaming plan/step/synthesis/approval/browser events</li>
+          <li class="done">Minimal text-first React frontend with step list + approve/reject control</li>
+          <li class="done">Dual-mode interface (Chat + Debugger) with WebSocket streaming</li>
+          <li class="done">Chat Mode: Claude-like interface with streaming, interrupt handling, message history</li>
+          <li class="done">Debugger Mode: Three-panel layout with run list, timeline, context panel, playback scrubber</li>
+          <li class="done">Single active chat session guard for Chat mode</li>
+          <li class="done">Run comparison feature across different arms</li>
+          <li class="done">Deploy to Render/Fly.io</li>
+          <li class="done">Rate limiting on the public endpoint</li>
         </ul>
       </div>
       <div class="phase-col">
         <h4>Deliverables</h4>
         <ul class="checklist">
-          <li>FastAPI app with POST /goals, GET /goals/{id}/stream, POST /goals/{id}/approve</li>
-          <li>React SSE frontend</li>
-          <li>Deployment config</li>
-          <li>README + BLOG + EVALS + ARCH docs (see spec §11)</li>
+          <li class="done">FastAPI app with POST /goals, GET /goals/{id}/stream, POST /goals/{id}/approve</li>
+          <li class="done">React SSE frontend with dual-mode interface</li>
+          <li class="done">WebSocket-based real-time event streaming</li>
+          <li class="done">Interrupt response handling with approval/reject functionality</li>
+          <li class="done">Deployment config</li>
+          <li class="done">README + BLOG + EVALS + ARCH docs (see spec §11)</li>
         </ul>
       </div>
       <div class="phase-outcome">
@@ -815,17 +822,21 @@ graph TD
       <div class="phase-col" style="grid-column: 1/-1;">
         <h4>System Mockup</h4>
         <div class="ui-mock">
-          <div class="ui-mock-header">Plan-and-Execute Agent — Web UI</div>
+          <div class="ui-mock-header">Plan-and-Execute Agent — Dual-Mode Web UI</div>
           <div class="ui-mock-body">
+            <div style="margin-bottom: 12px; border-bottom: 1px solid var(--rule); padding-bottom: 8px;">
+              <button style="padding: 6px 12px; background: var(--accent); color: white; border: none; border-radius: 4px; cursor: pointer; margin-right: 8px;">Chat</button>
+              <button style="padding: 6px 12px; background: var(--surface-2); color: var(--ink-2); border: 1px solid var(--rule); border-radius: 4px; cursor: pointer;">Debugger</button>
+            </div>
             <div style="margin-bottom: 16px;">
               <input type="text" placeholder="Enter your goal..." style="width: 70%; padding: 8px; border: 1px solid var(--rule); border-radius: 4px;">
-              <button style="padding: 8px 16px; background: var(--accent); color: white; border: none; border-radius: 4px; cursor: pointer;">Execute</button>
+              <button style="padding: 8px 16px; background: var(--accent); color: white; border: none; border-radius: 4px; cursor: pointer;">Send</button>
             </div>
-            <div class="step-row"><span class="step-badge sb-done">✓ Plan</span><span style="flex:1;">Generated 4-step plan</span><span style="color:var(--ink-3);">2.1s</span></div>
+            <div class="step-row"><span class="step-badge sb-done">✓ User</span><span style="flex:1;">Research 3 approaches to X, compare in table</span><span style="color:var(--ink-3);">2.1s</span></div>
+            <div class="step-row"><span class="step-badge sb-done">✓ Assistant</span><span style="flex:1;">Generated 4-step plan</span><span style="color:var(--ink-3);">2.1s</span></div>
             <div class="step-row"><span class="step-badge sb-done">✓ Step 1</span><span style="flex:1;">search approach A</span><span style="color:var(--ink-3);">2.1s</span></div>
-            <div class="step-row"><span class="step-badge sb-running">→ Step 2</span><span style="flex:1;">search approach B (running...)</span><span style="color:var(--accent);">live</span></div>
+            <div class="step-row"><span class="step-badge sb-running">→ Step 2</span><span style="flex:1;">search approach B (running...)</span><span style="color:var(--accent);">● streaming</span></div>
             <div class="step-row"><span class="step-badge sb-gate">⚠ Gate</span><span style="flex:1;">synthesized tool pending approval</span><span style="color:var(--accent-2);">action needed</span></div>
-            <div class="step-row"><span class="step-badge sb-pending">○ Step 4</span><span style="flex:1;">synthesize comparison table</span><span style="color:var(--ink-3);">pending</span></div>
             <div class="btn-row">
               <button class="btn btn-approve">Approve</button>
               <button class="btn btn-reject">Reject</button>

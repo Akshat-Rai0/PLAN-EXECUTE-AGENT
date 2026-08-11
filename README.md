@@ -29,17 +29,21 @@ The project includes a dual-mode web interface for interacting with the agent:
 
 1. **Chat Mode** (Default): Claude-like chat interface for running prompts with human-in-the-loop functionality
    - Enter tasks via chat input
-   - Real-time streaming of agent execution
+   - Real-time WebSocket streaming of agent execution
    - Inline interrupt handling (approve/reject buttons for commands, text input for questions)
    - Persistent chat history across sessions
    - Single active session at a time
+   - Activity indicators and toast notifications
+   - Connection status monitoring with automatic reconnection
 
 2. **Debugger Mode**: Original three-panel layout for detailed inspection
-   - Run list with filtering
-   - Timeline view of all steps
-   - Context panel with step details
-   - Playback scrubber for run replay
+   - Run list with filtering by arm and pass/fail status
+   - Timeline view of all steps with hover previews
+   - Context panel with detailed step information
+   - Playback scrubber for run replay (live vs replay mode)
    - Shared run history with chat mode
+   - Run comparison feature across different arms
+   - Collapsible panels for customizable layout
 
 To start the web interface:
 ```bash
@@ -47,6 +51,17 @@ uvicorn src.api.main:app --host 0.0.0.0 --port 8000
 ```
 
 Then open http://localhost:8000 in your browser.
+
+**Web Interface Features:**
+- **FastAPI Backend**: RESTful API with WebSocket support for real-time event streaming
+- **React Frontend**: Modern single-page application with smooth animations
+- **Dual-Mode Architecture**: Seamlessly switch between Chat and Debugger modes
+- **Real-Time Streaming**: WebSocket-based live updates during agent execution
+- **Interrupt Handling**: Human-in-the-loop approval gates for high-risk operations
+- **Run Management**: Persistent storage of all runs with SQLite database
+- **Arm Comparison**: Compare performance across different agent arms (ReAct, Plan-Execute, Full)
+- **Responsive Design**: Works on desktop and mobile devices
+- **Accessibility**: Reduced motion support and keyboard navigation
 
 ### CLI Execution
 
