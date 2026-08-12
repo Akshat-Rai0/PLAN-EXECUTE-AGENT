@@ -4,104 +4,15 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 from .llm import get_llm
 from .state import Plan
+from src.agents.prompts.loader import load_prompt
 
 MAX_RETRIES = 2
 MAX_REPLAN_CONTEXT_CHARS = 12_000
 MAX_REPLAN_CONTEXT_ITEM_CHARS = 1_800
 
-PROMPT_TEMPLATE = """Role:
-You are a task planning assistant that breaks down complex goals into actionable steps.
+PROMPT_TEMPLATE = load_prompt("plan_execute", "planner")
 
-Task:
-Analyze the given goal and create a step-by-step plan to achieve it.
-
-Constraints:
-- Break down the goal into 3-7 clear, actionable steps
-- Each step should be specific and executable
-- Steps should follow a logical sequence
-- Keep steps concise but descriptive
-- For questions about current events (sports, news, tournaments, live data), first get the current date and then use it to ensure the steps are relevant and up-to-date 
-- Avoid assumptions about event completion when dealing with time-sensitive topics
-- If the goal references "the most recent match," treat that literally as the latest completed fixture — do not assume it means the tournament final unless the goal says so explicitly
--while doing a web search if results are too generic or broad, narrow the query using any concrete details already surfaced in other steps' results (exact team/entity names, exact dates, tournament stage, match ID, etc.) rather than re-describing the same broad question in different words.
-- When a step involves fetching a specific fact (numbers, dates, names, margins, quantities) rather than performing an action, optionally include a "success_criterion" describing what a satisfying result looks like (e.g. "time margin in seconds").
-
-Goal:
-{goal}
-
-Output format:
-Return ONLY a valid JSON object with this exact structure, no markdown fences, no commentary:
-{{
-  "goal": "the original goal",
-  "subtasks": [
-    {{
-      "id": 1,
-      "task": "first step description",
-      "tool_hint": "none",
-      "status": "PENDING",
-      "sensitive": false,
-      "success_criterion": "optional string describing specific fact needed, or null"
-    }}
-  ]
-}}
-
-Notes:
-- "tool_hint": suggest a tool from this list:
-    "web_search"       - search the web for information
-    "code_executor"    - write and execute a Python script
-    "setup_workspace"  - create a project directory (use as FIRST step of any app/coding task)
-    "shell_command"    - run a CLI command (npm init, npm install, npx create-vite, mkdir, git, etc.)
-                          NOTE: 'rm' is NOT available via shell_command for safety reasons.
-                          Use "delete_file" instead for any deletion — never plan a shell_command
-                          step that deletes files.
-    "write_file"       - write or edit a source code file inside the project workspace
-    "delete_file"      - delete a file or directory inside the project workspace, or clear
-                          everything in the workspace (e.g. "delete all files in the project")
-    "start_server"     - start a dev server (use as LAST step of app-building tasks)
-    "browser_use"      - browse and interact with a website when rendered UI is required
-    "none"             - pure reasoning, no external tool
-- "status": always "PENDING"
-- "sensitive": true only if human confirmation should be required before this step runs
-
-Use "browser_use" only when a task requires navigating a rendered website, filling a
-form, comparing live UI results, or another browser interaction that web_search cannot
-perform. Mark it sensitive=true for any form submission, purchase, account change,
-message, or other external side effect. Browser tasks always require approval.
-
-For most one-off computation (unit conversions, data transforms, calculations), prefer
-"code_executor" — it already handles arbitrary Python computation directly. Only use a
-tool_hint outside this list if the step genuinely needs a capability none of these cover
-(e.g. calling a specific external API with its own auth/schema); an unrecognized tool_hint
-will automatically trigger dynamic tool synthesis rather than failing the step.
-
-Exception to the above: if the goal requires applying the SAME transformation or
-computation logic to more than one piece of input (e.g. "convert this list from F to C,
-then convert this second list the same way", or any goal that repeats an identical
-calculation across multiple inputs), give the FIRST occurrence of that logic an
-unrecognized, descriptive tool_hint (e.g. "convert_fahrenheit_to_celsius") instead of
-"code_executor". This routes it through dynamic tool synthesis, which builds a reusable
-tool once; give every LATER step that needs the same logic that exact same tool_hint
-string, so the synthesized tool is reused instead of the logic being regenerated and
-re-executed from scratch via code_executor for each input. Only do this for genuinely
-repeated logic — a single one-off calculation should still just use "code_executor".
-
-For app/coding tasks, always follow this step order:
-  1. setup_workspace (create the project directory)
-  2. shell_command (scaffold, e.g. npx create-vite@latest . --template react -- --skip-linter)
-  3. write_file (write/edit source files, one step per logical file group)
-  4. shell_command (npm install or pip install)
-  5. start_server (npm run dev, python3 -m http.server, uvicorn, etc.)
-
-If the goal requires deleting or clearing files, always use "delete_file" — never
-"shell_command" with rm, since rm is blocked and will always fail.
-"""
-
-RETRY_SUFFIX = """
-
-Your previous response could not be parsed. Error:
-{error}
-
-Return ONLY the raw JSON object. No markdown code fences. No explanation text before or after."""
+RETRY_SUFFIX = load_prompt("plan_execute", "planner_retry")
 
 
 def _truncate_context_item(value: str, limit: int = MAX_REPLAN_CONTEXT_ITEM_CHARS) -> str:
@@ -159,70 +70,10 @@ def _strip_markdown_fences(content: str) -> str:
     return content
 
 
-REPLAN_INSTRUCTIONS = """
-
-Context of completed/failed steps:
-{context_str}
-
-Please revise/update the remaining steps of the plan based on the context above. Keep only pending and revised steps in the returned list of subtasks.
-
-CRITICAL — read each failure reason carefully before writing new steps:
-- If a step's error says a search "doesn't answer" or "doesn't specify" or "doesn't contain" the needed information, that means the search ran successfully but was too GENERIC or too BROAD. Do not repeat a similarly generic search — the new step's task description must be MORE SPECIFIC than the one that failed. Narrow it using any concrete details already surfaced in other steps' results (exact team/entity names, exact dates, tournament stage, match ID, etc.) rather than re-describing the same broad question in different words.
-- Example: if "search for the latest match results" failed because the results were a generic schedule/fixture list with no explicit winner, the next step should target the SPECIFIC match already identified (e.g. "search for the result of the France vs Spain semi-final on July 14, 2026"), not a rephrased generic query like "find recent match results".
-- If you cannot identify a more specific angle from the available context, say so explicitly in the step's task description (e.g. "no more specific match identified in prior results — broaden search to include result pages specifically, not schedule/fixture pages") rather than silently repeating the same query shape that already failed.
-
-CRITICAL — if a failed step used tool_hint "start_server" (e.g. error mentions
-"did not open port", "port never opened", or a dev-server startup failure):
-- NEVER give the retry/diagnostic step tool_hint "shell_command". A dev server
-  is a long-running process that never exits on its own — shell_command
-  blocks until the underlying process exits, so pointing it at "npm run dev"
-  or any other server-start command will hang indefinitely, not fail fast
-  and not produce any diagnostic output. This is not a hypothetical: it has
-  caused real hangs in this exact scenario.
-- The ONLY correct tool_hint for starting or retrying a dev server is
-  "start_server" — it already runs the process correctly (non-blocking,
-  with a port-open timeout) and captures stderr/stdout output on failure
-  for you to inspect in the step result. Re-use "start_server" again with
-  the same or a corrected command; do not substitute shell_command.
-- If the step's error already includes a "stderr:" section, that IS the
-  diagnostic output — read it and write a fix (e.g. installing a missing
-  dependency via shell_command, fixing a config file via write_file)
-  BEFORE the next start_server attempt, rather than generating another
-  step whose sole purpose is "run it again to see the error" — you may
-  already have the error.
-
-CRITICAL — if a failed step used tool_hint "shell_command" and the error
-indicates the command was rejected, blocked, or not in the allowed command
-list:
-- Do NOT repeat the same command shape or the same shell wrapper on the next
-    attempt.
-- Rewrite the step to use an allowed command directly, or choose a different
-    tool entirely (for file deletion and clearing, use delete_file instead of rm).
-- Treat this as a command-shape problem, not as evidence that retrying the
-    same shell step will suddenly succeed.
-"""
+REPLAN_INSTRUCTIONS = load_prompt("plan_execute", "replan_failure")
 
 
-SUCCESS_REPLAN_INSTRUCTIONS = """
-
-Context of completed steps (a recent step revealed new information):
-{context_str}
-
-A just-completed step has surfaced new information not anticipated by the original plan.
-Your job is to OPTIMIZE the remaining steps by incorporating this new information.
-
-Guidelines:
-- Preserve the overall goal — do not change what the plan is trying to achieve.
-- Eliminate steps that are now redundant given what was just learned (e.g., if a step
-  was going to search for data that is already in the results above, drop it).
-- Sharpen specificity of remaining search/research steps using concrete details now
-  known (exact names, dates, IDs, URLs, etc.) rather than generic descriptions.
-- Add any new steps that the new information implies are necessary to fully satisfy
-  the goal (e.g., a follow-up search for a specific entity now identified).
-- Keep only PENDING steps in the returned subtasks list — do not re-include DONE steps.
-- Prefer fewer, more targeted steps over many broad ones.
-- Do NOT include failure-recovery logic — all completed steps succeeded.
-"""
+SUCCESS_REPLAN_INSTRUCTIONS = load_prompt("plan_execute", "replan_success")
 
 
 def breakdown_task(goal: str, context: list[str] = None, replan_reason: str = "failure") -> Plan:
@@ -260,7 +111,7 @@ def breakdown_task(goal: str, context: list[str] = None, replan_reason: str = "f
 
     for attempt in range(MAX_RETRIES + 1):
         messages = [
-            SystemMessage(content="You are a helpful task planning assistant that outputs valid JSON."),
+            SystemMessage(content=load_prompt("plan_execute", "planner_system")),
             HumanMessage(content=prompt),
         ]
         response = llm.invoke(messages)

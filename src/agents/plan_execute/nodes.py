@@ -272,21 +272,11 @@ def _check_search_relevance(step_task: str, goal: str, result: str) -> tuple[boo
     # relevance, not the full text (keeps the check itself fast and cheap).
     excerpt = result[:2000]
 
-    check_prompt = f"""Goal: "{goal}"
-Step this search was meant to answer: "{step_task}"
-
-Search result excerpt:
-{excerpt}
-
-Does this search result contain information that actually answers the step above — not just topically related content, but the specific fact(s) needed?
-
-Respond in EXACTLY this format, nothing else:
-RELEVANT: yes or no
-REASON: one short sentence explaining why"""
+    check_prompt = load_prompt("plan_execute", "search_relevance").format(**locals())
 
     llm = get_llm()
     messages = [
-        SystemMessage(content="You are a strict relevance checker. Be skeptical — topically-related content that doesn't contain the specific answer counts as NOT relevant."),
+        SystemMessage(content=load_prompt("plan_execute", "search_relevance_system")),
         HumanMessage(content=check_prompt),
     ]
     response = llm.invoke(messages)
@@ -1138,26 +1128,11 @@ def reason_node(state: State) -> dict:
         context_block = "\n\n".join(prior_context) if prior_context else "(no prior step results)"
         today = date.today().isoformat()
 
-        reasoning_prompt = f"""Today's date is {today}.
-
-Overall goal: "{plan.goal}"
-
-You are performing ONE step of a larger plan toward that goal. This step requires reasoning/synthesis, not an external tool call.
-
-Step to complete: {current_step.task}
-
-Prior step results so far:
-{context_block}
-
-Instructions:
-- Complete this step directly and concretely, using today's date and the prior results above where relevant.
-- If this step depends on information not present in the prior results and not derivable from today's date, say plainly what's missing rather than guessing.
-- Do not restate the whole goal — just produce the output this specific step calls for.
-- Be concise but complete."""
+        reasoning_prompt = load_prompt("plan_execute", "reason").format(**locals())
 
         llm = get_llm()
         messages = [
-            SystemMessage(content="You are a careful reasoning assistant completing one step of a larger plan."),
+            SystemMessage(content=load_prompt("plan_execute", "reason_system")),
             HumanMessage(content=reasoning_prompt),
         ]
         response = llm.invoke(messages)
@@ -1300,29 +1275,11 @@ def code_executor_node(state: State) -> dict:
         # call before the main code-generation call.
         script_args: list[str] = []
         try:
-            args_prompt = f"""Overall goal: "{plan.goal}"
-
-Step to complete: {current_step.task}
-
-Prior step results so far:
-{context_block}
-
-This step's Python script will be run non-interactively — it cannot call input().
-If it needs, it should read values from sys.argv (command-line arguments) instead.
-
-Decide what command-line argument values (if any) this script needs, based on
-the step description and prior results. For example, if the step says "print
-the first 20 Fibonacci numbers", the script needs one argument: "20".
-
-Rules:
-- Output a JSON object with exactly one key: "args"
-- "args" is a list of strings — the command-line argument values, in order.
-- If the step doesn't need any input values (e.g. it's self-contained), output {{"args": []}}.
-- No markdown fences around the JSON. Output only the raw JSON object."""
+            args_prompt = load_prompt("plan_execute", "code_executor_args").format(**locals())
 
             args_llm = get_llm()
             args_response = args_llm.invoke([
-                SystemMessage(content="You output only a raw JSON object with an 'args' key, no markdown."),
+                SystemMessage(content=load_prompt("plan_execute", "code_executor_args_system")),
                 HumanMessage(content=args_prompt),
             ])
             raw_args = args_response.content.strip()
@@ -1346,28 +1303,7 @@ Rules:
             else "This script will be invoked with no command-line arguments."
         )
 
-        code_generation_prompt = f"""Today's date is {today}.
-
-Overall goal: "{plan.goal}"
-
-You are performing ONE step of a larger plan toward that goal. This step requires writing and executing Python code.
-
-Step to complete: {current_step.task}
-
-Prior step results so far:
-{context_block}
-
-Instructions:
-- Write Python code to complete this step directly and concretely.
-- Use the prior results above where relevant.
-- Print your final answer/result to stdout using print() — this is how the result will be captured.
-- Keep the code simple and focused on the specific task.
-- If you need to import modules, use standard library modules only (no external packages unless you're certain they're available).
-- CRITICAL: Do NOT use input() for user input — the execution environment does not support interactive input. Instead:
-  * {args_note}
-  * If the task mentions taking a value as input, read it via sys.argv (e.g. `import sys; n = int(sys.argv[1]) if len(sys.argv) > 1 else 10`), keeping a sensible hardcoded default as a fallback in case no argument is passed.
-- CRITICAL: If this step fetches or looks up real data (an API call, a URL request, reading a file that should already exist, etc.) and that operation fails, let the exception propagate — do NOT catch it and substitute a made-up, hardcoded, or placeholder value in its place. A script that silently invents a plausible-looking number/result when the real one couldn't be obtained is worse than one that visibly fails, because the failure becomes invisible to anything downstream (including the human relying on this answer). It's fine to catch an exception if you're then going to retry, log, or clean up — just don't let the recovery path be "pretend it worked."
-- Do not include markdown code fences — output only the raw Python code."""
+        code_generation_prompt = load_prompt("plan_execute", "code_executor").format(**locals())
 
         llm = get_llm()
         
@@ -1378,14 +1314,14 @@ Instructions:
         
         for attempt in range(max_retries + 1):
             messages = [
-                SystemMessage(content="You are a Python code generator. Output only raw Python code, no markdown fences, no explanations."),
+                SystemMessage(content=load_prompt("plan_execute", "code_executor_system")),
                 HumanMessage(content=code_generation_prompt),
             ]
             
             if attempt > 0:
                 # Add error context to help fix the code
                 messages[-1] = HumanMessage(
-                    content=code_generation_prompt + f"\n\nPrevious attempt failed with error:\n{last_error}\n\nFix the code and try again."
+                    content=code_generation_prompt + load_prompt("plan_execute", "code_executor_retry").format(**locals())
                 )
             
             response = llm.invoke(messages)
@@ -1767,32 +1703,11 @@ def shell_node(state: State) -> dict:
 
     context_block = _build_coding_context(plan, current_step)
 
-    command_prompt = f"""You are generating a single shell command to complete one step of building a software project.
-
-Overall goal: "{plan.goal}"
-Project workspace directory: {workspace_path}
-
-Step to complete: {current_step.task}
-
-Prior steps and results:
-{context_block}
-
-Rules:
-- Output ONLY the raw shell command, nothing else. No explanation, no markdown.
-- The command will run with cwd={workspace_path}, so paths relative to that are fine.
-- Use non-interactive flags where available (e.g. npm --yes, npx --yes).
-- For npx create-vite, use exactly: npx --yes create-vite@latest . --template react -- --skip-linter
-  (NOTE: `--yes` alone does NOT suppress create-vite's linter/tooling prompt —
-  as of recent create-vite versions this is a separate prompt gated behind
-  its own flag, not the top-level --yes. Omitting `-- --skip-linter` will
-  cause the command to hang or self-cancel waiting for interactive input
-  that can never arrive in this environment.)
-- Do NOT use shell operators (&&, ||, ;, |, $()) — output ONE command only.
-- Do NOT use sudo."""
+    command_prompt = load_prompt("plan_execute", "shell_command").format(**locals())
 
     llm = get_llm()
     messages = [
-        SystemMessage(content="You are a shell command generator. Output only the raw command, no markdown, no explanation."),
+        SystemMessage(content=load_prompt("plan_execute", "shell_command_system")),
         HumanMessage(content=command_prompt),
     ]
 
@@ -1906,29 +1821,11 @@ def write_file_node(state: State) -> dict:
     context_block = _build_coding_context(plan, current_step)
     today = date.today().isoformat()
 
-    file_prompt = f"""You are generating source code for one step of building a software project.
-
-Today's date: {today}
-Overall goal: "{plan.goal}"
-Project workspace directory: {workspace_path}
-
-Step to complete: {current_step.task}
-
-Prior steps and results:
-{context_block}
-
-Rules:
-- Output a JSON object with exactly two keys:
-    "path": relative file path from the project root (e.g. "src/App.jsx", "index.html")
-    "content": the complete file content as a string
-- No markdown fences around the JSON. Output only the raw JSON object.
-- Write complete, working code — not stubs or placeholders.
-- If this step requires writing multiple files, pick the most important one;
-  the agent can write others in subsequent steps."""
+    file_prompt = load_prompt("plan_execute", "write_file").format(**locals())
 
     llm = get_llm()
     messages = [
-        SystemMessage(content="You are a code generator. Output only a raw JSON object with 'path' and 'content' keys, no markdown."),
+        SystemMessage(content=load_prompt("plan_execute", "write_file_system")),
         HumanMessage(content=file_prompt),
     ]
 
@@ -1939,27 +1836,11 @@ Rules:
         if current_step.result and current_step.result.startswith("_PENDING_FILE_PATH:"):
             rel_path = current_step.result.replace("_PENDING_FILE_PATH: ", "")
             # Generate content after approval
-            content_prompt = f"""You are generating source code for one step of building a software project.
-
-Today's date: {today}
-Overall goal: "{plan.goal}"
-Project workspace directory: {workspace_path}
-
-Step to complete: {current_step.task}
-File to write: {rel_path}
-
-Prior steps and results:
-{context_block}
-
-Rules:
-- Output a JSON object with exactly one key: "content"
-- "content" is the complete file content as a string
-- No markdown fences around the JSON. Output only the raw JSON object.
-- Write complete, working code — not stubs or placeholders."""
+            content_prompt = load_prompt("plan_execute", "write_file_content").format(**locals())
 
             llm = get_llm()
             messages = [
-                SystemMessage(content="You are a code generator. Output only a raw JSON object with a 'content' key, no markdown."),
+                SystemMessage(content=load_prompt("plan_execute", "write_file_content_system")),
                 HumanMessage(content=content_prompt),
             ]
             response = llm.invoke(messages)
@@ -2049,26 +1930,11 @@ def delete_file_node(state: State) -> dict:
     context_block = _build_coding_context(plan, current_step)
     today = date.today().isoformat()
 
-    delete_prompt = f"""You are determining what to delete for one step of a software task.
-
-Today's date: {today}
-Overall goal: "{plan.goal}"
-Project workspace directory: {workspace_path}
-
-Step to complete: {current_step.task}
-
-Prior steps and results:
-{context_block}
-
-Rules:
-- Output a JSON object with exactly one key: "path"
-- "path" is a file or directory path relative to the workspace root (e.g. "old_notes.txt", "src/legacy/").
-- If the step means clearing everything in the workspace (e.g. "delete all files"), use "" as the path.
-- No markdown fences around the JSON. Output only the raw JSON object."""
+    delete_prompt = load_prompt("plan_execute", "delete_file").format(**locals())
 
     llm = get_llm()
     messages = [
-        SystemMessage(content="You output only a raw JSON object with a 'path' key, no markdown."),
+        SystemMessage(content=load_prompt("plan_execute", "delete_file_system")),
         HumanMessage(content=delete_prompt),
     ]
 
@@ -2140,33 +2006,11 @@ def start_server_node(state: State) -> dict:
 
     context_block = _build_coding_context(plan, current_step)
 
-    server_prompt = f"""You are determining how to start the dev server for a software project.
-
-Overall goal: "{plan.goal}"
-Project workspace directory: {workspace_path}
-
-Step to complete: {current_step.task}
-
-Prior steps and results:
-{context_block}
-
-Output a JSON object with exactly two keys:
-  "command": the server start command string (e.g. "npm run dev", "python3 -m http.server 3000")
-  "port": the integer port number the server will listen on
-
-Common conventions:
-- Vite (React/Vue): command="npm run dev", port=5173
-- Create React App: command="npm start", port=3000
-- Next.js: command="npm run dev", port=3000
-- Flask: command="python3 app.py", port=5000
-- Express: command="node index.js", port=3000
-- Python http.server: command="python3 -m http.server 8080", port=8080
-
-No markdown fences — output only the raw JSON object."""
+    server_prompt = load_prompt("plan_execute", "start_server").format(**locals())
 
     llm = get_llm()
     messages = [
-        SystemMessage(content="You are a dev server configuration expert. Output only a raw JSON object with 'command' and 'port' keys."),
+        SystemMessage(content=load_prompt("plan_execute", "start_server_system")),
         HumanMessage(content=server_prompt),
     ]
 
@@ -2372,32 +2216,11 @@ def approval_node(state: State) -> dict:
     if current_step.tool_hint == "shell_command" and workspace_path:
         try:
             context_block = _build_coding_context(plan, current_step)
-            command_prompt = f"""You are generating a single shell command to complete one step of building a software project.
-
-Overall goal: "{plan.goal}"
-Project workspace directory: {workspace_path}
-
-Step to complete: {current_step.task}
-
-Prior steps and results:
-{context_block}
-
-Rules:
-- Output ONLY the raw shell command, nothing else. No explanation, no markdown.
-- The command will run with cwd={workspace_path}, so paths relative to that are fine.
-- Use non-interactive flags where available (e.g. npm --yes, npx --yes).
-- For npx create-vite, use exactly: npx --yes create-vite@latest . --template react -- --skip-linter
-  (NOTE: `--yes` alone does NOT suppress create-vite's linter/tooling prompt —
-  as of recent create-vite versions this is a separate prompt gated behind
-  its own flag, not the top-level --yes. Omitting `-- --skip-linter` will
-  cause the command to hang or self-cancel waiting for interactive input
-  that can never arrive in this environment.)
-- Do NOT use shell operators (&&, ||, ;, |, $()) — output ONE command only.
-- Do NOT use sudo."""
+            command_prompt = load_prompt("plan_execute", "approval_shell_command").format(**locals())
 
             llm = get_llm()
             messages = [
-                SystemMessage(content="You are a shell command generator. Output only the raw command, no markdown, no explanation."),
+                SystemMessage(content=load_prompt("plan_execute", "approval_shell_command_system")),
                 HumanMessage(content=command_prompt),
             ]
             response = llm.invoke(messages)
@@ -2416,26 +2239,11 @@ Rules:
     elif current_step.tool_hint == "delete_file" and workspace_path:
         try:
             context_block = _build_coding_context(plan, current_step)
-            delete_prompt = f"""You are determining what to delete for one step of a software task.
-
-Today's date: {date.today().isoformat()}
-Overall goal: "{plan.goal}"
-Project workspace directory: {workspace_path}
-
-Step to complete: {current_step.task}
-
-Prior steps and results:
-{context_block}
-
-Rules:
-- Output a JSON object with exactly one key: "path"
-- "path" is a file or directory path relative to the workspace root (e.g. "old_notes.txt", "src/legacy/").
-- If the step means clearing everything in the workspace (e.g. "delete all files"), use "" as the path.
-- No markdown fences around the JSON. Output only the raw JSON object."""
+            delete_prompt = load_prompt("plan_execute", "approval_delete_file").format(**locals(), _prompt_today=date.today().isoformat())
 
             llm = get_llm()
             messages = [
-                SystemMessage(content="You output only a raw JSON object with a 'path' key, no markdown."),
+                SystemMessage(content=load_prompt("plan_execute", "approval_delete_file_system")),
                 HumanMessage(content=delete_prompt),
             ]
             response = llm.invoke(messages)
@@ -2455,24 +2263,11 @@ Rules:
     elif current_step.tool_hint in ("write_file", "file_editor") and workspace_path:
         try:
             context_block = _build_coding_context(plan, current_step)
-            file_prompt = f"""You are determining what file to write for one step of a software task.
-
-Today's date: {date.today().isoformat()}
-Overall goal: "{plan.goal}"
-
-Step to complete: {current_step.task}
-
-Prior steps and results:
-{context_block}
-
-Rules:
-- Output a JSON object with exactly one key: "path"
-- "path" is a file path relative to the workspace root (e.g. "index.js", "src/App.jsx").
-- No markdown fences around the JSON. Output only the raw JSON object."""
+            file_prompt = load_prompt("plan_execute", "approval_write_file").format(**locals(), _prompt_today=date.today().isoformat())
 
             llm = get_llm()
             messages = [
-                SystemMessage(content="You output only a raw JSON object with a 'path' key, no markdown."),
+                SystemMessage(content=load_prompt("plan_execute", "approval_write_file_system")),
                 HumanMessage(content=file_prompt),
             ]
             response = llm.invoke(messages)
@@ -2679,22 +2474,11 @@ def synthesize_node(state: State, config: RunnableConfig | None = None) -> dict:
         return {"plan": plan}
 
     # Build synthesis prompt
-    synthesis_prompt = f"""You are given the results of executing a multi-step plan toward this goal: "{plan.goal}"
-
-For information/research goals: extract the specific facts that answer the goal, ignoring boilerplate.
-For app-building goals: summarize what was built, what files were created, and — most importantly — how to access the running app.
-
-Step results:
-{chr(10).join(step_results)}
-
-{f'\n✅ A dev server is running at: {state.get("server_url")}\n' if state.get("server_url") else ''}
-
-Provide a clear, direct final answer. For apps, lead with the URL if one is running.
-If any step result starts with "[UNVERIFIED:", you must explicitly mention in your final answer that you could not confirm that specific piece of information. Do NOT state unverified facts as true or confidently."""
+    synthesis_prompt = load_prompt("plan_execute", "final_synthesis").format(**locals())
 
     llm = get_llm()
     messages = [
-        SystemMessage(content="You are a helpful synthesis assistant that combines information from multiple sources."),
+        SystemMessage(content=load_prompt("plan_execute", "final_synthesis_system")),
         HumanMessage(content=synthesis_prompt),
     ]
 
@@ -2802,24 +2586,11 @@ def _check_replan_novelty(previous_context: list[str], new_context: list[str]) -
     previous_excerpt = previous_str[:3000]
     new_excerpt = new_str[:3000]
     
-    novelty_prompt = f"""Previous step results:
-{previous_excerpt}
-
-New step results:
-{new_excerpt}
-
-Does the new step results contain genuinely new information that wasn't present in the previous results? Consider:
-- Are there new facts, dates, or specific details?
-- Is there new perspective or analysis?
-- Or is this essentially the same information rephrased?
-
-Respond in EXACTLY this format, nothing else:
-HAS_NEW_INFO: yes or no
-REASON: one short sentence explaining why"""
+    novelty_prompt = load_prompt("plan_execute", "check_new_info").format(**locals())
 
     llm = get_llm()
     messages = [
-        SystemMessage(content="You are a strict novelty checker. Be skeptical — rephrased or marginally different content counts as NOT having new information."),
+        SystemMessage(content=load_prompt("plan_execute", "check_new_info_system")),
         HumanMessage(content=novelty_prompt),
     ]
     response = llm.invoke(messages)
@@ -2865,24 +2636,11 @@ def _detect_new_information(step_result: str, cumulative_context: list[str]) -> 
     prior_excerpt = prior_str[:3000]
     step_excerpt = step_result[:2000]
 
-    novelty_prompt = f"""Prior step results (everything completed before this step):
-{prior_excerpt}
-
-New step result (just completed):
-{step_excerpt}
-
-Does the new step result contain genuinely new, actionable information that was NOT already present in the prior results? Consider:
-- Are there new specific facts (names, dates, numbers, URLs, IDs) not seen before?
-- Does it meaningfully change what the remaining steps should look like?
-- Or is it essentially the same information already known, or a minor elaboration?
-
-Respond in EXACTLY this format, nothing else:
-HAS_NEW_INFO: yes or no
-REASON: one short sentence explaining why"""
+    novelty_prompt = load_prompt("plan_execute", "replan_novelty").format(**locals())
 
     llm = get_llm()
     messages = [
-        SystemMessage(content="You are a strict novelty checker. Be skeptical — rephrased or marginally different content counts as NOT having new information. Only return 'yes' if the new result would materially change how remaining steps should be planned."),
+        SystemMessage(content=load_prompt("plan_execute", "replan_novelty_system")),
         HumanMessage(content=novelty_prompt),
     ]
     response = llm.invoke(messages)
