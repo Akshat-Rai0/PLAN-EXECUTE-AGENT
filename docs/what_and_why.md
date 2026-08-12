@@ -34,7 +34,12 @@
   - [6.3 Synthesis Registry (registry.py)](#63-synthesis-registry-registrypy)
 - [7. ReAct Agent](#7-react-agent)
 - [8. Eval Framework](#8-eval-framework)
-- [9. Environment Configuration](#9-environment-configuration)
+- [9. API & Visualization](#9-api--visualization)
+  - [9.1 FastAPI Backend (main.py)](#91-fastapi-backend-mainpy)
+  - [9.2 Event Bus System (event_bus.py)](#92-event-bus-system-event_buspy)
+  - [9.3 Run Store (store.py)](#93-run-store-storepy)
+  - [9.4 Web Interface Components](#94-web-interface-components)
+- [10. Environment Configuration](#11-environment-configuration)
 
 ---
 
@@ -173,11 +178,11 @@ The system uses a **Plan-and-Execute** pattern built on LangGraph, rather than a
 
 **Why:** The upper bound on cost and runtime. A typical goal needs 3–7 steps; a complex goal with replanning might need 10–12. 15 gives enough headroom for legitimate complexity while preventing runaway execution. Going higher risks burning through API rate limits on free-tier models.
 
-#### `MAX_REPLAN = 4`
+#### `MAX_REPLAN = 8`
 
 **What:** Maximum number of times the replanner can be invoked.
 
-**Why:** Each replan is an LLM call that costs tokens and time. 4 replans is enough to recover from genuine failures (missing package → install → retry) but not enough to let the agent loop endlessly on an unsolvable problem.
+**Why:** Each replan is an LLM call that costs tokens and time. Originally set to 4, this was increased to 8 to handle more complex multi-step tasks that require additional replanning cycles. The higher limit allows the agent to recover from genuine failures (missing package → install → retry) and handle novel information discovery while still preventing infinite loops on unsolvable problems.
 
 #### `MAX_CONSECUTIVE_IDENTICAL_REPLANS = 2`
 
@@ -234,6 +239,12 @@ The fix is deterministic: if recency language is detected, a date-anchor step (`
 **What:** Builds a short context string from prior step results to append to the current search query.
 
 **Why:** Only uses the most recent short result (≤200 chars) and any detected year. It does NOT concatenate all prior results — that would bloat the query with irrelevant noise and actually make search results worse. The year is extracted separately because it's the single most common piece of context a later search needs (e.g., "who won world cup → 2026 → France vs Spain semi-final result 2026").
+
+#### `check_new_info_node` — Novelty Detection for Replanning
+
+**What:** A dedicated node that uses an LLM to determine if new information discovered during execution genuinely changes the plan or is just redundant.
+
+**Why:** The replanner needs to distinguish between truly novel information that requires plan modification versus redundant information that doesn't. Without this distinction, the agent might replan unnecessarily when it encounters information that doesn't actually change the optimal approach. This node uses a cheap LLM call to make this determination efficiently, reducing wasted replanning cycles while ensuring genuine novelty triggers appropriate plan adjustments.
 
 ---
 
@@ -705,7 +716,67 @@ The ReAct agent is a simpler alternative to Plan-Execute, kept for comparison an
 
 ---
 
-## 9. Environment Configuration
+## 10. API & Visualization
+
+### 10.1 FastAPI Backend (`main.py`)
+
+#### WebSocket Streaming Architecture
+
+**What:** Real-time event streaming via WebSocket connections for live agent execution updates.
+
+**Why:** The web interface needs to show agent execution progress in real-time. Traditional polling would be inefficient and provide poor user experience. WebSocket connections allow the backend to push events instantly as they occur, providing smooth live updates without the overhead of repeated HTTP requests.
+
+#### Single Active Chat Session Guard
+
+**What:** A global guard (`_active_chat_run`) that ensures only one chat session can be active at a time.
+
+**Why:** Multiple concurrent chat sessions could lead to race conditions, confused state management, and poor user experience. The guard prevents session conflicts by rejecting new chat requests while an existing session is active, while still allowing debugger mode access to historical runs.
+
+#### Interrupt Queue Management
+
+**What:** Per-run interrupt queues (`get_interrupt_queues()`) that store human responses to approval gates.
+
+**Why:** When the agent hits a HIGH-risk tool and pauses for human approval, the response needs to be delivered to the waiting graph execution. Interrupt queues provide a thread-safe mechanism to bridge the web interface's async response handling with LangGraph's synchronous interrupt mechanism.
+
+### 10.2 Event Bus System (`event_bus.py`)
+
+#### Publisher-Subscriber Pattern
+
+**What:** A centralized event bus that implements publish-subscribe messaging for agent events.
+
+**Why:** Multiple components (WebSocket streams, UI updates, logging) need to react to the same agent events. A centralized event bus decouples these components, allowing new subscribers to be added without modifying existing code. This is particularly important for the dual-mode interface where both chat and debugger views need to consume the same event stream.
+
+### 10.3 Run Store (`store.py`)
+
+#### SQLite Persistence
+
+**What:** Uses SQLite for persistent storage of runs, steps, and chat messages.
+
+**Why:** SQLite provides a lightweight, serverless database that requires no additional infrastructure setup. It's perfect for this use case because it's embedded (no separate database process), supports concurrent access, and provides ACID guarantees for data integrity. The database file can be easily backed up or migrated as needed.
+
+### 10.4 Web Interface Components
+
+#### Chat Interface with Streaming
+
+**What:** React-based chat interface with real-time message streaming and interrupt handling.
+
+**Why:** Users expect a conversational interface similar to ChatGPT. The chat interface provides an intuitive way to interact with the agent, showing both user messages and agent responses in a familiar format. Streaming responses provide immediate feedback and reduce perceived latency.
+
+#### Debugger Mode with Timeline
+
+**What:** Three-panel debugger layout with run list, timeline view, and context panel.
+
+**Why:** For debugging and analysis, users need to inspect the execution flow in detail. The timeline view shows all steps chronologically, the context panel provides detailed information about each step, and the playback scrubber allows stepping through execution. This is essential for understanding agent behavior and troubleshooting issues.
+
+#### Activity Indicators and Toast Notifications
+
+**What:** Visual feedback components showing agent state (thinking, executing, waiting) and important events.
+
+**Why:** Agent execution can take time, and users need to know what's happening. Activity indicators reduce uncertainty by showing the current state, while toast notifications alert users to important events like completion, errors, or required approvals.
+
+---
+
+## 11. Environment Configuration
 
 #### `.env.example` — All Configuration Parameters
 
@@ -720,6 +791,12 @@ The ReAct agent is a simpler alternative to Plan-Execute, kept for comparison an
 | `BROWSER_USE_MAX_STEPS` | `25` | Per-task browser step limit. |
 | `BROWSER_USE_MAX_FAILURES` | `3` | Consecutive failure limit before aborting browser task. |
 | `LANGCHAIN_TRACING_V2` | `true` | Enable LangSmith tracing for debugging graph execution. |
+
+**Additional Configuration Options:**
+- `GROQ_MODEL=openai/gpt-oss-120b` - Alternative Groq model for fast inference
+- `OLLAMA_MODEL=gemma4:latest` - Local Ollama model for offline development  
+- `CLAUDE_MODEL=claude-sonnet-4.6` - Anthropic Claude model for high-quality reasoning
+- `BROWSER_USE_MODEL=google/gemma-4-31b-it:free` - Updated from 26b to 31b for better browser automation performance
 
 #### `.gitignore` — Notable Exclusions
 

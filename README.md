@@ -17,6 +17,14 @@ ReAct baseline via a controlled three-arm ablation.
 - **Phase 8** ✅ ReAct Baseline + Ablation (Arm 1)
 - **Phase 9** ✅ Web UI + Deployment (Chat interface + Debugger mode)
 
+## Recent Enhancements
+- **Improved Replanning Logic**: Added `check_new_info_node` for novelty detection and optimized replanning efficiency
+- **Increased Replan Capacity**: Raised `MAX_REPLAN` from 4 to 8 for handling complex multi-step tasks
+- **Enhanced Chat Interface**: Real-time WebSocket streaming, improved interrupt handling, activity indicators
+- **Run Visualizer**: Comprehensive API and runner implementation for step tracking and visualization
+- **Cheap LLM Integration**: Added support for cost-effective LLM models with step result verification
+- **Simplified Startup**: Added `start.sh` script for launching both frontend and backend servers
+
 ## Architecture
 - [Project spec](docs/plan-and-execute-agent.html) — problem definition, scope, stack, timeline, risks
 - [System wiring](docs/system-wiring.html) — step-by-step flows and wire diagrams for every subsystem
@@ -47,6 +55,10 @@ The project includes a dual-mode web interface for interacting with the agent:
 
 To start the web interface:
 ```bash
+# Option 1: Use the convenience script (starts both frontend and backend)
+./start.sh
+
+# Option 2: Start backend only
 uvicorn src.api.main:app --host 0.0.0.0 --port 8000
 ```
 
@@ -62,6 +74,9 @@ Then open http://localhost:8000 in your browser.
 - **Arm Comparison**: Compare performance across different agent arms (ReAct, Plan-Execute, Full)
 - **Responsive Design**: Works on desktop and mobile devices
 - **Accessibility**: Reduced motion support and keyboard navigation
+- **Live Status Polling**: Enhanced WebSocket management for real-time updates
+- **Activity Indicators**: Visual feedback for agent thinking and execution states
+- **Toast Notifications**: Real-time alerts for important events and status changes
 
 ### CLI Execution
 
@@ -337,6 +352,11 @@ The golden dataset provides comprehensive test cases for evaluating agent perfor
 - **straightforward** (5 goals) - Baseline efficiency tests without replanning
 - **synthesis_required** (5 goals) - Tests dynamic tool synthesis capabilities
 - **browser_required** (8 goals) - Tests browser automation with vision capabilities
+
+**Recent Evaluation Results:**
+- Latest ablation study (20260806-072339) shows 100% success rate on plan_execute_full arm
+- Enhanced novelty detection with `check_new_info_node` for improved replanning accuracy
+- Increased replanning capacity (MAX_REPLAN = 8) for handling complex multi-step tasks
 
 **Browser Test Goals:**
 - Google Travel flights search with form filling

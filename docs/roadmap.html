@@ -121,9 +121,9 @@
 <body>
 
 <div class="hero">
-  <div class="hero-tag">Build Roadmap · v2.0 — Reconciled with Spec</div>
+  <div class="hero-tag">Build Roadmap · v2.1 — Updated August 2026</div>
   <h1>What You Can Do <em>After Each Phase</em></h1>
-  <p class="hero-sub">Ten build phases from LangGraph foundations through production deploy, matching the dated timeline (Jul 7 – Aug 10) and feature scope in the Project Spec. Arm labels, "synthesis" terminology, and phase content have been corrected to match <a href="plan-and-execute-agent.html" style="color:#c6dced;">plan-and-execute-agent.html</a> and <a href="system-wiring.html" style="color:#c6dced;">system-wiring.html</a> — see the changelog below for what changed from v1.</p>
+  <p class="hero-sub">Ten build phases from LangGraph foundations through production deploy, matching the dated timeline (Jul 7 – Aug 10) and feature scope in the Project Spec. All phases are now complete with enhanced replanning logic, increased MAX_REPLAN capacity, and comprehensive web interface. Recent updates include novelty detection improvements and real-time WebSocket streaming.</p>
   <div class="nav-links">
     <a href="#langgraph-structure">LangGraph Structure</a>
     <a href="#changelog">Changelog</a>
@@ -224,6 +224,13 @@ graph TD
     <p>Phase 4 adds an LLM-call budget cap and cross-run tool-registry caching (previously unaddressed — tools were only cached within a single run). Phase 5 adds an explicit sandbox-alternative decision note (subprocess+seccomp vs. microVM/managed sandbox). Phase 7 adds a prompt-injection defense for browser-sourced content, and its HITL gate now surfaces generated source code for review, not just the step description. Phase 0 adds a lightweight testing/CI task that v1 omitted entirely.</p>
     <h4>6. Phase 7 Complete — Browser Automation with Vision (August 2026)</h4>
     <p>Phase 7 is now complete with full browser automation capabilities including vision-enabled page understanding. The integration uses OpenRouter's Gemma model with structured outputs, comprehensive risk classification as HIGH-risk operations, and full approval gating. The system can now interact with rendered websites, fill forms, and navigate complex UI flows that require visual understanding.</p>
+    <h4>7. Recent Enhancements (August 2026)</h4>
+    <p><strong>Improved Replanning Logic:</strong> Added `check_new_info_node` for novelty detection and optimized replanning efficiency. The agent can now better distinguish between genuinely novel information that requires plan modification versus redundant information.</p>
+    <p><strong>Increased Replan Capacity:</strong> Raised `MAX_REPLAN` from 4 to 8 for handling complex multi-step tasks that require additional replanning cycles while still preventing infinite loops.</p>
+    <p><strong>Enhanced Web Interface:</strong> Dual-mode chat and debugger interface with real-time WebSocket streaming, improved interrupt handling, activity indicators, and toast notifications for better user experience.</p>
+    <p><strong>Run Visualizer:</strong> Comprehensive API and runner implementation for step tracking and visualization with SQLite persistence and event bus architecture.</p>
+    <p><strong>Cheap LLM Integration:</strong> Added support for cost-effective LLM models with step result verification for better performance optimization.</p>
+    <p><strong>Simplified Startup:</strong> Added `start.sh` script for launching both frontend and backend servers with a single command.</p>
   </div>
 </div>
 
@@ -852,7 +859,7 @@ graph TD
 </div>
 
 <div class="footer">
-  <p>Plan-and-Execute Agent · Build Roadmap v2.0 (reconciled)</p>
+  <p>Plan-and-Execute Agent · Build Roadmap v2.1 — Updated August 2026</p>
   <p><a href="plan-and-execute-agent.html" style="color:var(--ink-3)">Project Spec</a> · <a href="system-wiring.html" style="color:var(--ink-3)">System Wiring</a></p>
 </div>
 

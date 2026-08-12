@@ -2,6 +2,12 @@
 
 Each example traces a real user goal through the full pipeline: **Planner → Executor → (Synthesizer / Browser / HITL as needed) → Replanner → Final Answer**. Use these as raw material for the golden dataset (tag each with its category a–e) and as demo scripts for the README/blog.
 
+**Recent Enhancements:**
+- **Improved Replanning**: Enhanced novelty detection with `check_new_info_node` for more accurate plan adjustments
+- **Increased Replan Capacity**: MAX_REPLAN raised to 8 for handling complex multi-step tasks
+- **Web Interface**: Dual-mode chat and debugger interface with real-time streaming
+- **Better Browser Automation**: Updated to Gemma 4 31B for improved performance
+
 ---
 
 ## 1. Fuel cost estimate (Delhi → Mumbai)
