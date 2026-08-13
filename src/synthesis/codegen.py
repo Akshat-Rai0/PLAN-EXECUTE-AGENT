@@ -189,7 +189,8 @@ def generate_function_code(schema: SynthesisSchema, llm, previous_error: str = N
         else ""
     )
 
-    prompt = load_prompt("plan_execute_synthesis", "tool_implementation").format(**locals())    response = llm.invoke([
+    prompt = load_prompt("plan_execute_synthesis", "tool_implementation").format(**locals())
+    response = llm.invoke([
         SystemMessage(content=load_prompt("plan_execute_synthesis", "tool_implementation_system")),
         HumanMessage(content=prompt),
     ])
