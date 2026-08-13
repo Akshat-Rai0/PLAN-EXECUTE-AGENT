@@ -208,6 +208,56 @@ graph TD
   </pre>
 </div>
 
+<div class="section" id="multi-agent-process">
+  <div class="section-label">Multi-Agent System</div>
+  <h2>Multi-agent System Process Diagram</h2>
+  <pre class="mermaid">
+sequenceDiagram
+    participant User
+    participant Graph as LangGraph Engine
+    participant Planner as Planner Node
+    participant Executor as Executor Node
+    participant Tools as Tool Nodes
+    participant Replanner as Replanner Node
+    participant Synthesizer as Synthesizer Node
+
+    User->>Graph: Submit Goal
+    
+    Graph->>Planner: Generate initial plan
+    Planner-->>Graph: Return structured plan (steps)
+    
+    rect rgb(232, 245, 238)
+    Note over Graph,Replanner: Iterative Execution Process
+    
+    loop While PENDING steps remain
+        Graph->>Executor: Get next step
+        
+        alt HIGH risk tool
+            Executor->>User: Request approval (HITL)
+            User-->>Executor: Approve / Reject
+        end
+        
+        Executor->>Tools: Execute specific tool (search, code, etc.)
+        Tools-->>Executor: Return tool output/error
+        
+        Executor-->>Graph: Step completed
+        
+        Graph->>Graph: check_new_info (evaluate novelty)
+        
+        alt Step FAILED or New Info detected
+            Graph->>Replanner: Revise plan
+            Replanner-->>Graph: Updated plan & subtasks
+        end
+    end
+    end
+    
+    Graph->>Synthesizer: Synthesize final result
+    Synthesizer-->>Graph: Final answer generated
+    
+    Graph-->>User: Return achieved goal & answer
+  </pre>
+</div>
+
 <div class="section" id="changelog">
   <div class="section-label">Changelog · v1 → v2</div>
   <h2>What changed and why</h2>
