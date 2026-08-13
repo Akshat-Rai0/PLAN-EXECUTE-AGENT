@@ -23,6 +23,7 @@ from src.synthesis.codegen import declare_schema, generate_function_code
 from src.synthesis.validator import validate_synthesized_function
 from src.synthesis.registry import default_registry
 from src.synthesis.schema import SynthesizedTool
+from src.agents.prompts.loader import load_prompt
 
 try:
     from src.api.observer import emit_event as _emit_viz_event, current_run_id, current_arm
