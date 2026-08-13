@@ -3,6 +3,7 @@
 import pytest
 from src.agents.plan_execute.graph import build_graph
 from src.agents.plan_execute.state import State
+from src.agents.prompts.loader import load_prompt
 
 
 def test_tavily_search_fifa_world_cup_through_graph():

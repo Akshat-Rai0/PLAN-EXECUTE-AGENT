@@ -210,7 +210,8 @@ def test_browser_use_routes_to_approval():
 
 def test_route_after_tool_failed_step():
     """
-    Test that _route_after_tool routes to replaner when any step fails.
+    Test that _route_after_tool routes to check_new_info when any step fails.
+    The check_new_info_node then routes to replaner based on the failure.
     """
     plan = Plan(
         goal="test goal",
@@ -222,12 +223,13 @@ def test_route_after_tool_failed_step():
     state: State = {"input": "test", "plan": plan}
     
     result = _route_after_tool(state)
-    assert result == "replaner", f"Expected 'replaner' on FAILED step, got '{result}'"
+    assert result == "check_new_info", f"Expected 'check_new_info' on FAILED step, got '{result}'"
 
 
 def test_route_after_tool_all_success():
     """
-    Test that _route_after_tool routes back to executor when all steps succeed.
+    Test that _route_after_tool routes to check_new_info when all steps succeed.
+    The check_new_info_node then routes to executor or replaner based on novelty detection.
     """
     plan = Plan(
         goal="test goal",
@@ -239,7 +241,7 @@ def test_route_after_tool_all_success():
     state: State = {"input": "test", "plan": plan}
     
     result = _route_after_tool(state)
-    assert result == "executor", f"Expected 'executor' on success, got '{result}'"
+    assert result == "check_new_info", f"Expected 'check_new_info' on success, got '{result}'"
 
 
 def test_route_after_tool_none_plan():

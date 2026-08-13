@@ -4,6 +4,7 @@ import pytest
 from src.agents.plan_execute.graph import build_graph
 from src.agents.plan_execute.nodes import replaner
 from src.agents.plan_execute.state import State, Plan, Step, StepStatus
+from src.agents.prompts.loader import load_prompt
 from unittest.mock import patch, MagicMock
 
 

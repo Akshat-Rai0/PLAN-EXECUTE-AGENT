@@ -122,8 +122,8 @@ def test_no_schema_no_json_output_still_succeeds():
 # --- Memory limit ------------------------------------------------------
 
 @pytest.mark.skipif(
-    platform.system() == "Windows",
-    reason="RLIMIT_AS memory limiting is not supported on Windows"
+    platform.system() in ("Windows", "Darwin"),
+    reason="RLIMIT_AS memory limiting is not reliably supported on Windows or macOS"
 )
 def test_memory_limit_enforced():
     """A script that tries to allocate far more than the memory cap should

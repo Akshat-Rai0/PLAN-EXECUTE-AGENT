@@ -3,6 +3,7 @@
 import pytest
 from src.agents.plan_execute.nodes import reason_node
 from src.agents.plan_execute.state import State, Plan, Step, StepStatus
+from src.agents.prompts.loader import load_prompt
 from unittest.mock import patch, MagicMock
 
 

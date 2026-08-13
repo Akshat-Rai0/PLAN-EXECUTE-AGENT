@@ -93,6 +93,7 @@ def test_step_status_enum():
 def test_plan_generation(input_task):
     """Test plan generation for various input tasks."""
     graph = build_graph()
+    compiled = graph.compile()
     
     initial_state: State = {
         "input": input_task,
@@ -100,7 +101,7 @@ def test_plan_generation(input_task):
     }
     
     config = {"configurable": {"thread_id": "test-thread"}}
-    result = graph.invoke(initial_state, config)
+    result = compiled.invoke(initial_state, config)
     
     # Verify plan was generated
     assert result["plan"] is not None
@@ -129,6 +130,7 @@ def test_plan_generation(input_task):
 def test_goa_trip_specific():
     """Specific test for Goa trip planning."""
     graph = build_graph()
+    compiled = graph.compile()
     
     initial_state: State = {
         "input": "Plan a weekend trip to Goa",
@@ -136,7 +138,7 @@ def test_goa_trip_specific():
     }
     
     config = {"configurable": {"thread_id": "test-thread"}}
-    result = graph.invoke(initial_state, config)
+    result = compiled.invoke(initial_state, config)
     
     assert result["plan"] is not None
     assert isinstance(result["plan"], Plan)
