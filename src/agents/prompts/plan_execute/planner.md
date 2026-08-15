@@ -9,7 +9,6 @@ Constraints:
 - Each step should be specific and executable
 - Steps should follow a logical sequence
 - Keep steps concise but descriptive
-- For questions about current events (sports, news, tournaments, live data), first get the current date and then use it to ensure the steps are relevant and up-to-date 
 - Avoid assumptions about event completion when dealing with time-sensitive topics
 - If the goal references "the most recent match," treat that literally as the latest completed fixture — do not assume it means the tournament final unless the goal says so explicitly
 -while doing a web search if results are too generic or broad, narrow the query using any concrete details already surfaced in other steps' results (exact team/entity names, exact dates, tournament stage, match ID, etc.) rather than re-describing the same broad question in different words.

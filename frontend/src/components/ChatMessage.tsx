@@ -11,35 +11,6 @@ interface ChatMessageProps {
   isStreaming?: boolean
 }
 
-function TypedText({ text }: { text: string }) {
-  const [displayed, setDisplayed] = useState('')
-  const reducedMotion = useReducedMotion()
-
-  useEffect(() => {
-    if (reducedMotion) {
-      setDisplayed(text)
-      return
-    }
-
-    const words = text.split(/(\s+)/)
-    let current = ''
-    let wordIndex = 0
-
-    const interval = setInterval(() => {
-      if (wordIndex < words.length) {
-        current += words[wordIndex]
-        setDisplayed(current)
-        wordIndex++
-      } else {
-        clearInterval(interval)
-      }
-    }, 40) // Roughly 40ms per word chunk
-
-    return () => clearInterval(interval)
-  }, [text, reducedMotion])
-
-  return <span>{displayed}</span>
-}
 
 export function ChatMessage({ message, arm = 'plan_execute_synthesis', isStreaming = false }: ChatMessageProps) {
   const reducedMotion = useReducedMotion()
@@ -71,7 +42,7 @@ export function ChatMessage({ message, arm = 'plan_execute_synthesis', isStreami
           </div>
         )}
         <div className="whitespace-pre-wrap break-words text-[13px] leading-relaxed">
-          {!isUser && !isSystem && !isStreaming ? <TypedText text={message.content} /> : message.content}
+          {message.content}
         </div>
       </div>
     </motion.div>
