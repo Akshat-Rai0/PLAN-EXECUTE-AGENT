@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 ArmName = Literal["react", "plan_execute", "plan_execute_synthesis"]
@@ -73,8 +73,19 @@ class RunDetail(BaseModel):
 
 
 class CreateRunRequest(BaseModel):
-    task: str
+    task: str = ""
+    input: Optional[str] = None
     arm: ArmName = "plan_execute_synthesis"
+
+    @model_validator(mode="before")
+    @classmethod
+    def resolve_task_input(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            if not data.get("task") and data.get("input"):
+                data["task"] = data["input"]
+            elif not data.get("input") and data.get("task"):
+                data["input"] = data["task"]
+        return data
 
 
 class ChatMessage(BaseModel):

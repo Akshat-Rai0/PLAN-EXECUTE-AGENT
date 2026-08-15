@@ -96,7 +96,7 @@ def test_failed_replan_success_cycle():
     
     breakdown_call_count = [0]
     
-    def breakdown_side_effect(goal, context=None):
+    def breakdown_side_effect(goal, context=None, **kwargs):
         breakdown_call_count[0] += 1
         if breakdown_call_count[0] == 1:
             return initial_plan
@@ -127,14 +127,15 @@ def test_failed_replan_success_cycle():
                     mock_llm.invoke.return_value = mock_synthesis_response
                     mock_get_llm.return_value = mock_llm
                     
-                    graph = build_graph().compile()
-                    initial_state: State = {
-                        "input": "test goal",
-                        "plan": None
-                    }
-                    
-                    config = {"configurable": {"thread_id": "test-thread"}}
-                    result = graph.invoke(initial_state, config)
+                    with patch('src.agents.plan_execute.nodes._detect_new_information', return_value=(False, "No new info")):
+                        graph = build_graph().compile()
+                        initial_state: State = {
+                            "input": "test goal",
+                            "plan": None
+                        }
+                        
+                        config = {"configurable": {"thread_id": "test-thread"}}
+                        result = graph.invoke(initial_state, config)
                     
                     # Verify exactly one replan occurred
                     assert breakdown_call_count[0] == 2, f"Expected 2 breakdown_task calls (initial + 1 replan), got {breakdown_call_count[0]}"
@@ -269,14 +270,23 @@ def test_e2e_tool_hint_none_mid_plan():
     mock_reason_response = MockResponse("Reasoning result")
     mock_synthesis_response = MockResponse("Final answer")
     
-    with patch('src.agents.plan_execute.nodes.breakdown_task') as mock_breakdown:
-        mock_breakdown.return_value = mock_plan
-        
-        with patch('src.agents.plan_execute.nodes.tavily_search') as mock_search:
-            mock_search.return_value = "Search result"
-            
-            with patch('src.agents.plan_execute.nodes._check_search_relevance') as mock_relevance:
-                mock_relevance.return_value = (True, "Relevant")
+    def mock_breakdown_fn(goal, context=None, **kwargs):
+        return Plan(
+            goal="test goal",
+            subtasks=[
+                Step(id=1, task="search step 1", tool_hint="web_search", status=StepStatus.PENDING),
+                Step(id=2, task="reasoning step", tool_hint="none", status=StepStatus.PENDING),
+                Step(id=3, task="search step 3", tool_hint="web_search", status=StepStatus.PENDING),
+            ]
+        )
+
+    with patch('src.agents.plan_execute.nodes.breakdown_task', side_effect=mock_breakdown_fn):
+        with patch('src.agents.plan_execute.nodes._detect_new_information', return_value=(False, "No new info")):
+            with patch('src.agents.plan_execute.nodes.tavily_search') as mock_search:
+                mock_search.return_value = "Search result"
+                
+                with patch('src.agents.plan_execute.nodes._check_search_relevance') as mock_relevance:
+                    mock_relevance.return_value = (True, "Relevant")
                 
                 with patch('src.agents.plan_execute.nodes.get_llm') as mock_get_llm:
                     mock_llm = MagicMock()

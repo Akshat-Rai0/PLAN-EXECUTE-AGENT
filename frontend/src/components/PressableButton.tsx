@@ -1,8 +1,9 @@
 import { motion } from 'framer-motion'
-import type { ReactNode, ButtonHTMLAttributes } from 'react'
+import type { HTMLMotionProps } from 'framer-motion'
+import type { ReactNode } from 'react'
 import { useReducedMotion } from '../hooks/useAccessibility'
 
-interface PressableButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+interface PressableButtonProps extends HTMLMotionProps<'button'> {
   children: ReactNode
   variant?: 'primary' | 'success' | 'danger' | 'ghost'
   accentColor?: string

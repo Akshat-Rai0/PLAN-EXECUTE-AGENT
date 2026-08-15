@@ -2,6 +2,7 @@ import os
 import re
 import shlex
 import asyncio
+import time
 from datetime import date
 
 from .state import State, StepStatus, Step, Plan
@@ -196,7 +197,7 @@ def _make_date_anchor_step(next_id: int) -> Step:
     )
 
 
-def plan_node(state: State) -> dict:
+def plan_node(state: State, config: RunnableConfig | None = None) -> dict:
     """Break down the input task into a plan using the breakdown_task function.
 
     Two deterministic shortcuts, both bypassing the LLM planner's own
@@ -220,6 +221,38 @@ def plan_node(state: State) -> dict:
     print(f"📋 Creating Plan")
     print(f"{'='*80}")
     print(f"Goal: {goal}")
+
+    tracker = None
+    if config and "configurable" in config and "tracker" in config["configurable"]:
+        tracker = config["configurable"]["tracker"]
+        from src.api.models import RunStepEvent, StepPayload, utc_now_iso
+        tracker.handle_event(
+            RunStepEvent(
+                run_id=tracker.run_id,
+                step_id=f"{tracker.run_id}-plan",
+                parent_step_id=None,
+                arm=tracker.arm,
+                type="plan",
+                status="running",
+                title="Generating plan…",
+                started_at=utc_now_iso(),
+                payload=StepPayload(args={"goal": goal}),
+            )
+        )
+    elif _emit_viz_event is not None and current_run_id():
+        _emit_viz_event(
+            RunStepEvent(
+                run_id=current_run_id(),
+                step_id=f"{current_run_id()}-plan",
+                parent_step_id=None,
+                arm=current_arm(),
+                type="plan",
+                status="running",
+                title="Generating plan…",
+                started_at=_viz_now(),
+                payload=StepPayload(args={"goal": goal}),
+            )
+        )
 
     if _is_pure_date_query(goal):
         anchor_step = _make_date_anchor_step(next_id=1)
@@ -2475,6 +2508,9 @@ def synthesize_node(state: State, config: RunnableConfig | None = None) -> dict:
         return {"plan": plan}
 
     # Build synthesis prompt
+    goal = plan.goal
+    step_results_str = "\n".join(step_results)
+    server_url_notice = f"\n✅ A dev server is running at: {state.get('server_url')}\n" if state.get('server_url') else ""
     synthesis_prompt = load_prompt("plan_execute", "final_synthesis").format(**locals())
 
     llm = get_llm()
@@ -2507,28 +2543,46 @@ def synthesize_node(state: State, config: RunnableConfig | None = None) -> dict:
         )
     
     response_content = ""
-    for chunk in llm.stream(messages):
-        if hasattr(chunk, "content"):
-            response_content += chunk.content
-        elif isinstance(chunk, str):
-            response_content += chunk
-            
-        if tracker and synthesis_step_id:
-            from src.api.models import RunStepEvent, StepPayload
-            from src.api.models import utc_now_iso
-            tracker.handle_event(
-                RunStepEvent(
-                    run_id=tracker.run_id,
-                    step_id=synthesis_step_id,
-                    parent_step_id=None,
-                    arm=tracker.arm,
-                    type="synthesis",
-                    status="running",
-                    title="Synthesizing final answer",
-                    started_at=utc_now_iso(),
-                    payload=StepPayload(result=response_content),
+    last_emit_time = time.monotonic()
+    last_emit_len = 0
+
+    try:
+        for chunk in llm.stream(messages):
+            if hasattr(chunk, "content"):
+                response_content += chunk.content
+            elif isinstance(chunk, str):
+                response_content += chunk
+                
+            now = time.monotonic()
+            # Throttle: emit only if >= 40 new chars or >= 0.15s elapsed
+            if tracker and synthesis_step_id and (len(response_content) - last_emit_len >= 40 or now - last_emit_time >= 0.15):
+                last_emit_time = now
+                last_emit_len = len(response_content)
+                from src.api.models import RunStepEvent, StepPayload
+                from src.api.models import utc_now_iso
+                tracker.handle_event(
+                    RunStepEvent(
+                        run_id=tracker.run_id,
+                        step_id=synthesis_step_id,
+                        parent_step_id=None,
+                        arm=tracker.arm,
+                        type="synthesis",
+                        status="running",
+                        title="Synthesizing final answer",
+                        started_at=utc_now_iso(),
+                        payload=StepPayload(result=response_content),
+                    )
                 )
-            )
+    except Exception:
+        # If stream fails or isn't supported, fall back to invoke
+        response_content = ""
+
+    if not response_content and hasattr(llm, "invoke"):
+        resp = llm.invoke(messages)
+        if hasattr(resp, "content"):
+            response_content = resp.content
+        elif isinstance(resp, str):
+            response_content = resp
 
     # Store the synthesis result directly on the plan. This no longer depends
     # on a step having tool_hint="none" existing in the plan — the planner

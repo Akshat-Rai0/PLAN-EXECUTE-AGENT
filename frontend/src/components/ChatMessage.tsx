@@ -1,4 +1,3 @@
-import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import type { ArmName, ChatMessage as ChatMessageType } from '../lib/types'
 import { armTheme } from '../lib/armTheme'
@@ -43,6 +42,9 @@ export function ChatMessage({ message, arm = 'plan_execute_synthesis', isStreami
         )}
         <div className="whitespace-pre-wrap break-words text-[13px] leading-relaxed">
           {message.content}
+          {isStreaming && (
+            <span className="inline-block w-1.5 h-3 ml-1 bg-white/70 animate-pulse align-middle" />
+          )}
         </div>
       </div>
     </motion.div>

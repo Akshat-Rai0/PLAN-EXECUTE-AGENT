@@ -424,10 +424,10 @@ def _run_graph_blocking(
     auto_approve: bool,  # Kept for compatibility but ignored
 ) -> dict[str, Any] | None:
     if arm == "react":
-        _run_react(task, tracker)
+        return _run_react(task, tracker)
     else:
         disable_synthesis = arm == "plan_execute"
-        _run_plan_execute(task, tracker, disable_synthesis)
+        return _run_plan_execute(task, tracker, disable_synthesis)
 
 
 def _run_react(task: str, tracker: RunTracker) -> dict[str, Any] | None:
@@ -517,74 +517,76 @@ def _run_plan_execute(
             # can push a response even if an interrupt fires immediately.
             _interrupt_queues[tracker.run_id] = queue.Queue()
 
-            result = compiled.invoke(initial, config)
+            state = dict(initial)
+            stream = compiled.stream(initial, config, stream_mode="updates")
 
-            try:
-                while "__interrupt__" in result:
-                    # Parse interrupt data using shared helper
-                    interrupt_data = result["__interrupt__"]
-                    payload = _unwrap_interrupt_payload(interrupt_data)
-                    interrupt_type = payload.get("type", "unknown")
+            while True:
+                try:
+                    chunk = next(stream)
+                except StopIteration:
+                    break
 
-                    # Emit interrupt event
-                    interrupt_step_id = f"{tracker.run_id}-interrupt-{uuid.uuid4().hex[:8]}"
-                    tracker.handle_event(
-                        RunStepEvent(
-                            run_id=tracker.run_id,
-                            step_id=interrupt_step_id,
-                            parent_step_id=None,
-                            arm=tracker.arm,
-                            type="interrupt",
-                            status="running",
-                            title=f"Interrupt: {interrupt_type}",
-                            started_at=utc_now_iso(),
-                            payload=StepPayload(result=payload),
+                # Handle internal graph nodes
+                for node_name, node_state in chunk.items():
+                    if node_name == "__interrupt__":
+                        # Parse interrupt data using shared helper
+                        interrupt_data = node_state
+                        payload = _unwrap_interrupt_payload(interrupt_data)
+                        interrupt_type = payload.get("type", "unknown")
+
+                        # Emit interrupt event
+                        interrupt_step_id = f"{tracker.run_id}-interrupt-{uuid.uuid4().hex[:8]}"
+                        tracker.handle_event(
+                            RunStepEvent(
+                                run_id=tracker.run_id,
+                                step_id=interrupt_step_id,
+                                parent_step_id=None,
+                                arm=tracker.arm,
+                                type="interrupt",
+                                status="running",
+                                title=f"Interrupt: {interrupt_type}",
+                                started_at=utc_now_iso(),
+                                payload=StepPayload(result=payload),
+                            )
                         )
-                    )
 
-                    # Flip run status to waiting_for_input
-                    tracker.store.update_run_status(tracker.run_id, "waiting_for_input")
+                        # Flip run status to waiting_for_input
+                        tracker.store.update_run_status(tracker.run_id, "waiting_for_input")
 
-                    # Block on queue until response arrives
-                    try:
-                        response = _interrupt_queues[tracker.run_id].get()
-                    except Exception as e:
-                        # Queue was removed or error occurred, treat as reject
-                        response = {"decision": "reject"}
+                        # Block on queue until response arrives
+                        try:
+                            response = _interrupt_queues[tracker.run_id].get()
+                        except Exception:
+                            response = {"decision": "reject"}
 
-                    # Resume with response
-                    result = compiled.invoke(Command(resume=response), config)
+                        # Resume with response
+                        stream = compiled.stream(Command(resume=response), config, stream_mode="updates")
 
-                    # Flip interrupt step to success
-                    tracker.handle_event(
-                        RunStepEvent(
-                            run_id=tracker.run_id,
-                            step_id=interrupt_step_id,
-                            parent_step_id=None,
-                            arm=tracker.arm,
-                            type="interrupt",
-                            status="success",
-                            title=f"Interrupt: {interrupt_type}",
-                            started_at=utc_now_iso(),
-                            ended_at=utc_now_iso(),
-                            payload=StepPayload(result=payload),
+                        # Flip interrupt step to success
+                        tracker.handle_event(
+                            RunStepEvent(
+                                run_id=tracker.run_id,
+                                step_id=interrupt_step_id,
+                                parent_step_id=None,
+                                arm=tracker.arm,
+                                type="interrupt",
+                                status="success",
+                                title=f"Interrupt: {interrupt_type}",
+                                started_at=utc_now_iso(),
+                                ended_at=utc_now_iso(),
+                                payload=StepPayload(result=payload),
+                            )
                         )
-                    )
 
-                    # Flip run status back to running
-                    tracker.store.update_run_status(tracker.run_id, "running")
-
-                # NOTE: Do NOT re-stream `result` here — after the interrupt
-                # loop exits, `result` is already the final completed state.
-                # Passing it back into compiled.stream() would restart the
-                # graph from scratch and cause "'Step' object has no attribute
-                # 'get'" when update_from_state tries dict-style access on
-                # Pydantic Step objects returned by a fresh plan node.
-            finally:
-                # Clean up interrupt queue
-                _interrupt_queues.pop(tracker.run_id, None)
+                        # Flip run status back to running
+                        tracker.store.update_run_status(tracker.run_id, "running")
+                    else:
+                        tracker.update_from_state(node_state, node_name)
+                        if isinstance(node_state, dict):
+                            state.update(node_state)
     finally:
+        _interrupt_queues.pop(tracker.run_id, None)
         if patched_module is not None and original_synth is not None:
             patched_module.synthesize_tool_node = original_synth
     
-    return result
+    return state
