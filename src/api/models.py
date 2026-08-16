@@ -54,22 +54,44 @@ class RunSummary(BaseModel):
     run_id: str
     arm: ArmName
     task_name: str
+    input: Optional[str] = None
     status: RunStatus
     duration_ms: Optional[int] = None
     started_at: str
     pass_fail: Optional[bool] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def resolve_input(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            if not data.get("input") and data.get("task_name"):
+                data["input"] = data["task_name"]
+            elif not data.get("task_name") and data.get("input"):
+                data["task_name"] = data["input"]
+        return data
 
 
 class RunDetail(BaseModel):
     run_id: str
     arm: ArmName
     task_name: str
+    input: Optional[str] = None
     status: RunStatus
     duration_ms: Optional[int] = None
     started_at: str
     ended_at: Optional[str] = None
     pass_fail: Optional[bool] = None
     steps: list[RunStepEvent] = Field(default_factory=list)
+
+    @model_validator(mode="before")
+    @classmethod
+    def resolve_input(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            if not data.get("input") and data.get("task_name"):
+                data["input"] = data["task_name"]
+            elif not data.get("task_name") and data.get("input"):
+                data["task_name"] = data["input"]
+        return data
 
 
 class CreateRunRequest(BaseModel):
