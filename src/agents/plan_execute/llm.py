@@ -70,7 +70,7 @@ def get_cheap_llm():
     """Return a cheaper/faster model for simple verification tasks."""
     if LLM_PROVIDER == "groq":
         from langchain_groq import ChatGroq
-        model = "llama-3.1-8b-instant"
+        model = "openai/gpt-oss-120b"
         api_key = os.getenv("GROQ_API_KEY")
         return ChatGroq(model=model, api_key=api_key, temperature=0, max_retries=2, timeout=10)
     elif LLM_PROVIDER == "openrouter":
