@@ -48,6 +48,7 @@ export function Timeline({
   const ordered = steps.order
     .map((id) => steps.byId[id])
     .filter((s): s is RunStepEvent => !!s)
+    .filter((s) => s.type !== 'run_complete')          // hide internal sentinel
     .filter((s) => !visibleIds || visibleIds.has(s.step_id))
 
   if (ordered.length === 0) {

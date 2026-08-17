@@ -29,6 +29,7 @@ const TYPE_ICONS: Record<StepType, typeof Map> = {
   browser_step: Globe,
   synthesis: Sparkles,
   interrupt: AlertTriangle,
+  run_complete: Check,  // sentinel — filtered from UI, icon never rendered
 }
 
 interface StepNodeProps {

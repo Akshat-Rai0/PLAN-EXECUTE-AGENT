@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import type { ChatMessage, InterruptResponse } from '../lib/types'
 import { useRunStream } from './useRunStream'
 import { toast } from '../components/Toast'
@@ -7,50 +7,42 @@ const API_BASE = ''
 
 export function useChatStream(runId: string | null) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
+  // Start live=true for a new run; flip to false when the WebSocket signals completion.
   const [isLive, setIsLive] = useState(false)
-  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  // Poll the run status to determine if it's actually live
+  // When a new runId arrives (just submitted), assume the run is live immediately.
   useEffect(() => {
     if (!runId) {
       setIsLive(false)
       return
     }
-
-    // Assume live initially when we get a new runId (just submitted)
     setIsLive(true)
-
-    const checkStatus = async () => {
-      try {
-        const res = await fetch(`${API_BASE}/runs/${runId}`)
-        if (res.ok) {
-          const run = await res.json()
-          const live = run.status === 'running' || run.status === 'waiting_for_input'
-          setIsLive(live)
-          // Stop polling once the run is no longer live
-          if (!live && pollingRef.current) {
-            clearInterval(pollingRef.current)
-            pollingRef.current = null
-          }
-        }
-      } catch {
-        // If fetch fails, don't change isLive — let the WebSocket handle reconnection
-      }
-    }
-
-    // Check immediately, then poll every 3s
-    checkStatus()
-    pollingRef.current = setInterval(checkStatus, 3000)
-
-    return () => {
-      if (pollingRef.current) {
-        clearInterval(pollingRef.current)
-        pollingRef.current = null
-      }
-    }
   }, [runId])
 
   const { steps, connected, reconnecting } = useRunStream(runId, isLive)
+
+  // Detect run completion from the WebSocket event stream.
+  // The backend emits a "run_complete" sentinel event before closing the socket.
+  // This replaces the previous 3-second HTTP polling loop for run status.
+  useEffect(() => {
+    if (!runId) return
+    const hasCompletion = steps.order.some(
+      (id) => steps.byId[id]?.type === 'run_complete'
+    )
+    if (hasCompletion) {
+      setIsLive(false)
+    }
+  }, [runId, steps.order, steps.byId])
+
+  // Also flip isLive=false if the WebSocket disconnects cleanly (not reconnecting).
+  useEffect(() => {
+    if (!runId) return
+    if (!connected && !reconnecting && isLive) {
+      // Give a short grace period in case it's a transient reconnect
+      const timer = setTimeout(() => setIsLive(false), 4000)
+      return () => clearTimeout(timer)
+    }
+  }, [runId, connected, reconnecting, isLive])
 
   useEffect(() => {
     if (!runId) {

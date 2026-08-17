@@ -9,6 +9,7 @@ export type StepType =
   | 'browser_step'
   | 'synthesis'
   | 'interrupt'
+  | 'run_complete'
 
 export type StepStatus = 'running' | 'success' | 'failed' | 'waiting_for_input'
 export type RunStatus = 'running' | 'success' | 'failed' | 'waiting_for_input'

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { GitCompare, MessageSquare, Bug } from 'lucide-react'
 import type { ArmName, InterruptResponse, RunStepEvent, RunSummary } from './lib/types'
@@ -48,6 +48,8 @@ export default function App() {
     isWaitingForInput,
   } = useChatStream(mode === 'chat' ? selectedId : null)
 
+  const runsIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
   const refreshRuns = useCallback(async () => {
     const list = await fetchRuns()
     setRuns(list)
@@ -55,8 +57,17 @@ export default function App() {
 
   useEffect(() => {
     refreshRuns()
-    const interval = setInterval(refreshRuns, 5000)
-    return () => clearInterval(interval)
+    // Use a ref-guarded interval to prevent React StrictMode double-invocation
+    // from stacking multiple overlapping intervals (which caused ~22ms polling).
+    // Poll every 10s — live step updates come via WebSocket, not this list.
+    if (runsIntervalRef.current) clearInterval(runsIntervalRef.current)
+    runsIntervalRef.current = setInterval(refreshRuns, 10_000)
+    return () => {
+      if (runsIntervalRef.current) {
+        clearInterval(runsIntervalRef.current)
+        runsIntervalRef.current = null
+      }
+    }
   }, [refreshRuns])
 
   useEffect(() => {
@@ -72,7 +83,10 @@ export default function App() {
     if (selectedRun) setReplayMode(selectedRun.status !== 'running' && selectedRun.status !== 'waiting_for_input')
   }, [selectedRun?.run_id, selectedRun?.status])
 
-  const stepList = useMemo(() => steps.order.map((id) => steps.byId[id]), [steps])
+  const stepList = useMemo(
+    () => steps.order.map((id) => steps.byId[id]).filter((s) => s?.type !== 'run_complete'),
+    [steps]
+  )
   const selectedStep: RunStepEvent | null = selectedStepId ? steps.byId[selectedStepId] ?? null : null
   const previewStep: RunStepEvent | null = hoverStepId ? steps.byId[hoverStepId] ?? null : null
 
