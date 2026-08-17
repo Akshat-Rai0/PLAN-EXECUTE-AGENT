@@ -17,6 +17,7 @@ StepType = Literal[
     "browser_step",
     "synthesis",
     "interrupt",
+    "run_complete",
 ]
 StepStatus = Literal["running", "success", "failed", "waiting_for_input"]
 RunStatus = Literal["running", "success", "failed", "waiting_for_input"]
