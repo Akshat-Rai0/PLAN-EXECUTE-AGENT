@@ -7,7 +7,7 @@ from .nodes import (
     browser_use_node,
     setup_workspace_node, shell_node, write_file_node, delete_file_node, start_server_node,
     approval_node, ask_human_node, extract_user_info_node,
-    check_new_info_node,
+    check_new_info_node, search_query_preprocessor_node,
     MAX_TOTAL_STEPS,
 )
 from .state import State, StepStatus
@@ -215,6 +215,7 @@ def build_graph():
     graph.add_node("approval", approval_node)
     graph.add_node("ask_human", ask_human_node)
     graph.add_node("extract_user_info", extract_user_info_node)
+    graph.add_node("search_query_preprocessor", search_query_preprocessor_node)
     
     # Stub node kept registered for backward-compat (in case anything still
     # references "stub" directly) but is no longer reachable via normal

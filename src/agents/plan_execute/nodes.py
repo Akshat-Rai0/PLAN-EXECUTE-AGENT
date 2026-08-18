@@ -971,6 +971,95 @@ def _verify_step_result(step: Step) -> tuple[bool, str, str]:
         return True, "", ""
 
 
+def preprocess_search_query(
+    goal: str,
+    step_task: str,
+    prior_context: str = "",
+    current_date: str | None = None,
+) -> str:
+    """
+    Pre-process and rewrite an ambiguous or conversational step task into an
+    exact, keyword-dense search query optimized for Tavily search.
+
+    Uses a fast/cheap LLM with a robust heuristic fallback on error or empty response.
+    """
+    anchor = current_date or today_date()
+    
+    # 1. Try LLM-based query reformulation
+    try:
+        sys_prompt = load_prompt("plan_execute", "search_query_rewrite_system")
+        user_prompt = load_prompt("plan_execute", "search_query_rewrite").format(
+            goal=goal,
+            step_task=step_task,
+            prior_context=prior_context or "None",
+            current_date=anchor,
+        )
+        
+        cheap_llm = get_cheap_llm()
+        response = cheap_llm.invoke([
+            SystemMessage(content=sys_prompt),
+            HumanMessage(content=user_prompt),
+        ])
+        
+        rewritten = response.content.strip() if hasattr(response, "content") else str(response).strip()
+        # Strip out any lingering wrapping quotes or "Query:" prefixes
+        rewritten = re.sub(r'^(query|search query|rewritten query):\s*', '', rewritten, flags=re.IGNORECASE)
+        rewritten = rewritten.strip('"`\'\n ')
+        
+        if rewritten and len(rewritten) >= 3:
+            # Cap at Tavily query length limit
+            TAVILY_MAX_QUERY_CHARS = 400
+            return rewritten[:TAVILY_MAX_QUERY_CHARS].rstrip()
+    except Exception as exc:
+        print(f"⚠️ Search query pre-processor LLM failed ({exc}), falling back to heuristic cleanup")
+
+    # 2. Heuristic fallback
+    cleaned_task = re.sub(
+        r'^(step\s*\d+[\s:.-]*|search\s+(for|google|web|online|tavily)?[\s:.-]*|find\s+(out)?[\s:.-]*|look\s+up[\s:.-]*|check\s+(if)?[\s:.-]*)',
+        '',
+        step_task.strip(),
+        flags=re.IGNORECASE
+    ).strip()
+    
+    if not cleaned_task:
+        cleaned_task = step_task.strip()
+        
+    query = f"{goal} — {cleaned_task}"
+    if prior_context:
+        query = f"{query} {prior_context}"
+        
+    TAVILY_MAX_QUERY_CHARS = 400
+    if len(query) > TAVILY_MAX_QUERY_CHARS:
+        query = f"{cleaned_task} {prior_context}".strip() if prior_context else cleaned_task
+        if len(query) > TAVILY_MAX_QUERY_CHARS:
+            query = query[:TAVILY_MAX_QUERY_CHARS].rstrip()
+            
+    return query
+
+
+def search_query_preprocessor_node(state: State) -> dict:
+    """
+    Dedicated pre-processing node for Tavily search queries.
+    Rewrites the running step's task into an unambiguous search query.
+    """
+    plan = state.get("plan")
+    if plan is None:
+        return {"plan": plan}
+    
+    current_step = next((s for s in plan.subtasks if s.status == StepStatus.RUNNING), None)
+    if current_step is None:
+        return {"plan": plan}
+
+    prior_context = _extract_search_context(plan, current_step)
+    rewritten_query = preprocess_search_query(
+        goal=plan.goal,
+        step_task=current_step.task,
+        prior_context=prior_context,
+    )
+    print(f"🔍 [Query Preprocessor] Rewrote query to: '{rewritten_query}'")
+    return {"plan": plan}
+
+
 def tavily_search_node(state: State) -> dict:
     """
     Execute Tavily search for the current step.
@@ -992,34 +1081,16 @@ def tavily_search_node(state: State) -> dict:
     log_update = _log_approval(state, "tavily_search", current_step.task)
 
     try:
-        # Extract search query from the task description, including goal context
-        query = f"{plan.goal} — {current_step.task}"
-
-        # Fold in short, targeted context from prior steps (e.g. a year
-        # determined by an earlier reason_node step). Previously this
-        # function had no visibility into prior results at all, so a
-        # correctly-determined fact like "the current year is 2026" never
-        # reached the actual search query — search would default to
-        # historically dominant results instead of recency-anchored ones.
+        # Extract search context from prior steps
         search_context = _extract_search_context(plan, current_step)
-        if search_context:
-            query = f"{query} {search_context}"
 
-        # Tavily rejects queries over 400 chars outright. A long goal string
-        # combined with a long step task can exceed that easily — and
-        # without capping here, a replan that only rewords the step task
-        # (while the goal stays just as long) produces an equally-long query
-        # every time, which the replan-identical-limit guard then
-        # misreads as "no progress" and gives up rather than the query
-        # ever actually getting short enough to succeed.
-        # current_step.task and search_context are the specific, load-bearing
-        # part of the query; plan.goal is broader framing that's useful but
-        # droppable first when something has to give.
-        TAVILY_MAX_QUERY_CHARS = 400
-        if len(query) > TAVILY_MAX_QUERY_CHARS:
-            query = f"{current_step.task} {search_context}".strip() if search_context else current_step.task
-            if len(query) > TAVILY_MAX_QUERY_CHARS:
-                query = query[:TAVILY_MAX_QUERY_CHARS].rstrip()
+        # Pre-process and rewrite the search query to eliminate ambiguity and conversational artifacts
+        query = preprocess_search_query(
+            goal=plan.goal,
+            step_task=current_step.task,
+            prior_context=search_context,
+        )
+        print(f"🔍 Preprocessed search query: '{query}'")
 
         # Determine search depth based on step type
         # Use "basic" for status-check queries, "advanced" for detailed searches
@@ -1033,10 +1104,6 @@ def tavily_search_node(state: State) -> dict:
         # specific step carries recency language ("latest", "current",
         # "this year", etc.) — reuses the same detection already built for
         # the deterministic date-anchor step, rather than a second regex.
-        # This matters because general web search happily surfaces
-        # well-indexed historical/reference content (e.g. a "F1 race winners"
-        # page that still lists last year's race) even when a plain day-count
-        # filter is applied — see tavily_search's recency_sensitive param.
         recency_sensitive = _needs_date_anchor(plan.goal) or _needs_date_anchor(current_step.task)
 
         result = tavily_search(query, search_depth=search_depth, recency_sensitive=recency_sensitive)
