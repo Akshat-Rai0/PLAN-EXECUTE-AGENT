@@ -9,10 +9,19 @@ from fastapi.testclient import TestClient
 import asyncio
 
 
+import tempfile
+from pathlib import Path
+from src.api.store import RunStore
+import src.api.main as api_main
+
+
 @pytest.fixture
-def client():
-    """Create a test client for the FastAPI app."""
-    return TestClient(app)
+def client(monkeypatch):
+    """Create a test client for the FastAPI app using an isolated temp database."""
+    with tempfile.NamedTemporaryFile(suffix=".db") as tmp:
+        test_store = RunStore(tmp.name)
+        monkeypatch.setattr(api_main, "store", test_store)
+        yield TestClient(app)
 
 
 def test_list_runs_empty(client):
@@ -101,8 +110,8 @@ def test_concurrent_run_creation(client):
     assert len(set(run_ids)) == 3
 
 
-def test_run_messages_empty(client):
-    """Test retrieving messages for a run with no messages."""
+def test_run_messages(client):
+    """Test retrieving messages for a run."""
     # Create a run first
     create_response = client.post("/runs", json={"input": "test query"})
     run_id = create_response.json()["run_id"]
@@ -110,7 +119,10 @@ def test_run_messages_empty(client):
     # Get messages
     response = client.get(f"/runs/{run_id}/messages")
     assert response.status_code == 200
-    assert response.json() == []
+    messages = response.json()
+    assert len(messages) >= 1
+    assert messages[0]["content"] == "test query"
+    assert messages[0]["role"] == "user"
 
 
 def test_interrupt_response(client):
@@ -119,10 +131,10 @@ def test_interrupt_response(client):
     create_response = client.post("/runs", json={"input": "test query"})
     run_id = create_response.json()["run_id"]
     
-    # Try to respond to interrupt (may not exist, but should not crash)
-    response = client.post(f"/runs/{run_id}/interrupt", json={"response": "test response"})
-    # Should either succeed or return appropriate error
-    assert response.status_code in [200, 400, 404]
+    # Try to respond to interrupt (may not exist or not waiting, but should return handled status)
+    response = client.post(f"/runs/{run_id}/interrupt", json={"decision": "approve"})
+    # Handled responses: 200 (submitted), 400/422 (invalid), 404 (not found), 409 (not waiting for input)
+    assert response.status_code in [200, 400, 404, 409, 422]
 
 
 def test_database_persistence(client):
@@ -258,23 +270,15 @@ def test_api_versioning(client):
 
 def test_health_check(client):
     """Test health check endpoint if it exists."""
-    # Try common health check endpoints
     for endpoint in ["/health", "/healthz", "/status"]:
         response = client.get(endpoint)
         if response.status_code == 200:
-            # Health check exists and is healthy
-            return True
-    # Health check may not exist, which is fine
-    return True
+            assert response.status_code == 200
 
 
 def test_api_metrics_endpoint(client):
     """Test metrics endpoint if it exists."""
-    # Try common metrics endpoints
     for endpoint in ["/metrics", "/stats"]:
         response = client.get(endpoint)
         if response.status_code == 200:
-            # Metrics endpoint exists
-            return True
-    # Metrics endpoint may not exist, which is fine
-    return True
+            assert response.status_code == 200
