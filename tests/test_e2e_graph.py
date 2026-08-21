@@ -113,7 +113,7 @@ def test_failed_replan_success_cycle():
             # call ever made" landed on a different, unrelated step after
             # replanning, causing spurious additional failures/replans.
             def search_side_effect(query, search_depth=None, recency_sensitive=False):
-                if query.startswith("test goal — search step 2"):
+                if "step 2" in query or "search step 2" in query:
                     raise Exception("Search timeout")
                 return "Search result"
 

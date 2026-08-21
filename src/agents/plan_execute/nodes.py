@@ -1579,12 +1579,6 @@ def setup_workspace_node(state: State) -> dict:
 
     return {"plan": plan, "steps_executed": 1, "workspace_path": workspace_path, **log_update}
 
-    current_step.status = StepStatus.DONE
-    current_step.result = f"Project workspace created at: {workspace_path}"
-    print(f"✅ Workspace created: {workspace_path}")
-
-    return {"plan": plan, "steps_executed": 1, "workspace_path": workspace_path, **log_update}
-
 
 def _build_coding_context(plan, current_step) -> str:
     """Build a short prior-steps context block for coding node prompts."""
