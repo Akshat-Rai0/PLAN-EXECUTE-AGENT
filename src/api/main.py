@@ -5,8 +5,10 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 import uuid
 
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+import os
+from fastapi import FastAPI, HTTPException, Security, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.staticfiles import StaticFiles
 
 from .event_bus import event_bus
@@ -19,6 +21,23 @@ store = RunStore(REPO_ROOT / "run_visualizer.db")
 
 _active_tasks: dict[str, asyncio.Task] = {}
 _active_chat_run: str | None = None  # Single active chat session guard
+
+# Authentication setup (Optional API key check via bearer token)
+API_SECRET_KEY = os.getenv("API_SECRET_KEY", "").strip()
+security_bearer = HTTPBearer(auto_error=False)
+
+
+def verify_api_auth(credentials: HTTPAuthorizationCredentials | None = Security(security_bearer)) -> bool:
+    """Verify bearer token if API_SECRET_KEY is configured in environment."""
+    if not API_SECRET_KEY:
+        return True
+    if credentials is None or credentials.credentials != API_SECRET_KEY:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or missing authentication token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return True
 
 
 @asynccontextmanager
@@ -36,9 +55,15 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Agent Run Visualizer", version="1.0.0", lifespan=lifespan)
 
+# Restrict CORS to configured allowed origins (default to localhost UI dev server)
+raw_cors = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000")
+allowed_origins = [origin.strip() for origin in raw_cors.split(",") if origin.strip()]
+if "*" in allowed_origins or os.getenv("ALLOW_ALL_ORIGINS", "false").lower() in ("true", "1"):
+    allowed_origins = ["*"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -58,7 +83,7 @@ def get_run(run_id: str) -> RunDetail:
     return detail
 
 
-@app.post("/runs", response_model=RunSummary)
+@app.post("/runs", response_model=RunSummary, dependencies=[Security(verify_api_auth)])
 async def create_run(body: CreateRunRequest) -> RunSummary:
     global _active_chat_run
 
@@ -126,7 +151,7 @@ async def create_run(body: CreateRunRequest) -> RunSummary:
     )
 
 
-@app.post("/runs/{run_id}/interrupt")
+@app.post("/runs/{run_id}/interrupt", dependencies=[Security(verify_api_auth)])
 async def respond_to_interrupt(run_id: str, response: InterruptResponse) -> dict[str, str]:
     """Submit human response to an interrupt waiting for input."""
     # Check if run exists
