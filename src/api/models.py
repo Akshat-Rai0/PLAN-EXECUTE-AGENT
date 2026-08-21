@@ -104,10 +104,11 @@ class CreateRunRequest(BaseModel):
     @classmethod
     def resolve_task_input(cls, data: Any) -> Any:
         if isinstance(data, dict):
-            if not data.get("task") and data.get("input"):
-                data["task"] = data["input"]
-            elif not data.get("input") and data.get("task"):
-                data["input"] = data["task"]
+            task_val = data.get("task") or data.get("input")
+            if not task_val or not str(task_val).strip():
+                raise ValueError("A non-empty 'task' or 'input' is required.")
+            data["task"] = str(task_val).strip()
+            data["input"] = str(task_val).strip()
         return data
 
 
