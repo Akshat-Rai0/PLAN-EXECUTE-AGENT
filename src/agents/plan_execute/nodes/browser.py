@@ -1,8 +1,7 @@
 """Browser automation node."""
 
-from src.tools.browser_use import run_browser_task_sync
 from ..state import State, StepStatus
-from .common import _build_coding_context
+from .common import _build_coding_context, _pkg
 from .browser_guide import BROWSER_RELIABILITY_GUIDE
 
 
@@ -51,7 +50,7 @@ def browser_use_node(state: State) -> dict:
         browser_task += "\nUser-approved alternative instruction:\n" + current_step.result.split(": ", 1)[1]
 
     try:
-        outcome = run_browser_task_sync(browser_task)
+        outcome = _pkg().run_browser_task_sync(browser_task)
         current_step.status = StepStatus.DONE
         current_step.result = (
             f"[browser_use model={outcome.model}; vision={outcome.use_vision}; "
