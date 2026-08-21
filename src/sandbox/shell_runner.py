@@ -59,13 +59,9 @@ ALLOWED_COMMANDS = {
     "node",
     "npm",
     "npx",
-    "python3",
-    "python",
     "pip",
     "pip3",
     "git",
-    "sh",         # needed for some npx scaffolders that shell out
-    "bash",       # same
     "which",
     "pwd",
 }
