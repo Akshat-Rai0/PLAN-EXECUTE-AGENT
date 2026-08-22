@@ -20,3 +20,5 @@ checkpoints.db-shm
 checkpoints.db
 # Added by code-review-graph
 .code-review-graph/
+run_visualizer.db
+eval_checkpoints.db
