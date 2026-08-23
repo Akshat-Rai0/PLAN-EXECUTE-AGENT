@@ -6,6 +6,7 @@ from src.agents.plan_execute.state import State
 from src.agents.prompts.loader import load_prompt
 
 
+@pytest.mark.live
 def test_tavily_search_fifa_world_cup_through_graph():
     """Test Tavily search with FIFA World Cup query through the full graph flow."""
     query = "Who won the most recent FIFA World Cup match and highlight important moments"
@@ -55,6 +56,7 @@ def test_tavily_search_fifa_world_cup_through_graph():
     print(f"{'='*80}")
 
 
+@pytest.mark.live
 def test_tavily_search_basic_through_graph():
     """Test basic Tavily search functionality through the graph flow."""
     query = "What is the capital of France?"
@@ -92,6 +94,7 @@ def test_tavily_search_basic_through_graph():
     print(f"{'='*80}")
 
 
+@pytest.mark.live
 def test_tavily_search_complex_query_through_graph():
     """Test Tavily search with complex multi-part query through the graph flow."""
     query = "Latest developments in artificial intelligence and machine learning in 2024"

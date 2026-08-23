@@ -162,10 +162,8 @@ def _parse_react_response(content: str) -> tuple[str, str, str]:
     if action.lower() in _VALID_ACTIONS:
         return (thought, action, _strip_wrapping_quotes(_trim_trailing_rambling(action_input)))
 
-    # First match wasn't a real action (rambling leaked into the Action
-    # capture). Look for the last valid "Action: <name>" line in the
-    # content instead — the model's actual, final decision tends to be
-    # the last clean one it states, with rambling before and after it.
+    # First match wasn't a known action. Check if there is a valid action line
+    # later in the response (e.g. model rambled before finding the real action).
     valid_action_pattern = (
         r"Action:\s*(" + "|".join(re.escape(a) for a in _VALID_ACTIONS) + r")\s*"
         r"Action Input:\s*(.*?)(?=\n\s*Thought:|\n\s*Action:|\Z)"
@@ -175,7 +173,13 @@ def _parse_react_response(content: str) -> tuple[str, str, str]:
         last = valid_matches[-1]
         return (thought, last.group(1).strip(), _strip_wrapping_quotes(_trim_trailing_rambling(last.group(2).strip())))
 
-    # No recoverable valid action anywhere in the response.
+    # If the action is a simple single-token word without multi-line rambling,
+    # let it pass through so react_step can report an explicit "Unknown action"
+    # turn with tool feedback rather than an unhelpful generic parse error.
+    if "\n" not in action and len(action) <= 40:
+        return (thought, action, _strip_wrapping_quotes(_trim_trailing_rambling(action_input)))
+
+    # No recoverable action anywhere in the response.
     return ("", "", "")
 
 

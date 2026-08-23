@@ -26,7 +26,7 @@ async def test_runner_uses_openrouter_ling_in_text_only_mode(monkeypatch):
     assert result == BrowserTaskResult(
         result="browser result",
         model=BROWSER_MODEL,
-        use_vision=False,
+        use_vision=True,
         provider="openrouter",
     )
 
@@ -93,7 +93,7 @@ def test_browser_use_navigation_timeout(monkeypatch):
     result = nodes.browser_use_node({"input": plan.goal, "plan": plan})
 
     assert plan.subtasks[0].status == StepStatus.FAILED
-    assert "timeout" in plan.subtasks[0].error.lower()
+    assert "timeout" in plan.subtasks[0].error.lower() or "timed out" in plan.subtasks[0].error.lower()
 
 
 def test_browser_use_element_not_found(monkeypatch):

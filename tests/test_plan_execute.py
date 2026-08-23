@@ -89,6 +89,7 @@ def test_step_status_enum():
     assert StepStatus.FAILED.value == "FAILED"
 
 
+@pytest.mark.live
 @pytest.mark.parametrize("input_task", TEST_INPUTS)
 def test_plan_generation(input_task):
     """Test plan generation for various input tasks."""
@@ -127,6 +128,7 @@ def test_plan_generation(input_task):
     print(f"Plan: {plan.model_dump_json(indent=2)}")
 
 
+@pytest.mark.live
 def test_goa_trip_specific():
     """Specific test for Goa trip planning."""
     graph = build_graph()

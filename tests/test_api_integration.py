@@ -17,10 +17,15 @@ import src.api.main as api_main
 
 @pytest.fixture
 def client(monkeypatch):
-    """Create a test client for the FastAPI app using an isolated temp database."""
+    """Create a test client for the FastAPI app using an isolated temp database and mocked async execution."""
     with tempfile.NamedTemporaryFile(suffix=".db") as tmp:
         test_store = RunStore(tmp.name)
         monkeypatch.setattr(api_main, "store", test_store)
+        
+        async def mock_execute(run_id, task, arm, store):
+            return
+            
+        monkeypatch.setattr(api_main, "execute_run_async", mock_execute)
         yield TestClient(app)
 
 
