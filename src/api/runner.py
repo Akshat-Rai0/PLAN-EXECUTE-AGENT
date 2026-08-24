@@ -81,6 +81,18 @@ def _parse_browser_model(result: str | None) -> Optional[str]:
     return match.group(1).strip() if match else None
 
 
+def _state_value(value: Any, name: str, default: Any = None) -> Any:
+    """Read a graph-state field from either a Pydantic model or a dict.
+
+    LangGraph returns ``Plan``/``Step`` models for live runs but replay data can
+    be plain dictionaries.  Keeping that distinction here prevents the event
+    tracker from interfering with graph execution.
+    """
+    if isinstance(value, dict):
+        return value.get(name, default)
+    return getattr(value, name, default)
+
+
 class RunTracker:
     """Tracks in-flight step events while a graph executes."""
 
@@ -111,14 +123,14 @@ class RunTracker:
         if plan is None:
             return
 
-        goal = getattr(plan, "goal", None) or (plan.get("goal") if isinstance(plan, dict) else "")
-        subtasks = getattr(plan, "subtasks", None) or (plan.get("subtasks") if isinstance(plan, dict) else [])
+        goal = _state_value(plan, "goal", "")
+        subtasks = _state_value(plan, "subtasks", [])
 
         if not self._plan_emitted and subtasks:
             self._plan_emitted = True
             step_ids = []
             for s in subtasks:
-                sid = getattr(s, "id", s.get("id") if isinstance(s, dict) else None)
+                sid = _state_value(s, "id")
                 step_ids.append(str(sid))
             self.handle_event(
                 RunStepEvent(
@@ -136,9 +148,9 @@ class RunTracker:
                             "goal": goal,
                             "steps": [
                                 {
-                                    "id": getattr(s, "id", s.get("id")),
-                                    "task": getattr(s, "task", s.get("task")),
-                                    "tool_hint": getattr(s, "tool_hint", s.get("tool_hint")),
+                                    "id": _state_value(s, "id"),
+                                    "task": _state_value(s, "task", ""),
+                                    "tool_hint": _state_value(s, "tool_hint", ""),
                                 }
                                 for s in subtasks
                             ],
@@ -149,6 +161,7 @@ class RunTracker:
 
         replan_count = state.get("replan_count", 0)
         if replan_count > self._last_replan_count:
+            previous_replan_step_id = self._last_replan_step_id
             self._last_replan_count = replan_count
             replan_id = f"{self.run_id}-replan-{replan_count}"
             self._last_replan_step_id = replan_id
@@ -156,7 +169,7 @@ class RunTracker:
                 RunStepEvent(
                     run_id=self.run_id,
                     step_id=replan_id,
-                    parent_step_id=self._last_replan_step_id,
+                    parent_step_id=previous_replan_step_id,
                     arm=self.arm,
                     type="replan",
                     status="success",
@@ -168,12 +181,12 @@ class RunTracker:
             )
 
         for step in subtasks:
-            step_id = str(getattr(step, "id", step.get("id") if isinstance(step, dict) else "?"))
-            task = getattr(step, "task", step.get("task") if isinstance(step, dict) else "")
-            tool_hint = getattr(step, "tool_hint", step.get("tool_hint") if isinstance(step, dict) else "")
-            status = getattr(step, "status", step.get("status") if isinstance(step, dict) else "")
-            result = getattr(step, "result", step.get("result") if isinstance(step, dict) else None)
-            error = getattr(step, "error", step.get("error") if isinstance(step, dict) else None)
+            step_id = str(_state_value(step, "id", "?"))
+            task = _state_value(step, "task", "")
+            tool_hint = _state_value(step, "tool_hint", "")
+            status = _state_value(step, "status", "")
+            result = _state_value(step, "result")
+            error = _state_value(step, "error")
 
             status_str = str(status).split(".")[-1] if status else ""
             event_key = f"{self.run_id}-step-{step_id}"
