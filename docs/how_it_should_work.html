@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Plan-and-Execute Agent — How It Should Work (Golden Dataset Walkthrough)</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,600&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #1a1917; --ink-2: #4a4843; --ink-3: #8a8880; --rule: #e2e0d8;
+    --surface: #f8f6f0; --surface-2: #f0ede4;
+    --accent: #2b5f8a; --accent-light: #e8f1f9;
+    --accent-2: #c84b2f; --accent-2-light: #f9ece8;
+    --green: #2a6b45; --green-light: #e8f5ee;
+    --amber: #9a5c0a; --amber-light: #fdf3e3;
+    --purple: #5c3b8a; --purple-light: #f1ecfa;
+    --red: #9a2323; --red-light: #fde8e8;
+    --mono: 'DM Mono', monospace; --serif: 'Fraunces', serif; --sans: 'DM Sans', sans-serif;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: var(--surface); color: var(--ink); font-family: var(--sans); font-size: 15px; line-height: 1.7; padding: 0 0 80px; }
+  .hero { background: var(--ink); color: #f8f6f0; padding: 56px 64px 48px; }
+  .hero-tag { font-family: var(--mono); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); background: rgba(43,95,138,0.18); border: 1px solid rgba(43,95,138,0.35); padding: 4px 12px; border-radius: 2px; display: inline-block; margin-bottom: 20px; }
+  .hero h1 { font-family: var(--serif); font-size: 42px; font-weight: 300; line-height: 1.1; margin-bottom: 14px; }
+  .hero h1 em { font-style: italic; color: #c6dced; }
+  .hero-sub { font-size: 15px; color: rgba(248,246,240,0.65); max-width: 720px; line-height: 1.6; }
+  .nav-links { margin-top: 24px; display: flex; flex-wrap: wrap; gap: 8px; }
+  .nav-links a { font-family: var(--mono); font-size: 11px; color: rgba(248,246,240,0.7); text-decoration: none; padding: 5px 12px; border: 1px solid rgba(248,246,240,0.15); border-radius: 2px; }
+  .nav-links a:hover { background: rgba(248,246,240,0.08); }
+  .container { max-width: 1120px; margin: 0 auto; padding: 0 48px; }
+  .section { margin-top: 64px; scroll-margin-top: 24px; }
+  .section-label { font-family: var(--mono); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-3); display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
+  .section-label::after { content: ''; flex: 1; height: 1px; background: var(--rule); }
+  h2 { font-family: var(--serif); font-size: 30px; font-weight: 300; letter-spacing: -0.02em; margin-bottom: 12px; }
+  h3 { font-family: var(--sans); font-size: 13px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); margin: 24px 0 10px; }
+  p { color: var(--ink-2); margin-bottom: 12px; }
+  code { font-family: var(--mono); font-size: 12px; background: var(--surface-2); padding: 1px 5px; border-radius: 2px; }
+  p code, li code, td code, div code { font-size: 11.5px; }
+
+  /* ---------- tables ---------- */
+  .api-table { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 13px; background: white; border: 1px solid var(--rule); border-radius: 8px; overflow: hidden; }
+  .api-table th { text-align: left; font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3); padding: 8px 14px; border-bottom: 1px solid var(--rule); background: var(--surface); }
+  .api-table td { padding: 8px 14px; border-bottom: 1px solid var(--rule); vertical-align: top; color: var(--ink-2); }
+  .api-table tr:last-child td { border-bottom: none; }
+  .api-table td:first-child { font-family: var(--mono); font-size: 11.5px; color: var(--accent); font-weight: 500; white-space: nowrap; }
+  .riskchip { font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.06em; padding: 1px 7px; border-radius: 2px; white-space: nowrap; }
+  .risk-high { background: var(--accent-2-light); color: var(--accent-2); border: 1px solid rgba(200,75,47,0.35); }
+  .risk-low { background: var(--green-light); color: var(--green); border: 1px solid rgba(42,107,69,0.3); }
+
+  /* ---------- callouts ---------- */
+  .callout { border-left: 3px solid var(--accent); background: var(--accent-light); padding: 14px 18px; border-radius: 0 6px 6px 0; margin: 16px 0; }
+  .callout.orange { border-color: var(--accent-2); background: var(--accent-2-light); }
+  .callout.green { border-color: var(--green); background: var(--green-light); }
+  .callout.red { border-color: var(--red); background: var(--red-light); }
+  .callout.amber { border-color: var(--amber); background: var(--amber-light); }
+  .callout.purple { border-color: var(--purple); background: var(--purple-light); }
+  .callout p { margin: 0 0 6px; font-size: 13.5px; color: var(--ink); }
+  .callout p:last-child { margin: 0; }
+  .callout strong { font-weight: 500; }
+
+  /* ---------- node catalog ---------- */
+  .component-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 20px 0; }
+  .component-card { background: white; border: 1px solid var(--rule); border-radius: 8px; padding: 16px 18px; }
+  .component-card .tag { font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 6px; display: inline-block; padding: 1px 7px; border-radius: 2px; }
+  .component-card h4 { font-family: var(--mono); font-size: 13.5px; font-weight: 500; margin-bottom: 6px; }
+  .component-card p { font-size: 12.5px; margin: 0; line-height: 1.55; }
+
+  /* ---------- diagram ---------- */
+  .diagram-box { background: white; border: 1px solid var(--rule); border-radius: 10px; padding: 16px; margin: 20px 0; overflow-x: auto; }
+  .diagram-caption { font-family: var(--mono); font-size: 11px; color: var(--ink-3); text-align: center; margin-top: 10px; }
+  svg.graph { display: block; min-width: 900px; width: 100%; height: auto; }
+  svg.graph text { user-select: none; }
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; margin: 12px 0 0; font-size: 12px; color: var(--ink-2); align-items: center; }
+  .legend-item { display: flex; align-items: center; gap: 6px; }
+  .legend-swatch { width: 14px; height: 14px; border-radius: 3px; border: 1.5px solid; flex-shrink: 0; }
+  .legend-line { width: 26px; height: 0; border-top: 2.5px solid var(--accent); flex-shrink: 0; }
+  .legend-line.faint { border-top: 1px solid #d8d5cb; }
+  .legend-line.dashed { border-top: 1.5px dashed #b5b2a8; }
+
+  /* ---------- case sections ---------- */
+  .cat-header { margin-top: 72px; scroll-margin-top: 24px; }
+  .cat-header .cat-kicker { font-family: var(--mono); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; display: inline-block; padding: 3px 10px; border-radius: 2px; margin-bottom: 10px; }
+  .cat-header h2 { margin-bottom: 6px; }
+  .cat-header p { max-width: 800px; }
+  .case { background: white; border: 1px solid var(--rule); border-radius: 12px; padding: 28px 32px; margin: 28px 0; scroll-margin-top: 24px; }
+  .case-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
+  .case-id { font-family: var(--mono); font-size: 13px; font-weight: 500; color: var(--accent); }
+  .case-title { font-family: var(--serif); font-size: 22px; font-weight: 400; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 14px; }
+  .chip { font-family: var(--mono); font-size: 10px; letter-spacing: 0.05em; text-transform: uppercase; padding: 2px 9px; border-radius: 2px; border: 1px solid var(--rule); color: var(--ink-2); background: var(--surface); }
+  .chip.cat-forced_replan { background: var(--accent-2-light); color: var(--accent-2); border-color: rgba(200,75,47,0.35); }
+  .chip.cat-new_information { background: var(--purple-light); color: var(--purple); border-color: rgba(92,59,138,0.3); }
+  .chip.cat-straightforward { background: var(--green-light); color: var(--green); border-color: rgba(42,107,69,0.3); }
+  .chip.cat-synthesis_required { background: var(--accent-light); color: var(--accent); border-color: rgba(43,95,138,0.3); }
+  .chip.cat-browser_required { background: var(--amber-light); color: var(--amber); border-color: rgba(154,92,10,0.3); }
+  .goal-quote { border-left: 3px solid var(--rule); padding: 6px 16px; margin: 12px 0; color: var(--ink-2); font-size: 13.5px; font-style: italic; }
+  .crit-block { font-size: 13px; color: var(--ink-2); background: var(--surface); border: 1px dashed var(--rule); border-radius: 6px; padding: 10px 16px; margin: 12px 0; }
+  .crit-block b { font-weight: 500; color: var(--ink); }
+  .plan-table { width: 100%; border-collapse: collapse; margin: 14px 0 6px; font-size: 12.5px; background: var(--surface); border: 1px solid var(--rule); border-radius: 8px; overflow: hidden; }
+  .plan-table th { text-align: left; font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3); padding: 6px 12px; border-bottom: 1px solid var(--rule); }
+  .plan-table td { padding: 6px 12px; border-bottom: 1px solid var(--rule); vertical-align: top; color: var(--ink-2); }
+  .plan-table tr:last-child td { border-bottom: none; }
+  .plan-table td.hint { font-family: var(--mono); font-size: 11px; color: var(--accent); white-space: nowrap; }
+  .plan-table tr.anchor-row td { background: var(--purple-light); color: var(--purple); font-style: italic; }
+  .flow-steps { display: flex; flex-direction: column; gap: 0; margin: 18px 0 6px; position: relative; }
+  .flow-steps::before { content: ''; position: absolute; left: 17px; top: 34px; bottom: 34px; width: 1px; background: var(--rule); }
+  .flow-step { display: flex; gap: 14px; align-items: flex-start; padding: 9px 0; position: relative; }
+  .flow-num { width: 34px; height: 34px; border-radius: 50%; font-family: var(--mono); font-size: 11px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; z-index: 1; color: #fff; }
+  .flow-body { flex: 1; min-width: 0; }
+  .flow-body h4 { font-size: 13.5px; font-weight: 500; color: var(--ink); margin-bottom: 2px; padding-top: 6px; }
+  .flow-body h4 .node-name { font-family: var(--mono); font-size: 12px; color: var(--accent); }
+  .flow-body p { font-size: 12.5px; margin: 0 0 4px; line-height: 1.55; }
+  .flow-ret { font-family: var(--mono); font-size: 10.5px; color: var(--ink-2); background: var(--surface); border: 1px solid var(--rule); border-radius: 4px; padding: 5px 10px; margin-top: 4px; line-height: 1.6; word-break: break-word; }
+  .flow-ret::before { content: 'returns → '; color: var(--ink-3); }
+  .case-notes { margin-top: 14px; }
+  .case-notes .note { border-left: 3px solid var(--rule); background: var(--surface); padding: 9px 14px; border-radius: 0 6px 6px 0; margin: 8px 0; font-size: 12.5px; color: var(--ink-2); }
+  .case-notes .note b { color: var(--ink); font-weight: 500; }
+  .toc-cat { margin: 10px 0 4px; font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; }
+  .toc-list { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+  .toc-list a { font-family: var(--mono); font-size: 11px; text-decoration: none; color: var(--ink-2); border: 1px solid var(--rule); background: white; padding: 3px 10px; border-radius: 2px; }
+  .toc-list a:hover { border-color: var(--accent); color: var(--accent); }
+  .footer { border-top: 1px solid var(--rule); padding: 32px 48px; max-width: 1120px; margin: 64px auto 0; display: flex; justify-content: space-between; }
+  .footer p { font-family: var(--mono); font-size: 11px; color: var(--ink-3); margin: 0; }
+  @media (max-width: 700px) {
+    .hero { padding: 40px 24px; } .hero h1 { font-size: 32px; }
+    .container { padding: 0 24px; } .component-grid { grid-template-columns: 1fr; }
+    .case { padding: 20px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="hero-tag">Golden dataset · ideal execution walkthrough</div>
+  <h1>How it <em>should</em> work</h1>
+  <p class="hero-sub">For every goal in <code style="background:rgba(248,246,240,.1);color:#c6dced;">src/eval/golden_dataset.py</code>, this page traces the ideal run through the plan-and-execute graph: every node that activates, in order, the state each node returns, and where the human-in-the-loop gate pauses. The planner is an LLM — real plans vary run to run — so these are canonical flows consistent with each goal's <code style="background:rgba(248,246,240,.1);color:#c6dced;">expected_step_count</code>, <code style="background:rgba(248,246,240,.1);color:#c6dced;">required_capability</code> and category mechanics.</p>
+  <div class="nav-links">
+    <a href="#lifecycle">Lifecycle</a>
+    <a href="#graph">Master graph</a>
+    <a href="#routing">Routing &amp; risk</a>
+    <a href="#guards">Guard rails</a>
+    <a href="#nodes">Node catalog</a>
+    <a href="#cases">Test cases</a>
+    <a href="#cat-forced_replan">forced_replan</a>
+    <a href="#cat-new_information">new_information</a>
+    <a href="#cat-straightforward">straightforward</a>
+    <a href="#cat-synthesis_required">synthesis_required</a>
+    <a href="#cat-browser_required">browser_required</a>
+    <a href="#cat-stress">stress tests</a>
+  </div>
+</div>
+
+<div class="container">
+
+  <!-- ================= LIFECYCLE ================= -->
+  <div class="section" id="lifecycle">
+    <div class="section-label">01 · Lifecycle in one paragraph</div>
+    <h2>The shape of every run</h2>
+    <p>Every goal enters at <code>START → plan</code>. The <strong>plan node</strong> calls <code>breakdown_task()</code> — one LLM call that returns a JSON plan of steps (<code>id, task, tool_hint, status=PENDING</code>). Two deterministic shortcuts can fire here: a <em>pure date query</em> skips planning entirely, and any goal containing recency language (<em>latest, current, now, this year, most recent…</em>) gets a <strong>date-anchor step</strong> prepended — a step that is born <code>DONE</code> with today's real date, so no search ever guesses the year.</p>
+    <p>The <strong>executor</strong> then marks exactly one PENDING step <code>RUNNING</code> per visit, and a conditional edge routes it by <code>tool_hint</code>: LOW-risk hints go straight to their tool node; anything HIGH-risk (or unrecognized) is intercepted by the <strong>approval node</strong>, which pre-generates the exact operation (command / path / file / synthesis preview) and calls LangGraph's <code>interrupt()</code> — the graph physically pauses until a human approves.</p>
+    <p>After <em>every</em> tool node, control funnels through <strong>check_new_info</strong>: if the step FAILED → <strong>replaner</strong> (failure recovery). If the step succeeded but surfaced novel information (LLM novelty check against everything learned so far) → <strong>replaner</strong> again, this time to <em>refine the remaining steps</em> with what was just learned — that is the whole point of the <code>new_information</code> category. Otherwise → back to the executor for the next step.</p>
+    <p>When no PENDING step remains, the router sends the run to <strong>synthesize</strong>, which concatenates every step result/error and streams the final answer into <code>plan.final_answer</code> → <code>END</code>.</p>
+    <div class="callout amber">
+      <p><strong>Reading the per-case diagrams.</strong> Each diagram shows <em>all 21 registered nodes</em>; only the nodes a given ideal run touches are lit. Numbered badges give activation order (a badge stack like <code>2·6·9</code> means the node fired three times). Solid blue arrows are the path actually taken; everything else stays faint. Amber-bordered nodes are HITL pause points.</p>
+      <p><strong>Honesty note:</strong> three nodes are registered in <code>build_graph()</code> but unreachable via routing — <code>stub</code> (kept for backward compat), <code>ask_human</code> and <code>extract_user_info</code> (wired outgoing-only; nothing routes into them). They appear greyed/dashed everywhere.</p>
+    </div>
+    <div class="legend">
+      <span class="legend-item"><span class="legend-swatch" style="border-color:#1a1917;background:#1a1917;"></span> control (plan/executor)</span>
+      <span class="legend-item"><span class="legend-swatch" style="border-color:#2a6b45;background:#e8f5ee;"></span> LOW-risk tool</span>
+      <span class="legend-item"><span class="legend-swatch" style="border-color:#c84b2f;background:#f9ece8;"></span> HIGH-risk tool</span>
+      <span class="legend-item"><span class="legend-swatch" style="border-color:#9a5c0a;background:#fdf3e3;"></span> approval gate</span>
+      <span class="legend-item"><span class="legend-swatch" style="border-color:#5c3b8a;background:#f1ecfa;"></span> novelty / replan</span>
+      <span class="legend-item"><span class="legend-swatch" style="border-color:#2b5f8a;background:#e8f1f9;"></span> final synthesis</span>
+      <span class="legend-item"><span class="legend-swatch" style="border-color:#b5b2a8;background:#f0ede4;border-style:dashed;"></span> registered, unreachable</span>
+      <span class="legend-item"><span class="legend-line"></span> taken edge</span>
+      <span class="legend-item"><span class="legend-line faint"></span> unused edge</span>
+    </div>
+  </div>
+
+  <!-- ================= MASTER GRAPH ================= -->
+  <div class="section" id="graph">
+    <div class="section-label">02 · The whole machine</div>
+    <h2>Master graph — all nodes, all edges</h2>
+    <p>This is <code>build_graph()</code> in <code>src/agents/plan_execute/graph.py</code> drawn in full. Conditional edges (the fans out of <code>executor</code>, <code>approval</code> and <code>check_new_info</code>) are router functions, not nodes — their decision logic is tabulated in the next section. Every tool node without exception re-enters the pipeline at <code>check_new_info</code>; there are no side exits except the two termination guards (step-cap / cancellation) which jump straight to <code>synthesize</code>.</p>
+    <div class="diagram-box" id="master-graph"></div>
+    <div class="diagram-caption">build_graph() — 19 routed nodes + START/END. Grey dashed = registered but unreachable from routing.</div>
+  </div>
+
+  <!-- ================= ROUTING ================= -->
+  <div class="section" id="routing">
+    <div class="section-label">03 · Decision logic</div>
+    <h2>Routing &amp; risk classification</h2>
+    <h3>_route_to_tool — executor's conditional edge</h3>
+    <table class="api-table">
+      <thead><tr><th>running step's tool_hint</th><th>risk</th><th>routed to</th><th>why</th></tr></thead>
+      <tbody>
+        <tr><td>web_search / tavily_search</td><td><span class="riskchip risk-low">LOW</span></td><td><code>tavily_search</code></td><td>read-only web search, direct</td></tr>
+        <tr><td>none</td><td><span class="riskchip risk-low">LOW</span></td><td><code>reason</code></td><td>pure-reasoning LLM step (no silent stub)</td></tr>
+        <tr><td>setup_workspace</td><td><span class="riskchip risk-low">LOW</span></td><td><code>setup_workspace</code></td><td>timestamped project dir creation</td></tr>
+        <tr><td>shell_command</td><td><span class="riskchip risk-high">HIGH</span></td><td><code>approval → shell</code></td><td>arbitrary CLI — allowlist-enforced</td></tr>
+        <tr><td>write_file / file_editor</td><td><span class="riskchip risk-high">HIGH</span></td><td><code>approval → write_file</code></td><td>arbitrary file writes</td></tr>
+        <tr><td>delete_file</td><td><span class="riskchip risk-high">HIGH</span></td><td><code>approval → delete_file</code></td><td>destructive</td></tr>
+        <tr><td>start_server</td><td><span class="riskchip risk-high">HIGH</span></td><td><code>approval → start_server</code></td><td>opens network port</td></tr>
+        <tr><td>browser_use / browser-use</td><td><span class="riskchip risk-high">HIGH</span></td><td><code>approval → browser_use</code></td><td>acts on third-party websites</td></tr>
+        <tr><td>code_executor</td><td><span class="riskchip risk-high">HIGH</span></td><td><code>approval → code_executor</code></td><td>arbitrary Python execution</td></tr>
+        <tr><td>anything else (unrecognized)</td><td><span class="riskchip risk-high">HIGH</span> (default)</td><td><code>approval → synthesize_tool</code></td><td>unknown capability ⇒ dynamic tool synthesis; unknown defaults HIGH</td></tr>
+        <tr><td>— no RUNNING step remains —</td><td>—</td><td><code>synthesize</code></td><td>all steps DONE/FAILED ⇒ produce the answer</td></tr>
+        <tr><td>— plan is None —</td><td>—</td><td><code>END</code></td><td>degenerate guard</td></tr>
+      </tbody>
+    </table>
+    <h3>_route_after_check — the post-tool fork</h3>
+    <table class="api-table">
+      <thead><tr><th>condition (evaluated in order)</th><th>routed to</th><th>flavor of replan</th></tr></thead>
+      <tbody>
+        <tr><td>any step has status <code>FAILED</code></td><td><code>replaner</code></td><td><strong>failure recovery</strong> — find a different approach to the same sub-goal</td></tr>
+        <tr><td><code>last_step_new_info == true</code> (novelty LLM said yes)</td><td><code>replaner</code></td><td><strong>success-based refinement</strong> — rewrite remaining steps using the new fact</td></tr>
+        <tr><td>otherwise</td><td><code>executor</code></td><td>next step, unchanged plan</td></tr>
+      </tbody>
+    </table>
+    <div class="callout purple">
+      <p><strong>The first-executed info step never triggers a success-replan.</strong> <code>_detect_new_information()</code> compares a step result against <code>cumulative_context</code> — and the very first completed info step compares against an empty list, which is defined as "not novel". Also note the date-anchor step never enters <code>cumulative_context</code> at all (it is born DONE inside <code>plan_node</code> and never routed through <code>check_new_info</code>). So success-based replanning starts earliest at the <em>second</em> executed search/browser/code step.</p>
+      <p><strong>Silent skip list:</strong> shell / write_file / delete_file / start_server / setup_workspace results never even get a novelty LLM call — they don't gather external knowledge — but their entries still land in <code>cumulative_context</code>.</p>
+    </div>
+    <h3>_route_after_tool — the two hard exits</h3>
+    <p>Normally every tool node flows to <code>check_new_info</code>. Two conditions short-circuit straight to <code>synthesize</code>: <code>steps_executed ≥ MAX_TOTAL_STEPS (15)</code> (remaining PENDING/RUNNING steps get CANCELLED with an explanatory error), or any step already CANCELLED. This is how runaway runs still terminate with an honest partial answer.</p>
+    <h3>_route_after_approval — after the human decides</h3>
+    <ul style="color:var(--ink-2); font-size:13.5px; margin: 0 0 12px 20px;">
+      <li><strong>approve</strong> → the exact tool node matching the hint runs for real (pre-generated command/path/file cached on the step as <code>_PENDING_COMMAND</code> / <code>_PENDING_PATH</code> / <code>_PENDING_FILE_PATH</code> / <code>_PENDING_SCHEMA</code> is reused verbatim — the human approves what will actually execute).</li>
+      <li><strong>reject</strong> → step marked FAILED ("Operation rejected by human"); with no RUNNING step left the router falls back to <code>executor</code>.</li>
+      <li><strong>alternative</strong> → the replacement instruction is stored as <code>ALTERNATIVE_INPUT: …</code> on the step and folded into the tool task (browser_use consumes it explicitly).</li>
+    </ul>
+  </div>
+
+  <!-- ================= GUARDS ================= -->
+  <div class="section" id="guards">
+    <div class="section-label">04 · Termination guarantees</div>
+    <h2>Guard rails</h2>
+    <table class="api-table">
+      <thead><tr><th>guard</th><th>value</th><th>enforced in</th><th>effect when tripped</th></tr></thead>
+      <tbody>
+        <tr><td>MAX_TOTAL_STEPS</td><td>15</td><td>_route_after_tool</td><td>remaining steps CANCELLED → forced synthesize</td></tr>
+        <tr><td>MAX_REPLAN</td><td>8</td><td>replaner</td><td>remaining PENDING/RUNNING steps CANCELLED → next hop ends at synthesize</td></tr>
+        <tr><td>MAX_CONSECUTIVE_IDENTICAL_REPLANS</td><td>2</td><td>replaner</td><td>same — stops "search again, learn nothing" loops</td></tr>
+        <tr><td>code_executor retries</td><td>2</td><td>code_executor_node</td><td>only for fixable errors: ImportError, ModuleNotFoundError, IndexError, KeyError, AttributeError, TypeError, NameError</td></tr>
+        <tr><td>synthesis validation retries</td><td>2</td><td>synthesize_tool_node</td><td>regenerate code with previous error appended, re-validate in sandbox</td></tr>
+        <tr><td>search verification retries</td><td>&lt; 2</td><td>tavily_search_node</td><td>unmet success_criterion → back to PENDING, task augmented "(Entities from last try: …)"; 2nd miss → DONE prefixed [UNVERIFIED]</td></tr>
+        <tr><td>sandbox caps</td><td>15 s / 256 MB</td><td>run_in_sandbox</td><td>hard timeout + RLIMIT_AS on every generated-code execution</td></tr>
+        <tr><td>shell allowlist + timeouts</td><td>mkdir touch ls cat echo cp mv node npm npx pip pip3 git which pwd · 30 s quick / 120 s installs</td><td>shell_command_tool</td><td>anything else rejected before spawn; cwd confined under agent-workspaces</td></tr>
+        <tr><td>server-start refusal</td><td>tokenized match</td><td>shell_node</td><td>vite / dev / start / runserver / uvicorn / http.server / flask run ⇒ REFUSED, told to use start_server (tokenization prevents create-vite false positives)</td></tr>
+        <tr><td>Tavily query cap</td><td>400 chars</td><td>preprocess_search_query</td><td>rewritten queries truncated; depth basic|advanced; recency params when goal/task matches recency regex</td></tr>
+        <tr><td>context truncation</td><td>200 / 1500 / 2000 / 3000 chars</td><td>various</td><td>short-result fold into queries ≤ 200; prior results in prompts ≤ 1500; novelty excerpts ≤ 2000–3000</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ================= NODE CATALOG ================= -->
+  <div class="section" id="nodes">
+    <div class="section-label">05 · Cast of characters</div>
+    <h2>Node catalog</h2>
+    <p>What each node reads, does, and — since that's the question this page answers for every test case — exactly what it <em>returns into state</em>.</p>
+    <div class="component-grid" id="node-cards"></div>
+  </div>
+
+  <!-- ================= CASES ================= -->
+  <div class="section" id="cases">
+    <div class="section-label">06 · The 26 goals</div>
+    <h2>Ideal execution, case by case</h2>
+    <p>Grouped by category, then in dataset order. Every case lists its ideal plan (what a good planner emits), the full node-activation trace with each node's return value, and mechanic notes explaining <em>why</em> the flow looks the way it does.</p>
+    <div id="case-toc"></div>
+  </div>
+  <div id="case-sections"></div>
+
+</div>
+
+<div class="footer">
+  <p>docs/how_it_should_work.html · generated against golden_dataset.py (26 goals) · graph.py @ build_graph()</p>
+  <p>plan-and-execute-agent scaffold</p>
+</div>
+
+<script>
+/* =====================================================================
+   Graph definition — mirrors build_graph() layout.
+   Node groups: ctrl | low | high | hitl | meta | final | dead | term
+   ===================================================================== */
+const NW = 176, NH = 50;
+const NODES = [
+  { id:'start',           label:'START',            sub:'',                          x:16,   y:381, w:64,  h:32, g:'term' },
+  { id:'plan',            label:'plan',             sub:'LLM breakdown_task → Plan', x:104,  y:372, g:'ctrl' },
+  { id:'executor',        label:'executor',         sub:'next PENDING → RUNNING',    x:312,  y:372, g:'ctrl' },
+  { id:'tavily_search',   label:'tavily_search',    sub:'Tavily · rewrite · LOW',    x:584,  y:24,  g:'low' },
+  { id:'reason',          label:'reason',           sub:'pure LLM step · LOW',       x:584,  y:104, g:'low' },
+  { id:'setup_workspace', label:'setup_workspace',  sub:'project dir · LOW',         x:584,  y:184, g:'low' },
+  { id:'approval',        label:'approval',         sub:'interrupt() human gate',    x:584,  y:296, g:'hitl' },
+  { id:'shell',           label:'shell',            sub:'allowlisted CLI · HIGH',    x:836,  y:16,  g:'high' },
+  { id:'write_file',      label:'write_file',       sub:'create/edit file · HIGH',   x:836,  y:82,  g:'high' },
+  { id:'delete_file',     label:'delete_file',      sub:'remove path · HIGH',        x:836,  y:148, g:'high' },
+  { id:'start_server',    label:'start_server',     sub:'dev server + URL · HIGH',   x:836,  y:214, g:'high' },
+  { id:'browser_use',     label:'browser_use',      sub:'vision agent · HIGH',       x:836,  y:430, g:'high' },
+  { id:'code_executor',   label:'code_executor',    sub:'sandboxed Python · HIGH',   x:836,  y:496, g:'high' },
+  { id:'synthesize_tool', label:'synthesize_tool',  sub:'declare→gen→validate HIGH', x:836,  y:562, g:'high' },
+  { id:'stub',            label:'stub',             sub:'legacy placeholder',        x:836,  y:644, g:'dead' },
+  { id:'check_new_info',  label:'check_new_info',   sub:'novelty gate (LLM)',        x:1052, y:330, g:'meta' },
+  { id:'replaner',        label:'replaner',         sub:'rewrite PENDING steps',     x:1052, y:180, g:'meta' },
+  { id:'synthesize',      label:'synthesize',       sub:'final answer (streamed)',   x:1052, y:506, g:'final' },
+  { id:'end',             label:'END',              sub:'',                          x:1112, y:606, w:64, h:32, g:'term' },
+  { id:'ask_human',       label:'ask_human',        sub:'registered · unrouted',     x:312,  y:706, g:'dead' },
+  { id:'extract_user_info',label:'extract_user_info',sub:'registered · unrouted',   x:584,  y:706, g:'dead' },
+];
+
+const EDGES = [
+  // structural
+  { f:'start', t:'plan' },
+  { f:'plan', t:'executor' },
+  // executor conditional fan
+  { f:'executor', t:'tavily_search',   m:'web_search' },
+  { f:'executor', t:'reason',          m:'none' },
+  { f:'executor', t:'setup_workspace', m:'setup_ws' },
+  { f:'executor', t:'approval',        m:'HIGH risk' },
+  { f:'executor', t:'shell',           m:'' },
+  { f:'executor', t:'write_file',      m:'' },
+  { f:'executor', t:'delete_file',     m:'' },
+  { f:'executor', t:'start_server',    m:'' },
+  { f:'executor', t:'browser_use',     m:'' },
+  { f:'executor', t:'code_executor',   m:'(via approval)' },
+  { f:'executor', t:'synthesize_tool', m:'unknown hint' },
+  { f:'executor', t:'synthesize',      m:'all steps settled' },
+  // approval conditional fan
+  { f:'approval', t:'shell' },
+  { f:'approval', t:'write_file' },
+  { f:'approval', t:'delete_file' },
+  { f:'approval', t:'start_server' },
+  { f:'approval', t:'browser_use' },
+  { f:'approval', t:'code_executor' },
+  { f:'approval', t:'tavily_search' },
+  { f:'approval', t:'synthesize_tool', m:'approved synth' },
+  // tools -> check_new_info
+  { f:'tavily_search',   t:'check_new_info' },
+  { f:'reason',          t:'check_new_info' },
+  { f:'setup_workspace', t:'check_new_info' },
+  { f:'shell',           t:'check_new_info' },
+  { f:'write_file',      t:'check_new_info' },
+  { f:'delete_file',     t:'check_new_info' },
+  { f:'start_server',    t:'check_new_info' },
+  { f:'browser_use',     t:'check_new_info' },
+  { f:'code_executor',   t:'check_new_info' },
+  { f:'synthesize_tool', t:'check_new_info' },
+  { f:'stub',            t:'check_new_info' },
+  // check_new_info fork
+  { f:'check_new_info', t:'replaner',  m:'FAILED ∨ new info' },
+  { f:'check_new_info', t:'executor',  m:'else' },
+  { f:'replaner', t:'executor', big:'top' },
+  // final
+  { f:'synthesize', t:'end' },
+  // dead wiring
+  { f:'ask_human', t:'extract_user_info' },
+  { f:'extract_user_info', t:'executor' },
+];
+
+const GROUP_STYLE = {
+  ctrl:  { fill:'#1a1917', stroke:'#1a1917', text:'#f8f6f0', sub:'rgba(248,246,240,.55)', badge:'#1a1917' },
+  low:   { fill:'#e8f5ee', stroke:'#2a6b45', text:'#1f4d33', sub:'#5b8a70',               badge:'#2a6b45' },
+  high:  { fill:'#f9ece8', stroke:'#c84b2f', text:'#7c2c18', sub:'#b3715d',               badge:'#c84b2f' },
+  hitl:  { fill:'#fdf3e3', stroke:'#9a5c0a', text:'#6e4207', sub:'#b08a52',               badge:'#9a5c0a' },
+  meta:  { fill:'#f1ecfa', stroke:'#5c3b8a', text:'#43296a', sub:'#8a71ad',               badge:'#5c3b8a' },
+  final: { fill:'#e8f1f9', stroke:'#2b5f8a', text:'#1d4666', sub:'#6d93b3',               badge:'#2b5f8a' },
+  dead:  { fill:'#f0ede4', stroke:'#b5b2a8', text:'#8a8880', sub:'#aeaCA0'.toLowerCase(), badge:'#b5b2a8', dashed:true },
+  term:  { fill:'#ffffff', stroke:'#1a1917', text:'#1a1917', sub:'#8a8880',               badge:'#1a1917' },
+};
+
+function nodeBox(n) {
+  const w = n.w || NW, h = n.h || NH;
+  return { x:n.x, y:n.y, w, h, cx:n.x + w/2, cy:n.y + h/2,
+           l:n.x, r:n.x+w, t:n.y, b:n.y+h };
+}
+
+function anchor(from, to) {
+  const a = nodeBox(NODES.find(n=>n.id===from));
+  const b = nodeBox(NODES.find(n=>n.id===to));
+  if (Math.abs(a.cy - b.cy) < 30 && b.l > a.r + 8)  return [a.r, a.cy, b.l, b.cy, 'h'];
+  if (Math.abs(a.cy - b.cy) < 30 && a.l > b.r + 8)  return [a.l, a.cy, b.r, b.cy, 'h'];
+  if (b.cy >= a.cy) return [a.cx, a.b, b.cx, b.t, 'v'];
+  return [a.cx, a.t, b.cx, b.b, 'v'];
+}
+
+function edgePath(f, t, opts) {
+  opts = opts || {};
+  const [x1,y1,x2,y2,dir] = anchor(f,t);
+  let d;
+  if (opts.big === 'top') {
+    const a = nodeBox(NODES.find(n=>n.id===f)), b = nodeBox(NODES.find(n=>n.id===t));
+    const sx = a.cx, sy = a.t, ex = b.cx, ey = b.t;
+    const lift = 78;
+    d = `M ${sx} ${sy} C ${sx} ${sy-lift}, ${ex} ${sy-lift}, ${(sx+ex)/2} ${sy-lift*0.92} S ${sx} ${sy-lift}, ${ex} ${ey}`;
+    d = `M ${sx} ${sy} C ${sx} ${sy-lift}, ${ex} ${sy-lift}, ${ex} ${ey}`;
+    return { d, mx:(sx+ex)/2, my:sy-lift*0.62 };
+  }
+  if (opts.big === 'bottom') {
+    const a = nodeBox(NODES.find(n=>n.id===f)), b = nodeBox(NODES.find(n=>n.id===t));
+    const sx=a.b>a.t?a.cx:a.cx, sy=a.b, ex=b.cx, ey=b.b>b.t?b.t:b.b;
+    const drop = 90;
+    d = `M ${a.cx} ${sy} C ${a.cx} ${sy+drop}, ${ex} ${ey+drop}, ${ex} ${ey}`;
+    return { d, mx:(a.cx+ex)/2, my:Math.max(sy,ey)+drop*0.62 };
+  }
+  const bend = dir==='h' ? Math.min(60, Math.abs(x2-x1)*0.35) : Math.min(46, Math.abs(y2-y1)*0.35);
+  if (dir==='h') d = `M ${x1} ${y1} C ${x1+(x2>x1?bend:-bend)} ${y1}, ${x2-(x2>x1?bend:-bend)} ${y2}, ${x2} ${y2}`;
+  else           d = `M ${x1} ${y1} C ${x1} ${y1+(y2>y1?bend:-bend)}, ${x2} ${y2-(y2>y1?bend:-bend)}, ${x2} ${y2}`;
+  return { d, mx:(x1+x2)/2, my:(y1+y2)/2 };
+}
+
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function renderGraph(activePairs, seq) {
+  seq = seq || [];
+  const activeSet = new Set();
+  (activePairs||[]).forEach(p => activeSet.add(p[0]+'>'+p[1]));
+  const visits = {};
+  seq.forEach(s => { (visits[s[0]] = visits[s[0]] || []).push(s[1]); });
+
+  let edges = '', nodes = '';
+  for (const e of EDGES) {
+    const key = e.f+'>'+e.t;
+    const isActive = activeSet.has(key);
+    const dead = (NODES.find(n=>n.id===e.f).g==='dead');
+    const { d, mx, my } = edgePath(e.f, e.t, { big:e.big });
+    const marker = isActive ? 'url(#arrA)' : 'url(#arrN)';
+    const style = dead ? 'stroke:#c9c6bc;stroke-width:1;stroke-dasharray:3 4;opacity:.45;'
+                : isActive ? 'stroke:#2b5f8a;stroke-width:2.2;opacity:.95;'
+                : 'stroke:#ddd9ce;stroke-width:1;opacity:.55;';
+    edges += `<path d="${d}" fill="none" style="${style}" marker-end="${marker}"/>`;
+    if (e.m && !seq.length) {
+      edges += `<text x="${mx}" y="${my-3}" font-family="DM Mono, monospace" font-size="8.5" fill="#8a8880" text-anchor="middle">${esc(e.m)}</text>`;
+    }
+  }
+  for (const n of NODES) {
+    const st = GROUP_STYLE[n.g];
+    const vs = visits[n.id] || [];
+    const dim = seq.length && !vs.length;
+    const op = dim ? 0.22 : 1;
+    const w = n.w || NW, h = n.h || NH;
+    const dash = st.dashed ? 'stroke-dasharray:4 3;' : '';
+    nodes += `<rect x="${n.x}" y="${n.y}" width="${w}" height="${h}" rx="9"
+      style="fill:${st.fill};stroke:${st.stroke};stroke-width:${vs.length&&!dim?2.2:1.2};${dash}" opacity="${op}"/>`;
+    if (n.sub) {
+      nodes += `<text x="${n.x+w/2}" y="${n.y+h/2-2}" text-anchor="middle" font-family="DM Mono, monospace" font-size="12.5" font-weight="500" fill="${st.text}" opacity="${op}">${esc(n.label)}</text>`;
+      nodes += `<text x="${n.x+w/2}" y="${n.y+h/2+13}" text-anchor="middle" font-family="DM Sans, sans-serif" font-size="8.5" fill="${st.sub}" opacity="${op}">${esc(n.sub)}</text>`;
+    } else {
+      nodes += `<text x="${n.x+w/2}" y="${n.y+h/2+4}" text-anchor="middle" font-family="DM Mono, monospace" font-size="11.5" font-weight="500" fill="${st.text}" opacity="${op}">${esc(n.label)}</text>`;
+    }
+    vs.forEach((title, i) => {
+      const bx = n.x + w - 8 - i*20, by = n.y - 2;
+      nodes += `<circle cx="${bx}" cy="${by}" r="9.5" fill="${st.badge}" stroke="#ffffff" stroke-width="1.5"/>`;
+      nodes += `<text x="${bx}" y="${by+3.5}" text-anchor="middle" font-family="DM Mono, monospace" font-size="9.5" fill="#ffffff">${i+1}</text>`;
+      if (title) {
+        nodes += `<title>${esc((i+1)+'. '+title)}</title>`;
+      }
+    });
+  }
+  return `<svg class="graph" viewBox="0 0 1240 780" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <marker id="arrN" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="#c9c5ba"/>
+      </marker>
+      <marker id="arrA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse">
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="#2b5f8a"/>
+      </marker>
+    </defs>
+    ${edges}${nodes}
+  </svg>`;
+}
+
+// Master graph: structure only, no highlight.
+document.getElementById('master-graph').innerHTML = renderGraph([], []);
+
+/* Node catalog cards */
+const NODE_CARDS = [
+  ['ctrl','plan','Reads input goal → breakdown_task() LLM call → Plan(subtasks[]). Prepends a DONE date-anchor step when the goal matches the recency regex; pure date queries shortcut to an instant answer. Returns {"plan"}.'],
+  ['ctrl','executor','Marks the FIRST PENDING step RUNNING (one per visit). Routing reads that step\'s tool_hint. With nothing pending, returns the plan untouched — which itself routes to synthesize.'],
+  ['hitl','approval','HIGH-risk interceptor. Pre-generates the exact operation (shell cmd / delete path / file path / synthesis schema preview), caches it on the step, interrupt()s the graph. Resume decision: approve | reject | alternative.'],
+  ['low','tavily_search','Rewrites the task into a keyword-dense query (cheap LLM, ≤400 chars, folds short prior results + detected years), picks basic/advanced depth + recency bias, runs Tavily. Optional relevance validation (env-gated). Optional success_criterion verify/retry loop.'],
+  ['low','reason','Real LLM call grounded in goal + today\'s date + all prior DONE results (≤1500 chars each). For analysis/planning/decision steps with tool_hint "none".'],
+  ['low','setup_workspace','Creates timestamped workspace dir under agent-workspaces/, slug derived from goal. Sets state.workspace_path — required by shell/write/delete/start_server/code-exec(cwd).'],
+  ['high','shell','Runs ONE allowlisted command in the workspace (uses _PENDING_COMMAND if pre-approved). Deterministically refuses server-like commands (tokenized match). Result "$ cmd\\noutput", or FAILED ERROR:*.'],
+  ['high','write_file','LLM generates {path, content} JSON (path may come from _PENDING_FILE_PATH) → write_file_tool inside workspace.'],
+  ['high','delete_file','LLM (or pre-approved _PENDING_PATH) picks the workspace-relative path → delete_file_tool. Missing paths surface as ERROR:* → FAILED → replanner.'],
+  ['high','start_server','LLM picks {command, port}; process started NON-blocking, waits for the port to open. Success sets state.server_url — synthesize appends a "dev server running" notice automatically.'],
+  ['high','browser_use','Builds one browser task (goal + step + prior results + safety rules + reliability guide + optional ALTERNATIVE_INPUT), drives the vision agent sync. Result tagged [browser_use model=… vision=… provider=…].'],
+  ['high','code_executor','Pre-call decides sys.argv args, generates Python (retry ×2 on fixable errors), executes sandboxed (15 s / 256 MB, cwd=workspace). stdout becomes the result; failure ⇒ FAILED with full error context.'],
+  ['high','synthesize_tool','Dynamic TOOL synthesis for unknown capabilities: registry reuse-check → declare_schema → generate_function_code → validate in sandbox (JSON-object shape check) ×3 attempts → register + invoke. Result tagged [synthesized new tool: …] / [reused synthesized tool: …].'],
+  ['meta','check_new_info','After EVERY tool: FAILED ⇒ replan_reason=failure. Non-info tools (shell/write/delete/server/workspace) just append to cumulative_context. Info tools get an LLM novelty call vs cumulative_context. Sets last_step_new_info + replan_reason.'],
+  ['meta','replaner','Preserves DONE steps, rewrites the rest via breakdown_task(goal, completed_results, replan_reason). Guards: MAX_REPLAN=8, consecutive-identical≤2 (both cancel remaining steps). Tracks replan_count, last_replan_context, consecutive_identical_replans.'],
+  ['final','synthesize','Concatenates every result/error (≤1500 chars each) + dev-server notice → streaming LLM call → plan.final_answer. END follows immediately.'],
+  ['dead','stub','Legacy placeholder (marks step DONE with "[stub] not implemented"). No longer reachable — unknown hints route to synthesize_tool instead.'],
+  ['dead','ask_human / extract_user_info','Registered and wired outbound (ask_human → extract_user_info → executor) but nothing routes INTO ask_human, so the pair is currently dead code. Documented here so nobody re-discovers that the hard way.'],
+];
+document.getElementById('node-cards').innerHTML = NODE_CARDS.map(([g,name,desc]) => {
+  const st = GROUP_STYLE[g];
+  return `<div class="component-card">
+    <span class="tag" style="color:${st.stroke};background:${st.fill};border:1px solid ${st.stroke}33;">${g==='dead'?'unreachable':g}</span>
+    <h4>${esc(name)}</h4><p>${esc(desc)}</p></div>`;
+}).join('');
+
+/* =====================================================================
+   Case rendering
+   ===================================================================== */
+const CAT_META = {
+  forced_replan:    { blurb:'A step fails and forces the replanner to revise. The judged skill is recovery: name the real failure, change approach, never claim success.' , color:'#c84b2f', bg:'#f9ece8' },
+  new_information:  { blurb:'A successful step surfaces a fact that changes the remaining plan. Exercises success-based replanning and dependency-carrying search queries.', color:'#5c3b8a', bg:'#f1ecfa' },
+  straightforward:  { blurb:'No replanning needed. Baseline efficiency: ideal runs touch the fewest nodes, zero approvals when only LOW-risk tools are needed.', color:'#2a6b45', bg:'#e8f5ee' },
+  synthesis_required:{ blurb:'Needs a capability outside the fixed tool registry. Only succeeds if dynamic tool synthesis (declare → generate → validate → register → reuse) works.', color:'#2b5f8a', bg:'#e8f1f9' },
+  browser_required: { blurb:'Requires rendered-page interaction and vision via browser_use. Success criteria explicitly FAIL web_search fallbacks.', color:'#9a5c0a', bg:'#fdf3e3' },
+  stress:           { blurb:'One per category, pushing system limits: repeated failures, long dependency chains, multi-step computation, tool reuse, complex browser workflows.', color:'#1a1917', bg:'#f0ede4' },
+};
+
+function chipClass(cat){ return 'chip cat-' + cat; }
+
+function pairList(seq){
+  const pairs = [];
+  for (let i=0;i<seq.length-1;i++) pairs.push([seq[i][0], seq[i+1][0]]);
+  return pairs.filter((p,i,arr)=>arr.findIndex(q=>q[0]===p[0]&&q[1]===p[1])===i);
+}
+
+function renderCase(c){
+  const cm = CAT_META[c.isStress ? 'stress' : c.cat];
+  const chips = [
+    `<span class="${chipClass(c.cat)}">${c.id}</span>`,
+    `<span class="${chipClass(c.cat)}">${c.cat}</span>`,
+    c.isStress ? '<span class="chip" style="background:#1a1917;color:#f8f6f0;border-color:#1a1917;">STRESS</span>' : '',
+    `<span class="chip">capability: ${c.cap}</span>`,
+    `<span class="chip">~${c.exp} steps</span>`,
+    c.anchor ? '<span class="chip" style="color:#5c3b8a;background:#f1ecfa;border-color:rgba(92,59,138,.3);">date-anchor ✓</span>' : '',
+  ].join('');
+  const planRows = c.plan.map(r => {
+    const [num, task, hint, risk] = r;
+    const anchorRow = num === '0';
+    return `<tr class="${anchorRow?'anchor-row':''}">
+      <td style="font-family:var(--mono);font-size:11px;color:${anchorRow?'#5c3b8a':'#c84b2f'};white-space:nowrap;">${anchorRow?'auto':num}</td>
+      <td>${esc(task)}</td>
+      <td class="hint">${esc(hint)}</td>
+      <td><span class="riskchip ${risk==='HIGH'?'risk-high':'risk-low'}">${risk}</span></td>
+    </tr>`;
+  }).join('');
+  const steps = c.seq.map((s,i)=>{
+    const nodeId=s[0], title=s[1], desc=s[2], ret=s[3];
+    const nd = NODES.find(n=>n.id===nodeId);
+    const st = GROUP_STYLE[nd.g];
+    return `<div class="flow-step">
+      <div class="flow-num" style="background:${st.badge};">${i+1}</div>
+      <div class="flow-body">
+        <h4><span class="node-name">${esc(nd.label)}</span> — ${esc(title)}</h4>
+        <p>${desc}</p>
+        ${ret?`<div class="flow-ret">${esc(ret)}</div>`:''}
+      </div>
+    </div>`;
+  }).join('');
+  const notes = (c.notes||[]).map(n=>`<div class="note">${n}</div>`).join('');
+  return `<div class="case" id="case-${c.id}">
+    <div class="case-head"><span class="case-id">${c.id}</span><span class="case-title">${esc(c.title)}</span></div>
+    <div class="chips">${chips}</div>
+    <div class="goal-quote">“${esc(c.goal)}”</div>
+    <div class="crit-block"><b>Judge's success criteria:</b> ${esc(c.crit)}</div>
+    <h3>Ideal plan</h3>
+    <table class="plan-table">
+      <thead><tr><th>#</th><th>step</th><th>tool_hint</th><th>gate</th></tr></thead>
+      <tbody>${planRows}</tbody>
+    </table>
+    <h3>Activation trace</h3>
+    <div class="diagram-box">${renderGraph(pairList(c.seq), c.seq.map(s=>[s[0], s[1]]))}</div>
+    <div class="diagram-caption">badges = activation order (stacked badges = node visited multiple times) · hover a badge for what that visit did</div>
+    <div class="flow-steps">${steps}</div>
+    ${notes?`<div class="case-notes">${notes}</div>`:''}
+  </div>`;
+}
+
+//__CASES__
+
+/* TOC + mount */
+(function mount(){
+  const tocRoot = document.getElementById('case-toc');
+  const secRoot = document.getElementById('case-sections');
+  const groups = [
+    { key:'cat-forced_replan',    cat:'forced_replan',     stress:false },
+    { key:'cat-new_information',  cat:'new_information',   stress:false },
+    { key:'cat-straightforward',  cat:'straightforward',   stress:false },
+    { key:'cat-synthesis_required',cat:'synthesis_required',stress:false },
+    { key:'cat-browser_required', cat:'browser_required',  stress:false },
+    { key:'cat-stress',           cat:null,                stress:true  },
+  ];
+  let tocHtml = '', secsHtml = '';
+  for (const grp of groups) {
+    const cases = CASES.filter(c => grp.stress ? c.isStress : (!c.isStress && c.cat === grp.cat));
+    if (!cases.length) continue;
+    const metaKey = grp.stress ? 'stress' : grp.cat;
+    const cm = CAT_META[metaKey];
+    tocHtml += `<div class="toc-cat" style="color:${cm.color};">${grp.cat || 'stress tests'}</div><div class="toc-list">` +
+      cases.map(c=>`<a href="#case-${c.id}">${c.id}</a>`).join('') + `</div>`;
+    secsHtml += `<div class="cat-header" id="${grp.key}">
+      <span class="cat-kicker" style="color:${cm.color};background:${cm.bg};">${grp.stress?'stress tests':grp.cat}</span>
+      <h2>${grp.stress?'Stress tests — one per category':grp.cat.replace(/_/g,' ')}</h2>
+      <p>${cm.blurb}</p></div>` +
+      cases.map(renderCase).join('');
+  }
+  tocRoot.innerHTML = tocHtml;
+  secRoot.innerHTML = secsHtml;
+})();
+</script>
+</body>
+</html>
