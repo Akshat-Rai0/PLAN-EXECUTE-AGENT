@@ -183,6 +183,46 @@ def _parse_react_response(content: str) -> tuple[str, str, str]:
     return ("", "", "")
 
 
+def _response_text(content: object) -> str:
+    """Return a usable text representation of a LangChain message body.
+
+    Most providers return ``str`` content, but OpenAI-compatible providers can
+    return a list of content blocks.  Treating that list as though it were a
+    string makes the ReAct parser fail before it ever sees the model's action.
+    """
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts: list[str] = []
+        for block in content:
+            if isinstance(block, str):
+                parts.append(block)
+            elif isinstance(block, dict) and isinstance(block.get("text"), str):
+                parts.append(block["text"])
+        return "\n".join(parts)
+    return "" if content is None else str(content)
+
+
+def _request_format_repair(llm, system_message: SystemMessage, human_message: HumanMessage):
+    """Retry once when a model returned no recoverable action.
+
+    A malformed completion used to become an ``error`` turn and consume an
+    entire graph iteration.  Sending one explicit repair instruction keeps a
+    transient provider/model formatting failure from derailing an otherwise
+    valid run, while retaining the existing error turn if the retry also fails.
+    """
+    repair_message = HumanMessage(
+        content=(
+            "Your previous reply did not contain a recoverable action. "
+            "Reply again using only these three lines, with a real action name:\n"
+            "Thought: <brief reasoning>\n"
+            "Action: <tool name>\n"
+            "Action Input: <input or empty>"
+        )
+    )
+    return llm.invoke([system_message, human_message, repair_message])
+
+
 def react_step(state: ReactState) -> dict:
     goal = state["goal"]
     history = state.get("history", [])
@@ -205,8 +245,21 @@ def react_step(state: ReactState) -> dict:
         )
     )
 
-    response = get_llm().invoke([system_message, human_message])
-    thought, action, action_input = _parse_react_response(response.content)
+    llm = get_llm()
+    response = llm.invoke([system_message, human_message])
+    response_content = _response_text(response.content)
+    thought, action, action_input = _parse_react_response(response_content)
+
+    # A Thought is useful trace metadata, but it is not needed to safely run
+    # an already-recognized action.  Some providers legitimately emit an empty
+    # ``Thought:`` line, especially at temperature 0.  Only an absent action is
+    # a parse failure.  If no action can be recovered at all, ask once for a
+    # strictly formatted retry before recording an error turn.
+    if not action:
+        print("⚠️  ReAct response had no recoverable action; requesting one format-repair retry.")
+        response = _request_format_repair(llm, system_message, human_message)
+        response_content = _response_text(response.content)
+        thought, action, action_input = _parse_react_response(response_content)
 
     print(f"💭 Thought: {thought}")
     print(f"🎯 Action: {action}")
@@ -217,10 +270,10 @@ def react_step(state: ReactState) -> dict:
         return {"final_answer": action_input, "iterations": 1}
 
     # If parsing failed, create a failed turn
-    if not thought or not action:
+    if not action:
         print(f"❌ Parse Error: Could not extract Thought, Action, and Action Input from LLM response")
         turn = Turn(
-            thought=response.content[:200] if response.content else "No thought generated",
+            thought=response_content[:200] if response_content else "No thought generated",
             action="error",
             action_input="",
             observation="Parse error: Could not extract Thought, Action, and Action Input from LLM response"

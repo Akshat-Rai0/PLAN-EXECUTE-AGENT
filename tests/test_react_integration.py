@@ -1,7 +1,14 @@
 """Integration tests for React arm (ReAct baseline agent)."""
 
 import pytest
-from src.agents.react.nodes import react_step, _detect_repeat_loop, _truncate, _render_history, _strip_wrapping_quotes
+from src.agents.react.nodes import (
+    _detect_repeat_loop,
+    _parse_react_response,
+    _render_history,
+    _strip_wrapping_quotes,
+    _truncate,
+    react_step,
+)
 from src.agents.react.state import Turn, ReactState
 from unittest.mock import patch, MagicMock
 
@@ -147,6 +154,14 @@ def test_strip_wrapping_quotes_json():
     assert result == '{"key": "value"}'
 
 
+def test_parse_react_response_accepts_empty_thought_for_valid_action():
+    """An empty Thought field must not discard a valid, safe action."""
+    result = _parse_react_response(
+        "Thought:\nAction: set_workspace_path\nAction Input:"
+    )
+    assert result == ("", "set_workspace_path", "")
+
+
 def test_react_step_with_final_answer():
     """Test react_step with final_answer action."""
     state: ReactState = {
@@ -188,6 +203,28 @@ def test_react_step_with_parse_error():
         assert "history" in result
         assert len(result["history"]) == 1
         assert result["history"][0].action == "error"
+
+
+def test_react_step_repairs_one_malformed_completion():
+    """A malformed completion gets one formatting retry before failing."""
+    state: ReactState = {
+        "goal": "test goal",
+        "history": []
+    }
+    invalid_response = MagicMock(content="not a ReAct response")
+    repaired_response = MagicMock(
+        content="Thought: done\nAction: final_answer\nAction Input: repaired answer"
+    )
+
+    with patch('src.agents.react.nodes.get_llm') as mock_get_llm:
+        mock_llm = MagicMock()
+        mock_llm.invoke.side_effect = [invalid_response, repaired_response]
+        mock_get_llm.return_value = mock_llm
+
+        result = react_step(state)
+
+        assert result["final_answer"] == "repaired answer"
+        assert mock_llm.invoke.call_count == 2
 
 
 def test_react_step_with_web_search():
