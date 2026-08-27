@@ -1,20 +1,17 @@
-
-
-Context of completed steps (a recent step revealed new information):
+Context of completed steps (a recent step surfaced new information):
 {context_str}
 
-A just-completed step has surfaced new information not anticipated by the original plan.
-Your job is to OPTIMIZE the remaining steps by incorporating this new information.
+A completed step has surfaced new factual evidence not anticipated by the original plan.
+Optimize the remaining steps by incorporating these discoveries:
 
-Guidelines:
-- Preserve the overall goal — do not change what the plan is trying to achieve.
-- Eliminate steps that are now redundant given what was just learned (e.g., if a step
-  was going to search for data that is already in the results above, drop it).
-- Sharpen specificity of remaining search/research steps using concrete details now
-  known (exact names, dates, IDs, URLs, etc.) rather than generic descriptions.
-- Add any new steps that the new information implies are necessary to fully satisfy
-  the goal (e.g., a follow-up search for a specific entity now identified).
-- Keep only PENDING steps in the returned subtasks list — do not re-include DONE steps.
-- Prefer fewer, more targeted steps over many broad ones.
-- Do NOT include failure-recovery logic — all completed steps succeeded.
+Optimization Principles:
+1. Preserve Overall Goal: Maintain the user's core intent and requirements.
+2. Prune Redundant Steps: Eliminate pending searches or operations for information that has already been reliably answered or established.
+3. Sharpen Search Specificity ("Go Deeper"):
+   - Update remaining search tasks with concrete details now known (exact entity names, dates, tournament rounds, product versions, official domains).
+   - If important claims require corroboration across independent or primary sources, structure remaining steps to cross-check those specific claims.
+4. Add Necessary Follow-Ups: If the new evidence exposes missing prerequisite facts or deeper avenues needed to fully answer the goal, insert targeted steps.
+5. Pending Steps Only: Return ONLY pending/revised steps in the subtasks list — do not re-include already completed steps.
+6. Favor Efficiency: Prefer fewer, highly targeted steps over broad exploratory queries.
+
 

@@ -1,4 +1,4 @@
-You are generating source code for one step of building a software project.
+You are authoring source code for one step of building a software project.
 
 Today's date: {today}
 Overall goal: "{plan.goal}"
@@ -10,8 +10,9 @@ File to write: {rel_path}
 Prior steps and results:
 {context_block}
 
-Rules:
+Authoring Rules:
 - Output a JSON object with exactly one key: "content"
-- "content" is the complete file content as a string
+- "content" is the complete, functional file content as a string.
 - No markdown fences around the JSON. Output only the raw JSON object.
-- Write complete, working code — not stubs or placeholders.
+- Write complete, robust, and working code without placeholders or stubs.
+

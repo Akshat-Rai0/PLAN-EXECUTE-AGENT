@@ -1,5 +1,3 @@
-
-
 Context of completed/failed steps:
 {context_str}
 
@@ -8,7 +6,7 @@ Please revise/update the remaining steps of the plan based on the context above.
 CRITICAL — read each failure reason carefully before writing new steps:
 - If a step's error says a search "doesn't answer" or "doesn't specify" or "doesn't contain" the needed information, that means the search ran successfully but was too GENERIC or too BROAD. Do not repeat a similarly generic search — the new step's task description must be MORE SPECIFIC than the one that failed. Narrow it using any concrete details already surfaced in other steps' results (exact team/entity names, exact dates, tournament stage, match ID, etc.) rather than re-describing the same broad question in different words.
 - Example: if "search for the latest match results" failed because the results were a generic schedule/fixture list with no explicit winner, the next step should target the SPECIFIC match already identified (e.g. "search for the result of the France vs Spain semi-final on July 14, 2026"), not a rephrased generic query like "find recent match results".
-- If you cannot identify a more specific angle from the available context, say so explicitly in the step's task description (e.g. "no more specific match identified in prior results — broaden search to include result pages specifically, not schedule/fixture pages") rather than silently repeating the same query shape that already failed.
+- Go Deeper into Primary Sources: If you cannot identify a more specific angle from the available context, say so explicitly in the step's task description (e.g. "no more specific match identified in prior results — broaden search to include official result/announcement pages specifically, not generic fixture pages") rather than silently repeating the same query shape that already failed.
 
 CRITICAL — if a failed step used tool_hint "start_server" (e.g. error mentions
 "did not open port", "port never opened", or a dev-server startup failure):
@@ -34,9 +32,9 @@ CRITICAL — if a failed step used tool_hint "shell_command" and the error
 indicates the command was rejected, blocked, or not in the allowed command
 list:
 - Do NOT repeat the same command shape or the same shell wrapper on the next
-    attempt.
+  attempt.
 - Rewrite the step to use an allowed command directly, or choose a different
-    tool entirely (for file deletion and clearing, use delete_file instead of rm).
+  tool entirely (for file deletion and clearing, use delete_file instead of rm).
 - Treat this as a command-shape problem, not as evidence that retrying the
-    same shell step will suddenly succeed.
+  same shell step will suddenly succeed.
 

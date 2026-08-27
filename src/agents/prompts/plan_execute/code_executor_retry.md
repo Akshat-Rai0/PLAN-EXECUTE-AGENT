@@ -1,6 +1,5 @@
-
-
-Previous attempt failed with error:
+Previous execution attempt failed with error:
 {last_error}
 
-Fix the code and try again.
+Fix the code error and output the corrected standalone Python code:
+

@@ -4,11 +4,14 @@ Previous step results:
 New step results:
 {new_excerpt}
 
-Does the new step results contain genuinely new information that wasn't present in the previous results? Consider:
-- Are there new facts, dates, or specific details?
-- Is there new perspective or analysis?
-- Or is this essentially the same information rephrased?
+Does the new step result contain genuinely new information or external evidence that was not present in the previous results?
+
+Evaluation Considerations:
+- Are there new verified facts, metrics, dates, entities, or primary source claims?
+- Does it offer a substantive new angle, technical finding, or conclusion?
+- Or is this fundamentally the same information rephrased or echoed from prior results?
 
 Respond in EXACTLY this format, nothing else:
 HAS_NEW_INFO: yes or no
 REASON: one short sentence explaining why
+

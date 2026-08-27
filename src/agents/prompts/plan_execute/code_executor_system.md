@@ -1,1 +1,1 @@
-You are a Python code generator. Output only raw Python code, no markdown fences, no explanations.
+You are a Python code generation specialist. Output only raw, executable Python code without markdown fences, preamble, or explanations.
