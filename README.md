@@ -18,6 +18,7 @@ ReAct baseline via a controlled three-arm ablation.
 - **Phase 9** ✅ Web UI + Deployment (Chat interface + Debugger mode)
 
 ## Recent Enhancements
+- **Interactive Node & Flow Visualizer**: Standalone web application to simulate and explore all 19 LangGraph nodes, routing edges, HITL approval gates, and state reducers ([Interactive Visualizer](docs/interactive_flow_visualizer.html))
 - **Improved Replanning Logic**: Added `check_new_info_node` for novelty detection and optimized replanning efficiency
 - **Increased Replan Capacity**: Raised `MAX_REPLAN` from 4 to 8 for handling complex multi-step tasks
 - **Enhanced Chat Interface**: Real-time WebSocket streaming, improved interrupt handling, activity indicators
@@ -25,9 +26,103 @@ ReAct baseline via a controlled three-arm ablation.
 - **Cheap LLM Integration**: Added support for cost-effective LLM models with step result verification
 - **Simplified Startup**: Added `start.sh` script for launching both frontend and backend servers
 
-## Architecture
-- [Project spec](docs/plan-and-execute-agent.html) — problem definition, scope, stack, timeline, risks
-- [System wiring](docs/system-wiring.html) — step-by-step flows and wire diagrams for every subsystem
+## Architecture & Interactive Flow Diagram
+
+- ⚡ **[Interactive Flow Visualizer](docs/interactive_flow_visualizer.html)** — Full-featured interactive visualizer with scenario simulation, step-by-step state inspection, node registry directory, and state reducer lifecycle.
+- 📐 **[Project Spec](docs/plan-and-execute-agent.html)** — Problem definition, scope, stack, timeline, and risk analysis.
+- 🔌 **[System Wiring](docs/system-wiring.html)** — Step-by-step flows and wire diagrams for every subsystem.
+- 🛠️ **[Tool Definitions](docs/TOOL_DEFINITIONS.md)** — Comprehensive reference for all tool schemas and parameters.
+
+### Agent Flow & State Machine
+
+```mermaid
+flowchart TD
+    START([START]) --> plan[plan_node<br/><i>Decompose Goal & Date Anchor</i>]
+    plan --> executor[executor_node<br/><i>Select PENDING Subtask & Route</i>]
+
+    %% Routing Decisions
+    executor -->|_route_to_tool: LOW-RISK| low_risk_branch{Tool Type}
+    executor -->|_route_to_tool: HIGH-RISK| approval[approval_node<br/><i>🛡️ HITL Interrupt Gate</i>]
+    executor -->|_route_to_tool: ALL DONE| synthesize[synthesize_node<br/><i>Aggregate Final Answer</i>]
+
+    %% Low-Risk Tools
+    low_risk_branch -->|web_search| tavily[tavily_search_node<br/><i>Web Search & Recency</i>]
+    low_risk_branch -->|none| reason[reason_node<br/><i>Pure LLM Analysis</i>]
+    low_risk_branch -->|setup_workspace| workspace[setup_workspace_node<br/><i>Scaffold Directory</i>]
+
+    %% High-Risk Tools via Approval
+    approval -->|_route_after_approval: Approved| high_risk_branch{High-Risk Tool}
+    approval -->|Rejected| replaner[replaner<br/><i>Bounded Replan MAX=8</i>]
+
+    high_risk_branch -->|shell_command| shell[shell_node<br/><i>Sandboxed CLI</i>]
+    high_risk_branch -->|code_executor| code[code_executor_node<br/><i>Sandboxed Python</i>]
+    high_risk_branch -->|write_file| write[write_file_node<br/><i>Workspace Editor</i>]
+    high_risk_branch -->|delete_file| del[delete_file_node<br/><i>Safe Delete</i>]
+    high_risk_branch -->|start_server| srv[start_server_node<br/><i>Background Daemon</i>]
+    high_risk_branch -->|browser_use| browser[browser_use_node<br/><i>Vision Automation</i>]
+    high_risk_branch -->|synthesize_tool| synth_tool[synthesize_tool_node<br/><i>Dynamic Codegen</i>]
+
+    %% Post-Tool Evaluation
+    tavily --> check_info[check_new_info_node<br/><i>Novelty & Failure Evaluator</i>]
+    reason --> check_info
+    workspace --> check_info
+    shell --> check_info
+    code --> check_info
+    write --> check_info
+    del --> check_info
+    srv --> check_info
+    browser --> check_info
+    synth_tool --> check_info
+
+    %% Replanning & Resuming
+    check_info -->|_route_after_check: Failed or Novel Info| replaner
+    check_info -->|_route_after_check: Step Succeeded| executor
+    replaner --> executor
+
+    %% Human Clarification
+    ask_human[ask_human_node<br/><i>User Clarification</i>] --> extract_user[extract_user_info_node<br/><i>Persist Preferences</i>]
+    extract_user --> executor
+
+    %% Termination
+    synthesize --> END([END])
+
+    classDef core fill:#1e1b4b,stroke:#6366f1,stroke-width:2px,color:#e0e7ff;
+    classDef safe fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#ecfdf5;
+    classDef danger fill:#4c0519,stroke:#f43f5e,stroke-width:2px,color:#ffe4e6;
+    classDef replan fill:#78350f,stroke:#d97706,stroke-width:2px,color:#fffbeb;
+    classDef finish fill:#3b0764,stroke:#a855f7,stroke-width:2px,color:#faf5ff;
+
+    class START,plan,executor core;
+    class tavily,reason,workspace safe;
+    class approval,shell,code,write,del,srv,browser,synth_tool danger;
+    class check_info,replaner replan;
+    class synthesize,END finish;
+```
+
+### Graph Node Directory & Responsibilities
+
+| Node Name | Subsystem | Risk Level | Primary Responsibility |
+|:---|:---|:---|:---|
+| **`plan_node`** | Planning | LOW | Decomposes user goal into structured subtasks with `Step` schemas; anchors dates. |
+| **`executor_node`** | Control Flow | LOW | Selects the next `PENDING` subtask, marks it `RUNNING`, assembles cumulative state context, and routes to tool. |
+| **`approval_node`** | Safety / HITL | GATE | Interrupt gate for human confirmation before executing high-risk operations (shell, file modifications, code execution, browser automation). |
+| **`tavily_search_node`** | Fixed Tool | LOW | Real-time web search with domain allowlisting, relevance checks, and date filtering. |
+| **`reason_node`** | Fixed Tool | LOW | LLM-based pure reasoning & deduction when `tool_hint="none"`, using prior step results. |
+| **`setup_workspace_node`** | Coding Agent | LOW | Initializes an isolated sandboxed directory for project generation. |
+| **`code_executor_node`** | Coding Agent | HIGH | Sandboxed Python code runner with timeout (15s), memory cap (256MB), and network guards. |
+| **`shell_node`** | Coding Agent | HIGH | Sandboxed shell runner for CLI operations (npm, git). Explicitly blocks `rm`. |
+| **`write_file_node`** | Coding Agent | HIGH | Writes or updates code, markdown, and config files in the active workspace. |
+| **`delete_file_node`** | Coding Agent | HIGH | Safely deletes target files in the workspace (secure replacement for shell `rm`). |
+| **`start_server_node`** | Coding Agent | HIGH | Starts background development web servers and registers `server_url` in state. |
+| **`browser_use_node`** | Automation | HIGH | Vision-based browser automation (Chromium + OpenRouter Gemma-4-26B) for interactive web flows. |
+| **`synthesize_tool_node`** | Dynamic Tooling | HIGH | 2-step dynamic Python tool synthesizer (declare schema → generate code → sandbox validate → registry cache). |
+| **`check_new_info_node`** | Replanning | LOW | Evaluates step outcomes for failure recovery or novel information that warrants adaptive replanning. |
+| **`replaner`** | Replanning | LOW | Dynamically rewrites remaining subtasks while preserving completed work (bounded by `MAX_REPLAN=8`). |
+| **`ask_human_node`** | HITL | LOW | Interrupts execution to ask the user clarifying questions when key parameters are missing. |
+| **`extract_user_info_node`**| HITL | LOW | Extracts user answers and persists them in the user profile store. |
+| **`synthesize_node`** | Delivery | LOW | Consolidates all step observations and generates the comprehensive final answer. |
+
+---
 
 ## Usage
 
@@ -284,37 +379,42 @@ VALIDATE_SEARCH_RELEVANCE=false  # Disable for production speed (enable for qual
 ## Repo layout
 ```
 src/
+  api/                FastAPI backend, WebSocket streaming, and run runner
   tools/              fixed tool registry (search, code-exec, shell, file ops)
     registry.py       tool definitions and risk classification
     browser_use/      Browser Use runner (OpenRouter Gemma, vision-enabled)
-      config.py       Browser configuration and model settings
-      runner.py       Async browser task execution
-      free_openrouter.py  OpenRouter adapter for free models
   sandbox/            subprocess sandbox: timeouts, resource caps, network guards
     runner.py         sandbox execution with output validation
     shell_runner.py   shell command execution with allowlisting
     network_guard.py  network access controls
     server_manager.py dev server management
   agents/
-    react/            Arm 1 — plain ReAct loop
-    plan_execute/    Arm 2/3 — LangGraph planner/executor/replanner
-      graph.py       LangGraph wiring and routing
-      nodes.py       planner, executor, replanner, synthesis nodes
-      state.py       state schema and step status tracking
-      tools.py       tool integration and context building
-      llm.py         LLM provider abstraction
-      main.py        CLI entry point with interrupt handling
+    react/            Arm 1 — plain ReAct baseline loop
+    plan_execute/     Arm 2/3 — LangGraph planner/executor/replanner
+      graph.py        LangGraph wiring, conditional edge routing & state machine
+      state.py        State schema, StepStatus, and custom reducer functions
+      llm.py          LLM provider abstraction (OpenRouter, Groq, Claude, Ollama)
+      main.py         CLI execution entry point with interrupt handling
+      nodes/          Modular LangGraph nodes
+        planning.py   Goal decomposition, subtask planning & date anchoring
+        executor.py   Subtask selection, context assembly & tool routing
+        search.py     Tavily search, query preprocessor & pure reasoning nodes
+        code.py       Sandboxed Python code execution & workspace setup
+        tools_nodes.py Shell command, write_file, delete_file, start_server
+        browser.py    Vision-enabled browser automation runner
+        synthesis.py  Dynamic 2-step tool synthesis & final answer compilation
+        replan.py     check_new_info novelty detection & adaptive replaner
+        human.py      HITL approval gates & clarification question handlers
   synthesis/          dynamic tool generation, validation, registration
-    schema.py        SynthesisSchema and SynthesizedTool models
-    codegen.py       LLM-driven schema declaration and code generation
-    validator.py     sandbox validation for synthesized tools
-    registry.py      tool registry for reuse across steps
   plans/              saved plans for debugging and analysis
-  eval/               golden dataset, LLM-as-judge, ablation runner
-    golden_dataset.py  Test cases including browser use scenarios
-frontend/             FastAPI + React (built last)
-tests/
+  eval/               golden dataset (28 goals), LLM-as-judge, ablation runner
+frontend/             FastAPI static hosting + React UI (Chat + Debugger)
 docs/
+  interactive_flow_visualizer.html  ⚡ Standalone interactive HTML node & flow visualizer
+  plan-and-execute-agent.html       Architecture & project spec
+  system-wiring.html                System wiring and sequence diagrams
+  TOOL_DEFINITIONS.md               Complete tool reference
+tests/                136+ automated pytest test suite
 ```
 
 ## Testing

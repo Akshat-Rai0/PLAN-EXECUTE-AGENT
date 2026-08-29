@@ -1,0 +1,1219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Plan-and-Execute Agent — Interactive Node & Flow Visualizer</title>
+  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-mono: 'Fira Code', monospace;
+    }
+    body {
+      font-family: var(--font-sans);
+    }
+    code, pre, .font-mono {
+      font-family: var(--font-mono);
+    }
+    .grid-bg {
+      background-size: 32px 32px;
+      background-image: 
+        linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+    }
+    .light .grid-bg {
+      background-image: 
+        linear-gradient(to right, rgba(0, 0, 0, 0.05) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(0, 0, 0, 0.05) 1px, transparent 1px);
+    }
+    .glow-active {
+      filter: drop-shadow(0 0 12px rgba(99, 102, 241, 0.65));
+      animation: pulseGlow 2s infinite ease-in-out;
+    }
+    @keyframes pulseGlow {
+      0%, 100% { filter: drop-shadow(0 0 8px rgba(99, 102, 241, 0.6)); }
+      50% { filter: drop-shadow(0 0 18px rgba(129, 140, 248, 0.9)); }
+    }
+    .glow-highlight {
+      stroke-dasharray: 8;
+      animation: flowDash 1s linear infinite;
+    }
+    @keyframes flowDash {
+      to { stroke-dashoffset: -16; }
+    }
+    /* Custom scrollbar */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(156, 163, 175, 0.3); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(156, 163, 175, 0.5); }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen antialiased flex flex-col selection:bg-indigo-500 selection:text-white transition-colors duration-200">
+  <!-- Header -->
+  <header class="border-b border-slate-800/80 bg-slate-900/70 backdrop-blur-md sticky top-0 z-40 px-6 py-3.5 flex flex-wrap items-center justify-between gap-4">
+    <div class="flex items-center gap-3">
+      <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center shadow-lg shadow-indigo-500/20 text-white font-bold text-lg">
+        ⚡
+      </div>
+      <div>
+        <div class="flex items-center gap-2">
+          <h1 class="font-bold text-lg tracking-tight text-white">LangGraph Agent Architecture</h1>
+          <span class="px-2 py-0.5 text-xs font-semibold rounded-full bg-indigo-500/15 text-indigo-400 border border-indigo-500/30">v2.4 Interactive</span>
+        </div>
+        <p class="text-xs text-slate-400">Plan-and-Execute • Dynamic Tool Synthesis • HITL Approval Gates • Novelty Replanner</p>
+      </div>
+    </div>
+
+    <!-- Mode Selector & Quick Actions -->
+    <div class="flex items-center gap-2.5">
+      <div class="bg-slate-800/80 p-1 rounded-xl border border-slate-700 flex items-center gap-1 text-xs">
+        <button id="btn-view-graph" onclick="setViewMode('graph')" class="px-3 py-1.5 rounded-lg font-medium transition-all bg-indigo-600 text-white shadow">Visual Graph</button>
+        <button id="btn-view-matrix" onclick="setViewMode('matrix')" class="px-3 py-1.5 rounded-lg font-medium transition-all text-slate-400 hover:text-white">Node Directory</button>
+        <button id="btn-view-state" onclick="setViewMode('state')" class="px-3 py-1.5 rounded-lg font-medium transition-all text-slate-400 hover:text-white">State Reducers</button>
+      </div>
+
+      <div class="h-6 w-px bg-slate-800"></div>
+
+      <!-- Filter Dropdown -->
+      <select id="category-filter" onchange="filterCategory(this.value)" class="bg-slate-800/90 border border-slate-700 text-xs text-slate-200 rounded-lg px-3 py-2 outline-none focus:border-indigo-500">
+        <option value="all">🔍 All Nodes (19)</option>
+        <option value="orchestration">🟣 Core Control & Orchestration</option>
+        <option value="hitl">🛡️ HITL & Risk Approval</option>
+        <option value="low_risk">🟢 Low-Risk Tools</option>
+        <option value="high_risk">🔴 High-Risk Sandboxed Tools</option>
+        <option value="replanning">🔄 Novelty & Replanning</option>
+      </select>
+
+      <button onclick="resetZoomAndPan()" title="Reset Canvas View" class="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-xs flex items-center gap-1">
+        ⟲ Reset View
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="flex-1 flex flex-col lg:flex-row relative overflow-hidden">
+    
+    <!-- Left: Canvas / Visual Area -->
+    <div class="flex-1 relative flex flex-col bg-slate-950 grid-bg overflow-hidden min-h-[580px]" id="canvas-container">
+      
+      <!-- Scenario Simulator Bar -->
+      <div class="absolute top-4 left-4 right-4 z-20 flex flex-wrap items-center justify-between gap-3 bg-slate-900/90 backdrop-blur-md border border-slate-800/90 p-2.5 px-4 rounded-xl shadow-xl">
+        <div class="flex items-center gap-2">
+          <span class="text-xs font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+            <span class="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+            Simulate Flow:
+          </span>
+          <select id="scenario-select" onchange="loadScenario(this.value)" class="bg-slate-800 border border-slate-700 text-xs font-medium text-indigo-300 rounded-lg px-3 py-1.5 outline-none focus:ring-1 focus:ring-indigo-500">
+            <option value="happy_path">🌟 Standard Research & Final Synthesis Flow</option>
+            <option value="hitl_approval">🛡️ High-Risk Shell/Code Execution with HITL Approval</option>
+            <option value="failure_replan">🔄 Execution Failure & Adaptive Replanning Loop</option>
+            <option value="novelty_replan">💡 Novel Search Info Discovery & Plan Re-anchoring</option>
+            <option value="browser_automation">🌐 Browser Automation with Vision (Gemma/OpenRouter)</option>
+            <option value="tool_synthesis">⚡ Dynamic 2-Step Tool Synthesis & Registry Cache</option>
+          </select>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button id="btn-play-pause" onclick="togglePlayScenario()" class="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-xs flex items-center gap-1.5 shadow transition">
+            <span id="play-icon">▶</span> <span id="play-text">Step Forward</span>
+          </button>
+          <button onclick="restartScenario()" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs transition">
+            Restart
+          </button>
+          <div class="text-xs font-mono text-slate-400 pl-2">
+            Step: <span id="step-indicator" class="font-bold text-indigo-400">0/0</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Graph View (SVG Canvas) -->
+      <div id="graph-view" class="w-full h-full flex-1 relative overflow-auto cursor-grab active:cursor-grabbing p-6">
+        <svg id="flow-svg" class="w-[1240px] h-[920px] mx-auto select-none" viewBox="0 0 1240 920">
+          <defs>
+            <!-- Marker Arrows -->
+            <marker id="arrow-default" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M 0 1 L 10 5 L 0 9 z" fill="#64748b" />
+            </marker>
+            <marker id="arrow-active" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 1 L 10 5 L 0 9 z" fill="#818cf8" />
+            </marker>
+            <marker id="arrow-high-risk" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M 0 1 L 10 5 L 0 9 z" fill="#f43f5e" />
+            </marker>
+            <marker id="arrow-success" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M 0 1 L 10 5 L 0 9 z" fill="#10b981" />
+            </marker>
+            <marker id="arrow-replan" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M 0 1 L 10 5 L 0 9 z" fill="#f59e0b" />
+            </marker>
+            <!-- Node Glow Filters -->
+            <filter id="glow-indigo" x="-20%" y="-20%" width="140%" height="140%">
+              <feDropShadow dx="0" dy="0" stdDeviation="6" flood-color="#6366f1" flood-opacity="0.6"/>
+            </filter>
+            <filter id="glow-red" x="-20%" y="-20%" width="140%" height="140%">
+              <feDropShadow dx="0" dy="0" stdDeviation="6" flood-color="#f43f5e" flood-opacity="0.6"/>
+            </filter>
+          </defs>
+
+          <!-- Group for Background Regions -->
+          <g id="regions" opacity="0.8">
+            <!-- Planning Region -->
+            <rect x="40" y="40" width="310" height="240" rx="16" fill="#1e1b4b" fill-opacity="0.3" stroke="#4338ca" stroke-dasharray="4 4" stroke-opacity="0.4" />
+            <text x="56" y="65" fill="#818cf8" font-size="11" font-weight="700" letter-spacing="1">1. PLANNING & INITIALIZATION</text>
+
+            <!-- Execution & Routing Region -->
+            <rect x="390" y="40" width="340" height="340" rx="16" fill="#0f172a" fill-opacity="0.6" stroke="#334155" stroke-dasharray="4 4" stroke-opacity="0.4" />
+            <text x="406" y="65" fill="#94a3b8" font-size="11" font-weight="700" letter-spacing="1">2. EXECUTOR & ROUTING ENGINE</text>
+
+            <!-- Low-Risk Tools Region -->
+            <rect x="40" y="320" width="310" height="420" rx="16" fill="#064e3b" fill-opacity="0.15" stroke="#059669" stroke-dasharray="4 4" stroke-opacity="0.3" />
+            <text x="56" y="345" fill="#34d399" font-size="11" font-weight="700" letter-spacing="1">3A. LOW-RISK SAFE TOOLS</text>
+
+            <!-- High-Risk Tools Region -->
+            <rect x="850" y="40" width="350" height="700" rx="16" fill="#881337" fill-opacity="0.15" stroke="#e11d48" stroke-dasharray="4 4" stroke-opacity="0.3" />
+            <text x="866" y="65" fill="#fb7185" font-size="11" font-weight="700" letter-spacing="1">3B. HIGH-RISK TOOLS (APPROVAL-GATED)</text>
+
+            <!-- Replanning & Novelty Region -->
+            <rect x="390" y="420" width="420" height="460" rx="16" fill="#78350f" fill-opacity="0.15" stroke="#d97706" stroke-dasharray="4 4" stroke-opacity="0.3" />
+            <text x="406" y="445" fill="#fbbf24" font-size="11" font-weight="700" letter-spacing="1">4. NOVELTY DETECTION & REPLANNING</text>
+          </g>
+
+          <!-- EDGES (Connecting Paths) -->
+          <g id="edges" stroke-width="2" fill="none">
+            <!-- START -> plan -->
+            <path id="edge-START-plan" d="M 90 150 L 140 150" stroke="#64748b" marker-end="url(#arrow-default)"/>
+            <!-- plan -> executor -->
+            <path id="edge-plan-executor" d="M 280 150 L 430 150" stroke="#64748b" marker-end="url(#arrow-default)"/>
+
+            <!-- executor -> low risk tools -->
+            <!-- executor -> tavily_search -->
+            <path id="edge-executor-tavily_search" d="M 470 200 C 470 270, 240 330, 210 380" stroke="#10b981" marker-end="url(#arrow-default)"/>
+            <!-- executor -> reason -->
+            <path id="edge-executor-reason" d="M 450 200 C 420 300, 250 450, 210 480" stroke="#10b981" marker-end="url(#arrow-default)"/>
+            <!-- executor -> setup_workspace -->
+            <path id="edge-executor-setup_workspace" d="M 440 200 C 380 340, 250 560, 210 580" stroke="#10b981" marker-end="url(#arrow-default)"/>
+
+            <!-- executor -> approval (for high-risk tools) -->
+            <path id="edge-executor-approval" d="M 610 150 L 710 150" stroke="#f43f5e" stroke-dasharray="3 3" marker-end="url(#arrow-high-risk)"/>
+
+            <!-- approval -> high risk tools -->
+            <!-- approval -> code_executor -->
+            <path id="edge-approval-code_executor" d="M 820 130 C 860 130, 880 110, 910 110" stroke="#f43f5e" marker-end="url(#arrow-high-risk)"/>
+            <!-- approval -> shell -->
+            <path id="edge-approval-shell" d="M 820 150 L 910 190" stroke="#f43f5e" marker-end="url(#arrow-high-risk)"/>
+            <!-- approval -> write_file -->
+            <path id="edge-approval-write_file" d="M 820 160 L 910 270" stroke="#f43f5e" marker-end="url(#arrow-high-risk)"/>
+            <!-- approval -> delete_file -->
+            <path id="edge-approval-delete_file" d="M 800 180 C 830 250, 870 330, 910 350" stroke="#f43f5e" marker-end="url(#arrow-high-risk)"/>
+            <!-- approval -> start_server -->
+            <path id="edge-approval-start_server" d="M 780 190 C 800 300, 850 410, 910 430" stroke="#f43f5e" marker-end="url(#arrow-high-risk)"/>
+            <!-- approval -> browser_use -->
+            <path id="edge-approval-browser_use" d="M 770 200 C 790 340, 840 490, 910 510" stroke="#f43f5e" marker-end="url(#arrow-high-risk)"/>
+            <!-- approval -> synthesize_tool -->
+            <path id="edge-approval-synthesize_tool" d="M 760 200 C 780 390, 830 580, 910 600" stroke="#f43f5e" marker-end="url(#arrow-high-risk)"/>
+
+            <!-- Tool outputs -> check_new_info -->
+            <!-- tavily_search -> check_new_info -->
+            <path id="edge-tavily_search-check_new_info" d="M 230 420 C 270 460, 360 480, 420 500" stroke="#64748b" marker-end="url(#arrow-default)"/>
+            <!-- reason -> check_new_info -->
+            <path id="edge-reason-check_new_info" d="M 230 520 C 300 520, 360 520, 420 520" stroke="#64748b" marker-end="url(#arrow-default)"/>
+            <!-- code_executor -> check_new_info -->
+            <path id="edge-code_executor-check_new_info" d="M 910 130 C 760 260, 600 460, 520 490" stroke="#64748b" marker-end="url(#arrow-default)"/>
+            <!-- browser_use -> check_new_info -->
+            <path id="edge-browser_use-check_new_info" d="M 910 540 C 800 550, 650 540, 560 530" stroke="#64748b" marker-end="url(#arrow-default)"/>
+            <!-- shell -> check_new_info -->
+            <path id="edge-shell-check_new_info" d="M 910 210 C 780 300, 620 480, 540 500" stroke="#64748b" marker-end="url(#arrow-default)"/>
+            <!-- synthesize_tool -> check_new_info -->
+            <path id="edge-synthesize_tool-check_new_info" d="M 910 630 C 780 630, 660 570, 560 550" stroke="#64748b" marker-end="url(#arrow-default)"/>
+
+            <!-- check_new_info -> replaner (on failure OR new info) -->
+            <path id="edge-check_new_info-replaner" d="M 480 560 L 480 670" stroke="#f59e0b" stroke-dasharray="3 3" marker-end="url(#arrow-replan)"/>
+
+            <!-- check_new_info -> executor (routine next step) -->
+            <path id="edge-check_new_info-executor" d="M 450 490 C 430 400, 440 280, 470 200" stroke="#10b981" marker-end="url(#arrow-success)"/>
+
+            <!-- replaner -> executor (replan complete, resume with new subtasks) -->
+            <path id="edge-replaner-executor" d="M 420 710 C 370 650, 360 300, 440 180" stroke="#f59e0b" stroke-width="2.5" marker-end="url(#arrow-replan)"/>
+
+            <!-- executor -> synthesize (when all steps are DONE/FAILED) -->
+            <path id="edge-executor-synthesize" d="M 520 200 L 520 300" stroke="#a855f7" stroke-width="2.5" marker-end="url(#arrow-default)"/>
+
+            <!-- synthesize -> END -->
+            <path id="edge-synthesize-END" d="M 600 330 L 680 330" stroke="#a855f7" stroke-width="2.5" marker-end="url(#arrow-default)"/>
+
+            <!-- ask_human -> extract_user_info -> executor -->
+            <path id="edge-ask_human-extract_user_info" d="M 680 690 L 680 770" stroke="#ec4899" marker-end="url(#arrow-default)"/>
+            <path id="edge-extract_user_info-executor" d="M 630 800 C 580 800, 400 680, 450 200" stroke="#ec4899" stroke-dasharray="4 4" marker-end="url(#arrow-default)"/>
+          </g>
+
+          <!-- NODES -->
+          <g id="nodes">
+            
+            <!-- START -->
+            <g id="node-START" class="cursor-pointer" onclick="selectNode('START')">
+              <circle cx="70" cy="150" r="22" fill="#334155" stroke="#94a3b8" stroke-width="2" />
+              <text x="70" y="154" fill="#f8fafc" font-size="11" font-weight="700" text-anchor="middle">START</text>
+            </g>
+
+            <!-- plan_node -->
+            <g id="node-plan" class="cursor-pointer" onclick="selectNode('plan')">
+              <rect x="140" y="115" width="140" height="70" rx="12" fill="#1e1b4b" stroke="#6366f1" stroke-width="2" class="hover:stroke-indigo-400 transition" />
+              <text x="210" y="145" fill="#e0e7ff" font-size="13" font-weight="700" text-anchor="middle">plan_node</text>
+              <text x="210" y="165" fill="#a5b4fc" font-size="10" text-anchor="middle">Decompose & Anchor</text>
+            </g>
+
+            <!-- executor_node -->
+            <g id="node-executor" class="cursor-pointer" onclick="selectNode('executor')">
+              <rect x="430" y="115" width="180" height="85" rx="14" fill="#1e293b" stroke="#38bdf8" stroke-width="2.5" class="hover:stroke-sky-400 transition" />
+              <text x="520" y="148" fill="#f0f9ff" font-size="14" font-weight="700" text-anchor="middle">executor_node</text>
+              <text x="520" y="168" fill="#7dd3fc" font-size="11" text-anchor="middle">Pick RUNNING & Route</text>
+              <text x="520" y="185" fill="#94a3b8" font-size="9" text-anchor="middle">State Context Assembly</text>
+            </g>
+
+            <!-- approval_node (HITL Gate) -->
+            <g id="node-approval" class="cursor-pointer" onclick="selectNode('approval')">
+              <polygon points="770,110 830,150 770,190 710,150" fill="#4c0519" stroke="#f43f5e" stroke-width="2.5" class="hover:stroke-rose-400 transition" />
+              <text x="770" y="146" fill="#ffe4e6" font-size="11" font-weight="700" text-anchor="middle">approval</text>
+              <text x="770" y="160" fill="#fca5a5" font-size="8.5" text-anchor="middle">HITL Gate</text>
+            </g>
+
+            <!-- LOW RISK TOOLS -->
+            <!-- tavily_search -->
+            <g id="node-tavily_search" class="cursor-pointer" onclick="selectNode('tavily_search')">
+              <rect x="60" y="380" width="170" height="60" rx="10" fill="#064e3b" stroke="#10b981" stroke-width="2" />
+              <text x="145" y="406" fill="#ecfdf5" font-size="12" font-weight="700" text-anchor="middle">tavily_search_node</text>
+              <text x="145" y="424" fill="#6ee7b7" font-size="10" text-anchor="middle">Web Search & Relevance</text>
+            </g>
+
+            <!-- reason -->
+            <g id="node-reason" class="cursor-pointer" onclick="selectNode('reason')">
+              <rect x="60" y="480" width="170" height="60" rx="10" fill="#064e3b" stroke="#10b981" stroke-width="2" />
+              <text x="145" y="506" fill="#ecfdf5" font-size="12" font-weight="700" text-anchor="middle">reason_node</text>
+              <text x="145" y="524" fill="#6ee7b7" font-size="10" text-anchor="middle">Pure LLM Analysis</text>
+            </g>
+
+            <!-- setup_workspace -->
+            <g id="node-setup_workspace" class="cursor-pointer" onclick="selectNode('setup_workspace')">
+              <rect x="60" y="580" width="170" height="60" rx="10" fill="#064e3b" stroke="#10b981" stroke-width="2" />
+              <text x="145" y="606" fill="#ecfdf5" font-size="12" font-weight="700" text-anchor="middle">setup_workspace_node</text>
+              <text x="145" y="624" fill="#6ee7b7" font-size="10" text-anchor="middle">Sandbox Dir Scaffolding</text>
+            </g>
+
+            <!-- HIGH RISK TOOLS -->
+            <!-- code_executor -->
+            <g id="node-code_executor" class="cursor-pointer" onclick="selectNode('code_executor')">
+              <rect x="910" y="90" width="200" height="55" rx="10" fill="#3b0764" stroke="#c084fc" stroke-width="2" />
+              <text x="1010" y="115" fill="#fdf4ff" font-size="12" font-weight="700" text-anchor="middle">code_executor_node</text>
+              <text x="1010" y="132" fill="#d8b4fe" font-size="9.5" text-anchor="middle">Python Sandbox Runner</text>
+            </g>
+
+            <!-- shell -->
+            <g id="node-shell" class="cursor-pointer" onclick="selectNode('shell')">
+              <rect x="910" y="170" width="200" height="55" rx="10" fill="#881337" stroke="#fb7185" stroke-width="2" />
+              <text x="1010" y="195" fill="#fff1f2" font-size="12" font-weight="700" text-anchor="middle">shell_node</text>
+              <text x="1010" y="212" fill="#fda4af" font-size="9.5" text-anchor="middle">CLI Exec (Blocked rm)</text>
+            </g>
+
+            <!-- write_file -->
+            <g id="node-write_file" class="cursor-pointer" onclick="selectNode('write_file')">
+              <rect x="910" y="250" width="200" height="55" rx="10" fill="#881337" stroke="#fb7185" stroke-width="2" />
+              <text x="1010" y="275" fill="#fff1f2" font-size="12" font-weight="700" text-anchor="middle">write_file_node</text>
+              <text x="1010" y="292" fill="#fda4af" font-size="9.5" text-anchor="middle">Workspace Source Editor</text>
+            </g>
+
+            <!-- delete_file -->
+            <g id="node-delete_file" class="cursor-pointer" onclick="selectNode('delete_file')">
+              <rect x="910" y="330" width="200" height="55" rx="10" fill="#881337" stroke="#fb7185" stroke-width="2" />
+              <text x="1010" y="355" fill="#fff1f2" font-size="12" font-weight="700" text-anchor="middle">delete_file_node</text>
+              <text x="1010" y="372" fill="#fda4af" font-size="9.5" text-anchor="middle">Safe Sandboxed Delete</text>
+            </g>
+
+            <!-- start_server -->
+            <g id="node-start_server" class="cursor-pointer" onclick="selectNode('start_server')">
+              <rect x="910" y="410" width="200" height="55" rx="10" fill="#881337" stroke="#fb7185" stroke-width="2" />
+              <text x="1010" y="435" fill="#fff1f2" font-size="12" font-weight="700" text-anchor="middle">start_server_node</text>
+              <text x="1010" y="452" fill="#fda4af" font-size="9.5" text-anchor="middle">Background Dev Daemon</text>
+            </g>
+
+            <!-- browser_use -->
+            <g id="node-browser_use" class="cursor-pointer" onclick="selectNode('browser_use')">
+              <rect x="910" y="490" width="200" height="60" rx="10" fill="#1e1b4b" stroke="#818cf8" stroke-width="2" />
+              <text x="1010" y="515" fill="#e0e7ff" font-size="12" font-weight="700" text-anchor="middle">browser_use_node</text>
+              <text x="1010" y="534" fill="#a5b4fc" font-size="9.5" text-anchor="middle">Vision Automation (Gemma)</text>
+            </g>
+
+            <!-- synthesize_tool -->
+            <g id="node-synthesize_tool" class="cursor-pointer" onclick="selectNode('synthesize_tool')">
+              <rect x="910" y="580" width="200" height="60" rx="10" fill="#431407" stroke="#f97316" stroke-width="2" />
+              <text x="1010" y="605" fill="#fff7ed" font-size="12" font-weight="700" text-anchor="middle">synthesize_tool_node</text>
+              <text x="1010" y="624" fill="#fdba74" font-size="9.5" text-anchor="middle">Dynamic Codegen & Registry</text>
+            </g>
+
+            <!-- NOVELTY & REPLANNING -->
+            <!-- check_new_info -->
+            <g id="node-check_new_info" class="cursor-pointer" onclick="selectNode('check_new_info')">
+              <rect x="420" y="480" width="180" height="75" rx="12" fill="#451a03" stroke="#f59e0b" stroke-width="2.5" />
+              <text x="510" y="510" fill="#fef3c7" font-size="13" font-weight="700" text-anchor="middle">check_new_info</text>
+              <text x="510" y="530" fill="#fcd34d" font-size="10" text-anchor="middle">Novelty & Failure Evaluator</text>
+              <text x="510" y="546" fill="#fbbf24" font-size="9" text-anchor="middle">Sets replan_reason flag</text>
+            </g>
+
+            <!-- replaner -->
+            <g id="node-replaner" class="cursor-pointer" onclick="selectNode('replaner')">
+              <rect x="420" y="670" width="180" height="80" rx="12" fill="#78350f" stroke="#d97706" stroke-width="2.5" />
+              <text x="510" y="700" fill="#fffbeb" font-size="13" font-weight="700" text-anchor="middle">replaner</text>
+              <text x="510" y="720" fill="#fde68a" font-size="10" text-anchor="middle">Bounded Replan (MAX=8)</text>
+              <text x="510" y="736" fill="#f59e0b" font-size="9" text-anchor="middle">Preserves DONE, replans rest</text>
+            </g>
+
+            <!-- ask_human & extract_user_info -->
+            <g id="node-ask_human" class="cursor-pointer" onclick="selectNode('ask_human')">
+              <rect x="630" y="640" width="150" height="50" rx="10" fill="#500724" stroke="#f472b6" stroke-width="2" />
+              <text x="705" y="665" fill="#fdf2f8" font-size="11" font-weight="700" text-anchor="middle">ask_human_node</text>
+              <text x="705" y="680" fill="#fbcfe8" font-size="8.5" text-anchor="middle">Clarification Question</text>
+            </g>
+
+            <g id="node-extract_user_info" class="cursor-pointer" onclick="selectNode('extract_user_info')">
+              <rect x="630" y="750" width="150" height="50" rx="10" fill="#500724" stroke="#f472b6" stroke-width="2" />
+              <text x="705" y="775" fill="#fdf2f8" font-size="11" font-weight="700" text-anchor="middle">extract_user_info</text>
+              <text x="705" y="790" fill="#fbcfe8" font-size="8.5" text-anchor="middle">Update Persistent Store</text>
+            </g>
+
+            <!-- SYNTHESIS & END -->
+            <!-- synthesize -->
+            <g id="node-synthesize" class="cursor-pointer" onclick="selectNode('synthesize')">
+              <rect x="440" y="300" width="160" height="65" rx="12" fill="#3b0764" stroke="#a855f7" stroke-width="2.5" />
+              <text x="520" y="330" fill="#faf5ff" font-size="13" font-weight="700" text-anchor="middle">synthesize_node</text>
+              <text x="520" y="350" fill="#d8b4fe" font-size="10" text-anchor="middle">Final Answer Aggregation</text>
+            </g>
+
+            <!-- END -->
+            <g id="node-END" class="cursor-pointer" onclick="selectNode('END')">
+              <circle cx="710" cy="330" r="24" fill="#334155" stroke="#94a3b8" stroke-width="2" />
+              <text x="710" y="334" fill="#f8fafc" font-size="11" font-weight="700" text-anchor="middle">END</text>
+            </g>
+
+          </g>
+        </svg>
+      </div>
+
+      <!-- Matrix View (Alternative Directory Table) -->
+      <div id="matrix-view" class="w-full h-full flex-1 p-6 overflow-y-auto hidden">
+        <div class="max-w-6xl mx-auto space-y-4">
+          <div class="flex items-center justify-between pb-2 border-b border-slate-800">
+            <h2 class="text-lg font-bold text-white">Full Node Registry & Capabilities</h2>
+            <span class="text-xs text-slate-400">19 Registered LangGraph Graph Nodes</span>
+          </div>
+          <div class="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900/60">
+            <table class="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr class="bg-slate-800/80 text-slate-300 font-semibold border-b border-slate-700">
+                  <th class="p-3">Node Name</th>
+                  <th class="p-3">Category</th>
+                  <th class="p-3">Risk Level</th>
+                  <th class="p-3">Primary Responsibility</th>
+                  <th class="p-3">Source File</th>
+                </tr>
+              </thead>
+              <tbody id="matrix-table-body" class="divide-y divide-slate-800 text-slate-300">
+                <!-- Injected via JavaScript -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- State Reducers View -->
+      <div id="state-view" class="w-full h-full flex-1 p-6 overflow-y-auto hidden">
+        <div class="max-w-4xl mx-auto space-y-5">
+          <div class="pb-2 border-b border-slate-800">
+            <h2 class="text-lg font-bold text-white">LangGraph State Schema & Custom Reducers</h2>
+            <p class="text-xs text-slate-400 mt-1">State is annotated with custom reducer functions in <code>src/agents/plan_execute/state.py</code> to ensure correct accumulation across replanning cycles.</p>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4" id="reducers-container">
+            <!-- Injected via JavaScript -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Canvas Bottom Legend -->
+      <div class="bg-slate-900/80 border-t border-slate-800/80 px-6 py-2.5 flex flex-wrap items-center justify-between gap-4 text-xs">
+        <div class="flex flex-wrap items-center gap-4">
+          <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-indigo-600"></span> Orchestration / Planning</span>
+          <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-emerald-600"></span> Safe Read-Only / Low-Risk</span>
+          <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-rose-600"></span> High-Risk (Approval-Gated)</span>
+          <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-amber-600"></span> Novelty & Replanning</span>
+          <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-purple-600"></span> Synthesis & Delivery</span>
+        </div>
+        <div class="text-slate-400">
+          Click any node on the graph to inspect detailed routing & source code.
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Right: Inspector Sidebar -->
+    <div class="w-full lg:w-[420px] bg-slate-900 border-t lg:border-t-0 lg:border-l border-slate-800 flex flex-col h-[500px] lg:h-auto overflow-hidden z-30">
+      <!-- Inspector Header -->
+      <div class="p-4 border-b border-slate-800 bg-slate-900/90 flex items-center justify-between">
+        <div>
+          <span class="text-[10px] font-bold uppercase tracking-wider text-indigo-400" id="inspector-badge">NODE DETAILS</span>
+          <h2 class="text-base font-bold text-white flex items-center gap-2" id="inspector-title">
+            <span>Select a Node</span>
+          </h2>
+        </div>
+        <span id="inspector-risk" class="px-2 py-0.5 text-xs font-semibold rounded bg-slate-800 text-slate-400">INFO</span>
+      </div>
+
+      <!-- Inspector Content Body -->
+      <div class="flex-1 p-5 overflow-y-auto space-y-4 text-xs text-slate-300" id="inspector-body">
+        <div class="p-4 rounded-xl bg-slate-950/60 border border-slate-800 text-slate-400 space-y-2">
+          <p class="font-medium text-slate-200">Welcome to the Interactive Flow Visualizer!</p>
+          <p>Click on any node in the graph or select a scenario above to simulate the agent workflow step-by-step.</p>
+          <ul class="list-disc list-inside space-y-1 pt-2 text-[11px] text-slate-400">
+            <li>See routing conditions (LOW vs HIGH risk)</li>
+            <li>Explore novelty checking & replanning triggers</li>
+            <li>Inspect state reducers and LangGraph interrupts</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Simulator Step Log (When scenario active) -->
+      <div class="p-4 border-t border-slate-800 bg-slate-950/80">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Simulation Trace</span>
+          <span id="simulation-status-pill" class="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-400 font-mono">Idle</span>
+        </div>
+        <div id="simulation-log" class="text-xs font-mono bg-slate-900 p-2.5 rounded-lg border border-slate-800 text-slate-300 h-24 overflow-y-auto space-y-1">
+          <span class="text-slate-500">// Ready to simulate. Click "Step Forward" or choose a scenario.</span>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Interactive JavaScript Engine -->
+  <script>
+    // Node Database
+    const NODES_DB = {
+      START: {
+        name: "START",
+        category: "orchestration",
+        risk: "NONE",
+        role: "Graph Entrypoint",
+        summary: "LangGraph initial execution hook receiving the user prompt and goal.",
+        file: "src/agents/plan_execute/graph.py",
+        inputs: ["input (user goal string)"],
+        outputs: ["Initial State dictionary"],
+        routing: "Unconditionally routes to plan_node.",
+        codeSnippet: `graph.add_edge(START, "plan")`,
+        example: { input: "Research recent AI agents and write a summary." }
+      },
+      plan: {
+        name: "plan_node",
+        category: "orchestration",
+        risk: "LOW",
+        role: "Goal Decomposition & Date Anchoring",
+        summary: "Analyzes the user request, checks if recency anchoring is needed, and generates a structured list of subtasks (Step schema) with assigned tool hints.",
+        file: "src/agents/plan_execute/nodes/planning.py",
+        inputs: ["input", "workspace_path"],
+        outputs: ["plan (Plan object containing subtasks)", "steps_executed (+1)"],
+        routing: "Routes to executor_node to begin subtask processing.",
+        codeSnippet: `plan = breakdown_task(user_goal)\nreturn {"plan": plan, "steps_executed": 1}`,
+        example: {
+          subtasks: [
+            { id: 1, task: "Search AI agent benchmarks", tool_hint: "tavily_search", status: "PENDING" },
+            { id: 2, task: "Synthesize findings", tool_hint: "none", status: "PENDING" }
+          ]
+        }
+      },
+      executor: {
+        name: "executor_node",
+        category: "orchestration",
+        risk: "LOW",
+        role: "Step Selection & Context Assembly",
+        summary: "Identifies the next PENDING step, marks it RUNNING, aggregates prior step results, coding context, and routes via _route_to_tool based on tool_hint and risk classification.",
+        file: "src/agents/plan_execute/nodes/executor.py",
+        inputs: ["plan", "cumulative_context", "workspace_path"],
+        outputs: ["plan (with current step marked RUNNING)"],
+        routing: "Conditional routing: HIGH-risk tools -> approval_node; LOW-risk tools -> specific tool; All done -> synthesize_node.",
+        codeSnippet: `running_step = next(s for s in plan.subtasks if s.status == PENDING)\nrunning_step.status = StepStatus.RUNNING\nreturn {"plan": plan}`,
+        example: { active_step_id: 1, tool_hint: "tavily_search" }
+      },
+      approval: {
+        name: "approval_node",
+        category: "hitl",
+        risk: "HIGH GATE",
+        role: "Human-in-the-Loop Approval Gate",
+        summary: "Suspends graph execution via interrupt() if running a HIGH-risk action (shell, write_file, browser_use, start_server, synthesize_tool). Awaits human approval or rejection.",
+        file: "src/agents/plan_execute/nodes/human.py",
+        inputs: ["plan", "pending_approval"],
+        outputs: ["approval_events", "pending_approval"],
+        routing: "If approved: routes to target tool node via _route_after_approval. If rejected: marks step FAILED and triggers replanning.",
+        codeSnippet: `decision = interrupt({"type": "tool_approval", "step": running_step})\nif decision["approved"]:\n    return _route_after_approval(state)`,
+        example: { command: "npm install express", approved: true }
+      },
+      tavily_search: {
+        name: "tavily_search_node",
+        category: "low_risk",
+        risk: "LOW",
+        role: "Web Information Retrieval",
+        summary: "Executes real-time web search via Tavily API with relevance validation, snippet extraction, and recency parameter filtering.",
+        file: "src/agents/plan_execute/nodes/search.py",
+        inputs: ["running step task", "cumulative_context"],
+        outputs: ["step.result", "step.status = DONE", "steps_executed (+1)"],
+        routing: "Routes to check_new_info_node.",
+        codeSnippet: `results = tavily_search(query, search_depth='basic')\nrunning_step.result = results\nrunning_step.status = StepStatus.DONE`,
+        example: { query: "Latest Plan-and-Execute agent benchmarks 2026", result_count: 5 }
+      },
+      reason: {
+        name: "reason_node",
+        category: "low_risk",
+        risk: "LOW",
+        role: "Pure LLM Computation & Analysis",
+        summary: "Executes rich LLM reasoning without external side-effects when tool_hint is 'none'. Uses accumulated prior context to analyze or compile findings.",
+        file: "src/agents/plan_execute/nodes/search.py",
+        inputs: ["cumulative_context", "running step task"],
+        outputs: ["step.result", "step.status = DONE"],
+        routing: "Routes to check_new_info_node.",
+        codeSnippet: `response = get_llm().invoke(reasoning_prompt)\nrunning_step.result = response.content`,
+        example: { task: "Compare ReAct vs Plan-Execute token efficiency" }
+      },
+      setup_workspace: {
+        name: "setup_workspace_node",
+        category: "low_risk",
+        risk: "LOW",
+        role: "Workspace Directory Scaffolding",
+        summary: "Initializes a clean sandboxed workspace folder for code generation and server deployment.",
+        file: "src/agents/plan_execute/nodes/code.py",
+        inputs: ["input"],
+        outputs: ["workspace_path", "step.status = DONE"],
+        routing: "Routes to check_new_info_node.",
+        codeSnippet: `workspace = create_workspace(goal)\nreturn {"workspace_path": workspace, "plan": plan}`,
+        example: { workspace_path: "/tmp/agent_workspaces/run_20260829_101" }
+      },
+      code_executor: {
+        name: "code_executor_node",
+        category: "high_risk",
+        risk: "HIGH",
+        role: "Sandboxed Python Execution",
+        summary: "Executes Python code in a secure subprocess sandbox with timeout (15s), memory limit (256MB), and network guard controls.",
+        file: "src/agents/plan_execute/nodes/code.py",
+        inputs: ["generated python code", "workspace_path"],
+        outputs: ["step.result", "step.error (if any)", "step.status"],
+        routing: "Routes to check_new_info_node.",
+        codeSnippet: `res = run_in_sandbox(code, timeout=15, max_mem=256)\nrunning_step.result = res.stdout`,
+        example: { stdout: "Calculated benchmark score: 98.4%", exit_code: 0 }
+      },
+      shell: {
+        name: "shell_node",
+        category: "high_risk",
+        risk: "HIGH",
+        role: "Sandboxed Shell Command Runner",
+        summary: "Runs CLI commands (npm, git, build tools). Explicitly blocks destructive commands like 'rm' (redirects to delete_file).",
+        file: "src/agents/plan_execute/nodes/tools_nodes.py",
+        inputs: ["command string", "workspace_path"],
+        outputs: ["step.result", "step.status"],
+        routing: "Routes to check_new_info_node.",
+        codeSnippet: `if 'rm ' in cmd: raise SecurityError('rm is blocked')\noutput = run_shell(cmd, cwd=workspace)`,
+        example: { command: "git status", output: "On branch main, working tree clean" }
+      },
+      write_file: {
+        name: "write_file_node",
+        category: "high_risk",
+        risk: "HIGH",
+        role: "Workspace File Creator & Editor",
+        summary: "Safely writes source code, HTML, CSS, or configuration files into the sandboxed workspace directory.",
+        file: "src/agents/plan_execute/nodes/tools_nodes.py",
+        inputs: ["filepath", "file content", "workspace_path"],
+        outputs: ["step.result", "step.status = DONE"],
+        routing: "Routes to check_new_info_node.",
+        codeSnippet: `write_workspace_file(workspace_path, relative_path, content)`,
+        example: { path: "src/index.js", bytes_written: 1420 }
+      },
+      delete_file: {
+        name: "delete_file_node",
+        category: "high_risk",
+        risk: "HIGH",
+        role: "Sandboxed Safe File Deletion",
+        summary: "Safely deletes specific files within the workspace. Used instead of risky shell 'rm -rf' commands.",
+        file: "src/agents/plan_execute/nodes/tools_nodes.py",
+        inputs: ["filepath", "workspace_path"],
+        outputs: ["step.result", "step.status"],
+        routing: "Routes to check_new_info_node.",
+        codeSnippet: `safe_delete_workspace_file(workspace_path, path)`,
+        example: { target: "temp_cache.json", deleted: true }
+      },
+      start_server: {
+        name: "start_server_node",
+        category: "high_risk",
+        risk: "HIGH",
+        role: "Development Server Manager",
+        summary: "Spawns background development servers (Vite, Next.js, FastAPI, Python http.server) and records the live server URL in state.",
+        file: "src/agents/plan_execute/nodes/tools_nodes.py",
+        inputs: ["command", "port", "workspace_path"],
+        outputs: ["server_url", "step.status = DONE"],
+        routing: "Routes to check_new_info_node.",
+        codeSnippet: `server_url = spawn_dev_server(cmd, port=3000)\nreturn {"server_url": server_url}`,
+        example: { server_url: "http://localhost:3000", pid: 48921 }
+      },
+      browser_use: {
+        name: "browser_use_node",
+        category: "high_risk",
+        risk: "HIGH",
+        role: "Vision-Enabled Browser Automation",
+        summary: "Drives Chromium browser with DOM interaction, form filling, and screenshot vision analysis via OpenRouter (google/gemma-4-26b-a4b-it:free).",
+        file: "src/agents/plan_execute/nodes/browser.py",
+        inputs: ["browser task instructions", "url"],
+        outputs: ["step.result", "step.status = DONE"],
+        routing: "Routes to check_new_info_node.",
+        codeSnippet: `result = run_browser_task_sync(task, model='google/gemma-4-26b-a4b-it:free')`,
+        example: { url: "https://news.ycombinator.com", top_story: "AI Agent Scaffold v2" }
+      },
+      synthesize_tool: {
+        name: "synthesize_tool_node",
+        category: "high_risk",
+        risk: "HIGH",
+        role: "Dynamic 2-Step Tool Generation",
+        summary: "Synthesizes new callable Python tools on-the-fly: Step 1 declares schema, Step 2 generates code, validates in sandbox, and registers for step reuse.",
+        file: "src/agents/plan_execute/nodes/synthesis.py",
+        inputs: ["tool capability requirement", "sample input"],
+        outputs: ["synthesized tool in registry", "step.status = DONE"],
+        routing: "Routes to check_new_info_node.",
+        codeSnippet: `schema = declare_schema(spec)\ncode = generate_function_code(schema)\nvalidate_and_register(code)`,
+        example: { tool_name: "parse_custom_financial_xml", cached: true }
+      },
+      check_new_info: {
+        name: "check_new_info_node",
+        category: "replanning",
+        risk: "LOW",
+        role: "Novelty & Failure Evaluator",
+        summary: "Examines the completed step result. Evaluates whether the step FAILED or produced novel unexpected information that invalidates remaining steps.",
+        file: "src/agents/plan_execute/nodes/replan.py",
+        inputs: ["plan", "cumulative_context", "last_replan_context"],
+        outputs: ["last_step_new_info (bool)", "replan_reason ('failure' | 'success_new_info')"],
+        routing: "Routes via _route_after_check: if step FAILED or new info -> replaner; otherwise -> executor.",
+        codeSnippet: `if any_failed: return {'last_step_new_info': True, 'replan_reason': 'failure'}\nnovel = detect_novelty(result, prior_context)\nreturn {'last_step_new_info': novel}`,
+        example: { novelty_detected: true, replan_reason: "success_new_info" }
+      },
+      replaner: {
+        name: "replaner",
+        category: "replanning",
+        risk: "LOW",
+        role: "Adaptive Plan Re-generation",
+        summary: "Reconstructs the remaining subtask plan while preserving DONE steps. Limits context to 12k chars and enforces MAX_REPLAN=8 and identical replan loops detection.",
+        file: "src/agents/plan_execute/nodes/replan.py",
+        inputs: ["plan", "replan_count", "replan_reason", "consecutive_identical_replans"],
+        outputs: ["plan (updated subtasks)", "replan_count (+1)"],
+        routing: "Routes back to executor_node to execute revised subtasks.",
+        codeSnippet: `if replan_count >= MAX_REPLAN: return cancel_remaining(state)\nnew_plan = llm_replan(goal, done_steps, remaining, reason)\nreturn {"plan": new_plan, "replan_count": 1}`,
+        example: { replan_count: 2, subtasks_updated: 3 }
+      },
+      ask_human: {
+        name: "ask_human_node",
+        category: "hitl",
+        risk: "LOW",
+        role: "Interactive Question Dispatcher",
+        summary: "Halts execution to ask the user a clarifying question when critical parameters are missing.",
+        file: "src/agents/plan_execute/nodes/human.py",
+        inputs: ["question text"],
+        outputs: ["human_questions", "pending user response"],
+        routing: "Routes to extract_user_info_node.",
+        codeSnippet: `answer = interrupt({'type': 'user_question', 'question': q})`,
+        example: { question: "Which target framework do you prefer: React or Vue?" }
+      },
+      extract_user_info: {
+        name: "extract_user_info_node",
+        category: "hitl",
+        risk: "LOW",
+        role: "User Profile & Preference Storing",
+        summary: "Extracts and persists user preferences and answers to the persistent user info store.",
+        file: "src/agents/plan_execute/nodes/human.py",
+        inputs: ["user response text"],
+        outputs: ["user_info_store updated"],
+        routing: "Routes back to executor_node.",
+        codeSnippet: `store_user_preference(key, val)\nreturn state`,
+        example: { key: "framework_preference", value: "React" }
+      },
+      synthesize: {
+        name: "synthesize_node",
+        category: "orchestration",
+        risk: "LOW",
+        role: "Final Answer Aggregation",
+        summary: "Consolidates all completed step observations, reasons over findings, and writes the structured final answer to plan.final_answer.",
+        file: "src/agents/plan_execute/nodes/synthesis.py",
+        inputs: ["plan", "cumulative_context"],
+        outputs: ["plan.final_answer"],
+        routing: "Unconditionally routes to END.",
+        codeSnippet: `final_answer = compile_final_response(goal, all_step_results)\nplan.final_answer = final_answer\nreturn {"plan": plan}`,
+        example: { final_answer: "The benchmark evaluation demonstrates a 98.4% success rate across all 28 golden dataset tasks." }
+      },
+      END: {
+        name: "END",
+        category: "orchestration",
+        risk: "NONE",
+        role: "Graph Termination",
+        summary: "LangGraph completion endpoint. Results are persisted to SQLite and agent_outputs/ folder.",
+        file: "src/agents/plan_execute/graph.py",
+        inputs: ["final State"],
+        outputs: ["Persisted run output"],
+        routing: "Execution finished.",
+        codeSnippet: `graph.add_edge("synthesize", END)`,
+        example: { status: "COMPLETED", total_steps: 4 }
+      }
+    };
+
+    // State Reducers Schema
+    const STATE_REDUCERS = [
+      {
+        field: "plan",
+        type: "Optional[Plan]",
+        reducer: "replace_plan(existing, new)",
+        desc: "Replaces the active plan object with the newest Plan version."
+      },
+      {
+        field: "replan_count",
+        type: "int",
+        reducer: "sum_replan_count(existing, new)",
+        desc: "Accumulates total replans executed (capped at MAX_REPLAN = 8)."
+      },
+      {
+        field: "steps_executed",
+        type: "int",
+        reducer: "sum_steps_executed(existing, new)",
+        desc: "Tracks total executed steps across all turns (capped at MAX_TOTAL_STEPS)."
+      },
+      {
+        field: "consecutive_identical_replans",
+        type: "int",
+        reducer: "replace_consecutive_identical_replans(existing, new)",
+        desc: "Direct replacement reducer. Resets to 0 on novel info; increments on identical plans to break infinite loops."
+      },
+      {
+        field: "last_replan_context",
+        type: "Optional[list]",
+        reducer: "replace_last_replan_context(existing, new)",
+        desc: "Stores completed step results from the last replan execution for real outcome novelty comparison."
+      },
+      {
+        field: "cumulative_context",
+        type: "list",
+        reducer: "accumulate_context(existing, new)",
+        desc: "Appends new step results into the running cumulative context list."
+      },
+      {
+        field: "workspace_path",
+        type: "Optional[str]",
+        reducer: "replace_workspace_path(existing, new)",
+        desc: "Sets and preserves the active coding workspace root directory."
+      },
+      {
+        field: "server_url",
+        type: "Optional[str]",
+        reducer: "replace_server_url(existing, new)",
+        desc: "Preserves the URL of the running background dev server."
+      },
+      {
+        field: "pending_approval",
+        type: "Optional[dict]",
+        reducer: "replace_pending_approval(existing, new)",
+        desc: "Holds the pending HITL interrupt payload when approval is required."
+      },
+      {
+        field: "last_step_new_info",
+        type: "bool",
+        reducer: "replace_bool(existing, new)",
+        desc: "Flag set by check_new_info_node indicating novelty detection."
+      }
+    ];
+
+    // Simulation Scenarios
+    const SCENARIOS = {
+      happy_path: {
+        title: "Standard Research & Final Synthesis Flow",
+        steps: [
+          { node: "START", log: "[START] Received user goal: 'Research Plan-Execute agents'" },
+          { node: "plan", log: "[plan_node] Generated 2 subtasks: [1] Web search, [2] Reason & Synthesize", edge: "edge-START-plan" },
+          { node: "executor", log: "[executor_node] Picked Step 1 (tavily_search), marked RUNNING", edge: "edge-plan-executor" },
+          { node: "tavily_search", log: "[tavily_search_node] Retrieved 5 search results from Tavily API", edge: "edge-executor-tavily_search" },
+          { node: "check_new_info", log: "[check_new_info] Step 1 SUCCESS. No failure, normal continuation.", edge: "edge-tavily_search-check_new_info" },
+          { node: "executor", log: "[executor_node] Picked Step 2 (reason), marked RUNNING", edge: "edge-check_new_info-executor" },
+          { node: "reason", log: "[reason_node] LLM analyzed search findings and organized conclusions", edge: "edge-executor-reason" },
+          { node: "check_new_info", log: "[check_new_info] Step 2 DONE. No remaining PENDING steps.", edge: "edge-reason-check_new_info" },
+          { node: "executor", log: "[executor_node] All subtasks DONE. Routing to synthesize.", edge: "edge-check_new_info-executor" },
+          { node: "synthesize", log: "[synthesize_node] Compiled final answer into plan.final_answer", edge: "edge-executor-synthesize" },
+          { node: "END", log: "[END] Run persisted to SQLite and agent_outputs/ folder.", edge: "edge-synthesize-END" }
+        ]
+      },
+      hitl_approval: {
+        title: "High-Risk Shell/Code Execution with HITL Approval",
+        steps: [
+          { node: "START", log: "[START] Received coding goal: 'Create React app and install Tailwind'" },
+          { node: "plan", log: "[plan_node] Subtask plan: [1] setup_workspace, [2] shell (npm install), [3] write_file", edge: "edge-START-plan" },
+          { node: "executor", log: "[executor_node] Picked Step 1: setup_workspace", edge: "edge-plan-executor" },
+          { node: "setup_workspace", log: "[setup_workspace_node] Created /tmp/agent_workspaces/app_01", edge: "edge-executor-setup_workspace" },
+          { node: "check_new_info", log: "[check_new_info] Workspace ready.", edge: "edge-check_new_info-executor" },
+          { node: "executor", log: "[executor_node] Step 2 is tool_hint='shell_command' (HIGH-RISK). Routing to approval gate.", edge: "edge-check_new_info-executor" },
+          { node: "approval", log: "[approval_node] 🛡️ HITL Interrupt triggered! Waiting for human confirmation for 'npm install tailwindcss'...", edge: "edge-executor-approval" },
+          { node: "shell", log: "[shell_node] ✅ Human APPROVED. Executing 'npm install tailwindcss' in sandbox...", edge: "edge-approval-shell" },
+          { node: "check_new_info", log: "[check_new_info] Dependencies installed successfully.", edge: "edge-shell-check_new_info" },
+          { node: "executor", log: "[executor_node] Step 3: write_file (HIGH-RISK). Routed to approval.", edge: "edge-check_new_info-executor" },
+          { node: "approval", log: "[approval_node] 🛡️ HITL Gate: Human approved writing src/App.jsx", edge: "edge-executor-approval" },
+          { node: "write_file", log: "[write_file_node] Wrote 840 bytes to src/App.jsx", edge: "edge-approval-write_file" },
+          { node: "check_new_info", log: "[check_new_info] File written successfully.", edge: "edge-check_new_info-executor" },
+          { node: "synthesize", log: "[synthesize_node] Summarized application scaffold deliverables.", edge: "edge-executor-synthesize" },
+          { node: "END", log: "[END] Execution completed.", edge: "edge-synthesize-END" }
+        ]
+      },
+      failure_replan: {
+        title: "Execution Failure & Adaptive Replanning Loop",
+        steps: [
+          { node: "START", log: "[START] Goal: 'Fetch live flight rates from API'" },
+          { node: "plan", log: "[plan_node] Subtask 1: Tavily API query for flight endpoints", edge: "edge-START-plan" },
+          { node: "executor", log: "[executor_node] Dispatching Step 1", edge: "edge-plan-executor" },
+          { node: "tavily_search", log: "[tavily_search_node] API returned 404 / No results found (FAILED)", edge: "edge-executor-tavily_search" },
+          { node: "check_new_info", log: "[check_new_info] ⚠️ Step FAILED detected! Setting replan_reason='failure'", edge: "edge-tavily_search-check_new_info" },
+          { node: "replaner", log: "[replaner] 🔄 Replanning (count=1/8): Replacing failed query with fallback flight scrapers", edge: "edge-check_new_info-replaner" },
+          { node: "executor", log: "[executor_node] Executing fallback plan Step 1 (browser_use)", edge: "edge-replaner-executor" },
+          { node: "approval", log: "[approval_node] Approval requested for browser automation.", edge: "edge-executor-approval" },
+          { node: "browser_use", log: "[browser_use_node] Browser navigation succeeded. Extracted rates.", edge: "edge-approval-browser_use" },
+          { node: "check_new_info", log: "[check_new_info] Step succeeded.", edge: "edge-browser_use-check_new_info" },
+          { node: "synthesize", log: "[synthesize_node] Final flight rates aggregated.", edge: "edge-executor-synthesize" },
+          { node: "END", log: "[END] Run finished successfully after adaptive recovery.", edge: "edge-synthesize-END" }
+        ]
+      },
+      novelty_replan: {
+        title: "Novel Search Info Discovery & Plan Re-anchoring",
+        steps: [
+          { node: "START", log: "[START] Goal: 'Analyze company acquisition details'" },
+          { node: "plan", log: "[plan_node] Initial plan assumed acquisition happened in 2024", edge: "edge-START-plan" },
+          { node: "executor", log: "[executor_node] Executing search for 2024 acquisition", edge: "edge-plan-executor" },
+          { node: "tavily_search", log: "[tavily_search_node] Search revealed acquisition was delayed to 2026 for $4.2B", edge: "edge-executor-tavily_search" },
+          { node: "check_new_info", log: "[check_new_info] 💡 NOVELTY DETECTED! Results contradict plan assumptions. Setting last_step_new_info=True", edge: "edge-tavily_search-check_new_info" },
+          { node: "replaner", log: "[replaner] 🔄 Success-based replan: Re-anchoring future steps to investigate 2026 regulatory terms", edge: "edge-check_new_info-replaner" },
+          { node: "executor", log: "[executor_node] Running updated 2026 inquiry step", edge: "edge-replaner-executor" },
+          { node: "reason", log: "[reason_node] Analyzed updated regulatory filings", edge: "edge-executor-reason" },
+          { node: "check_new_info", log: "[check_new_info] Step DONE.", edge: "edge-reason-check_new_info" },
+          { node: "synthesize", log: "[synthesize_node] Final report synthesized with corrected 2026 timelines.", edge: "edge-executor-synthesize" },
+          { node: "END", log: "[END] Complete.", edge: "edge-synthesize-END" }
+        ]
+      },
+      browser_automation: {
+        title: "Browser Automation with Vision (Gemma/OpenRouter)",
+        steps: [
+          { node: "START", log: "[START] Goal: 'Navigate Hacker News and find top trending AI repository'" },
+          { node: "plan", log: "[plan_node] Plan generated with tool_hint='browser_use'", edge: "edge-START-plan" },
+          { node: "executor", log: "[executor_node] Step is browser_use (HIGH-RISK). Routing to approval gate.", edge: "edge-plan-executor" },
+          { node: "approval", log: "[approval_node] 🛡️ HITL Gate: Approval granted to open Chromium session.", edge: "edge-executor-approval" },
+          { node: "browser_use", log: "[browser_use_node] Running OpenRouter Gemma-4-26B vision agent. Navigated page, clicked links, extracted top post.", edge: "edge-approval-browser_use" },
+          { node: "check_new_info", log: "[check_new_info] Browser task finished cleanly.", edge: "edge-browser_use-check_new_info" },
+          { node: "synthesize", log: "[synthesize_node] Compiled final summary of trending repository.", edge: "edge-executor-synthesize" },
+          { node: "END", log: "[END] Workflow complete.", edge: "edge-synthesize-END" }
+        ]
+      },
+      tool_synthesis: {
+        title: "Dynamic 2-Step Tool Synthesis & Registry Cache",
+        steps: [
+          { node: "START", log: "[START] Goal: 'Compute custom polynomial hash on 50 data items'" },
+          { node: "plan", log: "[plan_node] Subtask requested custom capability 'poly_hash_tool'", edge: "edge-START-plan" },
+          { node: "executor", log: "[executor_node] tool_hint not in fixed registry -> Routed to synthesize_tool_node", edge: "edge-plan-executor" },
+          { node: "approval", log: "[approval_node] 🛡️ Approved dynamic runtime tool generation.", edge: "edge-executor-approval" },
+          { node: "synthesize_tool", log: "[synthesize_tool_node] Step 1: Declared schema. Step 2: Generated & validated Python code in sandbox. Cached in registry!", edge: "edge-approval-synthesize_tool" },
+          { node: "check_new_info", log: "[check_new_info] Tool synthesis confirmed.", edge: "edge-synthesize_tool-check_new_info" },
+          { node: "executor", log: "[executor_node] Executed cached tool across all 50 items", edge: "edge-check_new_info-executor" },
+          { node: "synthesize", log: "[synthesize_node] Final hash calculations returned.", edge: "edge-executor-synthesize" },
+          { node: "END", log: "[END] Synthesis complete.", edge: "edge-synthesize-END" }
+        ]
+      }
+    };
+
+    // State Variables
+    let currentScenarioKey = "happy_path";
+    let currentStepIndex = 0;
+    let isPlaying = false;
+    let playTimer = null;
+    let selectedNodeKey = null;
+
+    // Initialize
+    document.addEventListener("DOMContentLoaded", () => {
+      populateMatrixTable();
+      populateStateReducers();
+      loadScenario("happy_path");
+      selectNode("plan");
+    });
+
+    // View Switching
+    function setViewMode(mode) {
+      document.getElementById("graph-view").classList.toggle("hidden", mode !== "graph");
+      document.getElementById("matrix-view").classList.toggle("hidden", mode !== "matrix");
+      document.getElementById("state-view").classList.toggle("hidden", mode !== "state");
+
+      // Button styles
+      const btns = {
+        graph: document.getElementById("btn-view-graph"),
+        matrix: document.getElementById("btn-view-matrix"),
+        state: document.getElementById("btn-view-state")
+      };
+      for (const [k, btn] of Object.entries(btns)) {
+        if (k === mode) {
+          btn.className = "px-3 py-1.5 rounded-lg font-medium transition-all bg-indigo-600 text-white shadow";
+        } else {
+          btn.className = "px-3 py-1.5 rounded-lg font-medium transition-all text-slate-400 hover:text-white";
+        }
+      }
+    }
+
+    // Node Selection & Inspector
+    function selectNode(nodeKey) {
+      selectedNodeKey = nodeKey;
+      const data = NODES_DB[nodeKey];
+      if (!data) return;
+
+      // Update Node Highlight in SVG
+      document.querySelectorAll("#nodes > g").forEach(g => {
+        g.classList.remove("glow-active");
+      });
+      const targetG = document.getElementById(`node-${nodeKey}`);
+      if (targetG) {
+        targetG.classList.add("glow-active");
+      }
+
+      // Update Inspector Panel
+      const titleEl = document.getElementById("inspector-title");
+      const badgeEl = document.getElementById("inspector-badge");
+      const riskEl = document.getElementById("inspector-risk");
+      const bodyEl = document.getElementById("inspector-body");
+
+      badgeEl.innerText = data.category.toUpperCase().replace("_", " ");
+      titleEl.innerText = data.name;
+      riskEl.innerText = `RISK: ${data.risk}`;
+
+      let riskBadgeColor = "bg-emerald-950 text-emerald-400 border border-emerald-800";
+      if (data.risk.includes("HIGH")) riskBadgeColor = "bg-rose-950 text-rose-400 border border-rose-800";
+      else if (data.risk === "NONE") riskBadgeColor = "bg-slate-800 text-slate-400 border border-slate-700";
+      riskEl.className = `px-2 py-0.5 text-xs font-bold rounded ${riskBadgeColor}`;
+
+      bodyEl.innerHTML = `
+        <div class="space-y-3">
+          <div>
+            <span class="text-[10px] font-bold uppercase text-slate-400">Primary Role</span>
+            <p class="text-xs font-medium text-slate-200">${data.role}</p>
+          </div>
+          
+          <div>
+            <span class="text-[10px] font-bold uppercase text-slate-400">Summary</span>
+            <p class="text-xs text-slate-300 leading-relaxed">${data.summary}</p>
+          </div>
+
+          <div class="p-2.5 rounded-lg bg-slate-950 border border-slate-800 font-mono text-[11px]">
+            <span class="text-[10px] uppercase text-indigo-400 block mb-1">Source File</span>
+            <span class="text-slate-300 select-all">${data.file}</span>
+          </div>
+
+          <div class="grid grid-cols-2 gap-2">
+            <div class="p-2.5 rounded-lg bg-slate-950 border border-slate-800">
+              <span class="text-[10px] uppercase font-bold text-slate-400 block mb-1">Inputs</span>
+              <ul class="list-disc list-inside text-[11px] text-slate-300 space-y-0.5">
+                ${data.inputs.map(i => `<li>${i}</li>`).join("")}
+              </ul>
+            </div>
+            <div class="p-2.5 rounded-lg bg-slate-950 border border-slate-800">
+              <span class="text-[10px] uppercase font-bold text-slate-400 block mb-1">Outputs</span>
+              <ul class="list-disc list-inside text-[11px] text-slate-300 space-y-0.5">
+                ${data.outputs.map(o => `<li>${o}</li>`).join("")}
+              </ul>
+            </div>
+          </div>
+
+          <div>
+            <span class="text-[10px] font-bold uppercase text-slate-400">Routing & Transitions</span>
+            <p class="text-xs text-slate-300 bg-slate-950/70 p-2 rounded border border-slate-800/80 mt-1">${data.routing}</p>
+          </div>
+
+          <div>
+            <span class="text-[10px] font-bold uppercase text-slate-400">Example Code Execution</span>
+            <pre class="bg-slate-950 text-indigo-300 p-2.5 rounded-lg border border-slate-800 font-mono text-[10.5px] overflow-x-auto mt-1">${data.codeSnippet}</pre>
+          </div>
+        </div>
+      `;
+    }
+
+    // Category Filtering
+    function filterCategory(cat) {
+      document.querySelectorAll("#nodes > g").forEach(g => {
+        const id = g.id.replace("node-", "");
+        const node = NODES_DB[id];
+        if (!node) return;
+        if (cat === "all" || node.category === cat) {
+          g.style.opacity = "1";
+          g.style.pointerEvents = "auto";
+        } else {
+          g.style.opacity = "0.2";
+          g.style.pointerEvents = "none";
+        }
+      });
+    }
+
+    // Scenario Simulation Engine
+    function loadScenario(key) {
+      currentScenarioKey = key;
+      currentStepIndex = 0;
+      stopScenario();
+      clearEdgeHighlights();
+      updateSimulationUI();
+      const sc = SCENARIOS[key];
+      addLog(`Loaded scenario: "${sc.title}"`);
+    }
+
+    function togglePlayScenario() {
+      if (isPlaying) {
+        stopScenario();
+      } else {
+        stepScenario();
+      }
+    }
+
+    function stepScenario() {
+      const sc = SCENARIOS[currentScenarioKey];
+      if (!sc || currentStepIndex >= sc.steps.length) {
+        currentStepIndex = 0;
+      }
+      
+      const step = sc.steps[currentStepIndex];
+      selectNode(step.node);
+      addLog(step.log);
+
+      if (step.edge) {
+        highlightEdge(step.edge);
+      }
+
+      currentStepIndex++;
+      updateSimulationUI();
+
+      if (currentStepIndex >= sc.steps.length) {
+        addLog(`🎉 Scenario "${sc.title}" completed!`);
+        document.getElementById("simulation-status-pill").innerText = "Completed";
+        document.getElementById("simulation-status-pill").className = "text-[10px] px-2 py-0.5 rounded bg-emerald-900/60 text-emerald-400 font-mono border border-emerald-700";
+      }
+    }
+
+    function restartScenario() {
+      currentStepIndex = 0;
+      clearEdgeHighlights();
+      loadScenario(currentScenarioKey);
+    }
+
+    function stopScenario() {
+      isPlaying = false;
+      if (playTimer) clearInterval(playTimer);
+      document.getElementById("play-icon").innerText = "▶";
+      document.getElementById("play-text").innerText = "Step Forward";
+      document.getElementById("simulation-status-pill").innerText = "Paused";
+      document.getElementById("simulation-status-pill").className = "text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-400 font-mono";
+    }
+
+    function updateSimulationUI() {
+      const sc = SCENARIOS[currentScenarioKey];
+      document.getElementById("step-indicator").innerText = `${currentStepIndex}/${sc.steps.length}`;
+      if (currentStepIndex > 0 && currentStepIndex < sc.steps.length) {
+        document.getElementById("simulation-status-pill").innerText = "Simulating";
+        document.getElementById("simulation-status-pill").className = "text-[10px] px-2 py-0.5 rounded bg-indigo-900/60 text-indigo-300 font-mono border border-indigo-700 animate-pulse";
+      }
+    }
+
+    function addLog(msg) {
+      const logBox = document.getElementById("simulation-log");
+      const p = document.createElement("div");
+      p.className = "text-slate-300 py-0.5 border-b border-slate-800/40";
+      p.innerText = msg;
+      logBox.appendChild(p);
+      logBox.scrollTop = logBox.scrollHeight;
+    }
+
+    function highlightEdge(edgeId) {
+      clearEdgeHighlights();
+      const edge = document.getElementById(edgeId);
+      if (edge) {
+        edge.setAttribute("stroke", "#818cf8");
+        edge.setAttribute("stroke-width", "3.5");
+        edge.classList.add("glow-highlight");
+        edge.setAttribute("marker-end", "url(#arrow-active)");
+      }
+    }
+
+    function clearEdgeHighlights() {
+      document.querySelectorAll("#edges > path").forEach(p => {
+        p.classList.remove("glow-highlight");
+        const isHighRisk = p.id.includes("approval") || p.id.includes("shell") || p.id.includes("write_file") || p.id.includes("delete_file") || p.id.includes("browser_use");
+        const isReplan = p.id.includes("replan");
+        const isSuccess = p.id.includes("check_new_info-executor") || p.id.includes("tavily_search");
+        
+        if (isHighRisk && p.id.includes("approval")) {
+          p.setAttribute("stroke", "#f43f5e");
+          p.setAttribute("stroke-width", "2");
+          p.setAttribute("marker-end", "url(#arrow-high-risk)");
+        } else if (isReplan) {
+          p.setAttribute("stroke", "#f59e0b");
+          p.setAttribute("stroke-width", "2.5");
+          p.setAttribute("marker-end", "url(#arrow-replan)");
+        } else if (isSuccess) {
+          p.setAttribute("stroke", "#10b981");
+          p.setAttribute("stroke-width", "2");
+          p.setAttribute("marker-end", "url(#arrow-success)");
+        } else {
+          p.setAttribute("stroke", "#64748b");
+          p.setAttribute("stroke-width", "2");
+          p.setAttribute("marker-end", "url(#arrow-default)");
+        }
+      });
+    }
+
+    function resetZoomAndPan() {
+      const container = document.getElementById("graph-view");
+      container.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
+    }
+
+    // Populate Directory Table
+    function populateMatrixTable() {
+      const tbody = document.getElementById("matrix-table-body");
+      tbody.innerHTML = Object.entries(NODES_DB).map(([key, item]) => {
+        let badgeColor = "bg-slate-800 text-slate-300";
+        if (item.risk.includes("HIGH")) badgeColor = "bg-rose-950 text-rose-400 border border-rose-800/60";
+        else if (item.risk === "LOW") badgeColor = "bg-emerald-950 text-emerald-400 border border-emerald-800/60";
+
+        return `
+          <tr class="hover:bg-slate-800/40 cursor-pointer transition" onclick="setViewMode('graph'); selectNode('${key}');">
+            <td class="p-3 font-mono font-semibold text-indigo-300">${item.name}</td>
+            <td class="p-3 text-slate-400 uppercase tracking-wide text-[10px]">${item.category}</td>
+            <td class="p-3"><span class="px-2 py-0.5 rounded text-[10px] font-bold ${badgeColor}">${item.risk}</span></td>
+            <td class="p-3 text-slate-300">${item.role}</td>
+            <td class="p-3 font-mono text-[11px] text-slate-400">${item.file}</td>
+          </tr>
+        `;
+      }).join("");
+    }
+
+    // Populate State Reducers
+    function populateStateReducers() {
+      const container = document.getElementById("reducers-container");
+      container.innerHTML = STATE_REDUCERS.map(item => `
+        <div class="p-4 rounded-xl bg-slate-900/80 border border-slate-800 space-y-2 hover:border-slate-700 transition">
+          <div class="flex items-center justify-between">
+            <span class="font-mono font-bold text-indigo-400 text-sm">${item.field}</span>
+            <span class="font-mono text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-400">${item.type}</span>
+          </div>
+          <div class="font-mono text-xs text-amber-400/90 bg-slate-950 p-2 rounded border border-slate-800/80">
+            ${item.reducer}
+          </div>
+          <p class="text-xs text-slate-400">${item.desc}</p>
+        </div>
+      `).join("");
+    }
+  </script>
+</body>
+</html>
