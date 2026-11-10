@@ -156,4 +156,4 @@ Each example traces a real user goal through the full pipeline: **Planner → Ex
 | 9 | Contract compliance check | c | High-stakes accuracy, no action |
 | 10 | Multi-day price watch | e | Browser + loop/plan-size handling |
 
-These ten collectively cover all five golden-dataset categories (a–e) from the spec, plus the HITL and internal-tool-priority patterns that the original 20-goal dataset description didn't call out explicitly — worth folding a couple of these directly into the actual golden dataset rather than writing new ones from scratch.
+These ten collectively cover all five golden-dataset categories (a–e) from the spec, plus the HITL and internal-tool-priority patterns that the original 28-goal dataset description didn't call out explicitly — worth folding a couple of these directly into the actual golden dataset rather than writing new ones from scratch.

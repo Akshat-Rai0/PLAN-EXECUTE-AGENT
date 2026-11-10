@@ -4,7 +4,7 @@ Programmatic, non-interactive runners for each ablation arm.
 The CLI entrypoints (src/agents/plan_execute/main.py,
 src/agents/react/main.py) are built for a human at a terminal — they block
 on input() for HITL approval and print directly to stdout. For batch eval
-across ~20 goals x however-many-arms, we need a version that:
+across 28 goals x however-many-arms, we need a version that:
   - never blocks on human input (auto-approves every HITL interrupt)
   - returns a structured result instead of printing
   - captures wall-clock time and operational counters (step count, replan

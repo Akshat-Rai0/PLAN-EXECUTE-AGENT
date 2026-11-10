@@ -18,7 +18,7 @@ ReAct baseline via a controlled three-arm ablation.
 - **Phase 9** ✅ Web UI + Deployment (Chat interface + Debugger mode)
 
 ## Recent Enhancements
-- **Interactive Node & Flow Visualizer**: Standalone web application to simulate and explore all 19 LangGraph nodes, routing edges, HITL approval gates, and state reducers ([Interactive Visualizer](docs/interactive_flow_visualizer.html))
+- **Interactive Node & Flow Visualizer**: Standalone web application to simulate and explore the 19 functional LangGraph nodes plus 1 legacy stub, routing edges, HITL approval gates, and state reducers ([Interactive Visualizer](docs/interactive_flow_visualizer.html))
 - **Improved Replanning Logic**: Added `check_new_info_node` for novelty detection and optimized replanning efficiency
 - **Increased Replan Capacity**: Raised `MAX_REPLAN` from 4 to 8 for handling complex multi-step tasks
 - **Enhanced Chat Interface**: Real-time WebSocket streaming, improved interrupt handling, activity indicators
@@ -453,10 +453,15 @@ The golden dataset provides comprehensive test cases for evaluating agent perfor
 - **synthesis_required** (5 goals) - Tests dynamic tool synthesis capabilities
 - **browser_required** (8 goals) - Tests browser automation with vision capabilities
 
-**Recent Evaluation Results:**
-- Latest ablation study (20260806-072339) shows 100% success rate on plan_execute_full arm
-- Enhanced novelty detection with `check_new_info_node` for improved replanning accuracy
-- Increased replanning capacity (MAX_REPLAN = 8) for handling complex multi-step tasks
+**Evaluation Harness and Results:**
+- The three-arm harness runs all 28 goals through ReAct, Plan-and-Execute without
+  synthesis, and the full system, then records per-goal judge scores and
+  operational metrics. A complete 28-goal three-arm result is pending.
+- Partial reports are available in
+  [`eval_results/ablation_report_20260805-175910.md`](eval_results/ablation_report_20260805-175910.md)
+  and [`eval_results/ablation_report_20260806-060511.md`](eval_results/ablation_report_20260806-060511.md).
+- Enhanced novelty detection with `check_new_info_node` improves replanning accuracy.
+- Increased replanning capacity (MAX_REPLAN = 8) handles complex multi-step tasks.
 
 **Browser Test Goals:**
 - Google Travel flights search with form filling
@@ -508,6 +513,13 @@ agent_outputs/<timestamp>_<goal>/
 
 The execution workspace remains temporary and sandboxed. Dependency/cache
 directories such as `node_modules/` are not copied; generated deliverables are.
+
+### Sandbox boundary
+
+Code execution uses a subprocess sandbox, not container isolation. Each run has
+a timeout, an `RLIMIT_AS` memory cap, and a `sitecustomize.py` socket guard that
+restricts DNS resolution to the allowlist. The `RLIMIT_AS` enforcement test is
+skipped on macOS because that limit is not reliably supported there.
 
 ### Regression Bugs Covered
 Tests specifically target and validate fixes for production bugs:

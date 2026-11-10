@@ -792,7 +792,7 @@ sequenceDiagram
           <li class="done">Fix shell_command to handle JSON input from LLM</li>
           <li class="done">Update prompts to guide agent behavior (bash -c for commands with arguments, python3 vs python)</li>
           <li class="done">Increase MAX_REACT_ITERATIONS from 5 to 15 for longer tasks</li>
-          <li class="done">20-goal golden dataset across 5 categories (a–e, see spec §07)</li>
+          <li class="done">28-goal golden dataset across 5 categories (a–e, see spec §07)</li>
           <li class="done">Human-annotate expected step count, expected answer, required capability</li>
           <li class="done">LLM-as-judge for completeness/correctness</li>
           <li class="done">Log step_count, replan_count, synthesis_count, approval_events, browser_tool_usage per run</li>
@@ -802,13 +802,13 @@ sequenceDiagram
         <h4>Deliverables</h4>
         <ul class="checklist">
           <li class="done">Standalone ReAct baseline agent (Arm 1)</li>
-          <li class="done">20-goal golden dataset with annotations</li>
+          <li class="done">28-goal golden dataset with annotations</li>
           <li class="done">LLM-judge eval pipeline</li>
-          <li class="done">Three-arm ablation results (Arm 1 vs 2 vs 3)</li>
+          <li class="done">Three-arm ablation harness (Arm 1 vs 2 vs 3)</li>
         </ul>
       </div>
       <div class="phase-outcome">
-        <p><strong>You can:</strong> Run the same 20 goals through all three arms and get a quantified, defensible comparison — planning efficiency (Arm 1 vs 2) and synthesis/browser coverage gain (Arm 2 vs 3), isolated from each other.</p>
+        <p><strong>You can:</strong> Run the same 28 goals through all three arms and get a quantified, defensible comparison — planning efficiency (Arm 1 vs 2) and synthesis/browser coverage gain (Arm 2 vs 3), isolated from each other.</p>
       </div>
     </div>
     <div class="phase-body">
@@ -818,13 +818,11 @@ sequenceDiagram
           <div class="mockup-bar"><div class="mockup-dot r"></div><div class="mockup-dot y"></div><div class="mockup-dot g"></div><span class="mockup-title">terminal — phase 8</span></div>
           <div class="mockup-body">
             <div class="prompt">$</div> <div class="cmd">python -m plan_execute.eval --benchmark --arms react,plan_execute,full</div>
-            <div class="out">Running 20 goals × 3 arms...</div>
+            <div class="out">Running 28 goals × 3 arms...</div>
             <div class="hi">=== ABLATION RESULTS ===</div>
-            <div class="out">Arm 1 (ReAct):            14/20 complete · avg 11.4 LLM calls</div>
-            <div class="out">Arm 2 (Plan+Execute):      17/20 complete · avg 6.8 LLM calls</div>
-            <div class="out">Arm 3 (+Synthesis+Browser): 19/20 complete · avg 8.1 LLM calls</div>
-            <div class="out">Category (d) goals: 0/4 on Arm 2 → 4/4 on Arm 3</div>
-            <div class="out">Report: eval_results/ablation_study.json</div>
+            <div class="out">Full 28-goal three-arm results: pending</div>
+            <div class="out">Partial reports: eval_results/ablation_report_20260805-175910.md</div>
+            <div class="out">                 eval_results/ablation_report_20260806-060511.md</div>
             <div class="prompt">$</div> <div class="cmd">_</div>
           </div>
         </div>

@@ -1,5 +1,8 @@
 """
-The 20-goal golden dataset for the three-arm ablation study.
+The 28-goal golden dataset for the three-arm ablation study.
+
+The dataset contains 5 forced-replan, 5 new-information, 5 straightforward,
+5 synthesis-required, and 8 browser-required goals.
 
 Categories (from docs/plan-and-execute-agent.html, section 07):
   (a) forced_replan       — a step fails and forces the replanner to revise
@@ -12,7 +15,7 @@ Categories (from docs/plan-and-execute-agent.html, section 07):
 
 Each goal records:
   - goal: the exact prompt text to run through an agent
-  - category: one of the four above
+  - category: one of the five above
   - expected_step_count: a human-set estimate, used only as a rough sanity
     signal in reports (LLM planners are non-deterministic in step count;
     this is NOT a hard pass/fail gate)

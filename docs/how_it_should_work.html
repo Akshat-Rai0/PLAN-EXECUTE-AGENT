@@ -161,8 +161,8 @@
     <p>After <em>every</em> tool node, control funnels through <strong>check_new_info</strong>: if the step FAILED → <strong>replaner</strong> (failure recovery). If the step succeeded but surfaced novel information (LLM novelty check against everything learned so far) → <strong>replaner</strong> again, this time to <em>refine the remaining steps</em> with what was just learned — that is the whole point of the <code>new_information</code> category. Otherwise → back to the executor for the next step.</p>
     <p>When no PENDING step remains, the router sends the run to <strong>synthesize</strong>, which concatenates every step result/error and streams the final answer into <code>plan.final_answer</code> → <code>END</code>.</p>
     <div class="callout amber">
-      <p><strong>Reading the per-case diagrams.</strong> Each diagram shows <em>all 21 registered nodes</em>; only the nodes a given ideal run touches are lit. Numbered badges give activation order (a badge stack like <code>2·6·9</code> means the node fired three times). Solid blue arrows are the path actually taken; everything else stays faint. Amber-bordered nodes are HITL pause points.</p>
-      <p><strong>Honesty note:</strong> three nodes are registered in <code>build_graph()</code> but unreachable via routing — <code>stub</code> (kept for backward compat), <code>ask_human</code> and <code>extract_user_info</code> (wired outgoing-only; nothing routes into them). They appear greyed/dashed everywhere.</p>
+      <p><strong>Reading the per-case diagrams.</strong> Each diagram shows <em>all 20 registered nodes</em>: 19 functional nodes plus 1 legacy stub. Only the nodes a given ideal run touches are lit. Numbered badges give activation order (a badge stack like <code>2·6·9</code> means the node fired three times). Solid blue arrows are the path actually taken; everything else stays faint. Amber-bordered nodes are HITL pause points.</p>
+      <p><strong>Honesty note:</strong> the <code>stub</code> node is registered for backward compatibility but is no longer reachable through normal routing. <code>ask_human</code> and <code>extract_user_info</code> are functional nodes with outgoing edges, but no current route enters them; they appear greyed/dashed when not visited.</p>
     </div>
     <div class="legend">
       <span class="legend-item"><span class="legend-swatch" style="border-color:#1a1917;background:#1a1917;"></span> control (plan/executor)</span>
@@ -183,7 +183,7 @@
     <h2>Master graph — all nodes, all edges</h2>
     <p>This is <code>build_graph()</code> in <code>src/agents/plan_execute/graph.py</code> drawn in full. Conditional edges (the fans out of <code>executor</code>, <code>approval</code> and <code>check_new_info</code>) are router functions, not nodes — their decision logic is tabulated in the next section. Every tool node without exception re-enters the pipeline at <code>check_new_info</code>; there are no side exits except the two termination guards (step-cap / cancellation) which jump straight to <code>synthesize</code>.</p>
     <div class="diagram-box" id="master-graph"></div>
-    <div class="diagram-caption">build_graph() — 19 routed nodes + START/END. Grey dashed = registered but unreachable from routing.</div>
+    <div class="diagram-caption">build_graph() — 19 functional nodes + 1 legacy stub, plus START/END. Grey dashed = registered but unreachable from routing.</div>
   </div>
 
   <!-- ================= ROUTING ================= -->

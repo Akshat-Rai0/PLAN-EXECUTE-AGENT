@@ -432,7 +432,7 @@
     <div class="flow-step"><div class="flow-num red">3</div><div class="flow-body"><h4>Heuristic flagging</h4><p>Extracted text is scanned for injection red flags: imperative phrasing directed at an AI ("ignore previous instructions", "system:", "you must now..."), credential-looking strings, and urgency/authority language. A hit doesn't block the content from being read — it forces the <em>current step</em> through the HITL gate even if it wasn't originally flagged sensitive.</p></div></div>
     <div class="flow-step"><div class="flow-num red">4</div><div class="flow-body"><h4>Session isolation from planning context</h4><p>The browser tool's live session state (cookies, full page DOM, navigation history) never enters the planner's or replanner's context directly — only the structured, wrapped, extracted result of a single tool call does. This bounds the blast radius of a compromised page to one step's output, not the whole plan.</p></div></div>
     <div class="flow-step"><div class="flow-num red">5</div><div class="flow-body"><h4>Domain allowlisting is a separate defense, not a substitute</h4><p>Restricting outbound domains protects the sandbox's network egress. It does not protect against injection from a legitimate, allowlisted site whose content is attacker-controlled (a comment, forum post, or ad). Both defenses run independently — allowlisting doesn't make the content-wrapping step optional.</p></div></div>
-    <div class="flow-step"><div class="flow-num red">6</div><div class="flow-body"><h4>Adversarial eval coverage</h4><p>The 20-goal golden dataset includes at least 1–2 goals where a fetched page contains a deliberate injection attempt, scored on whether the agent ignores it and whether the flag correctly routes to HITL.</p></div></div>
+    <div class="flow-step"><div class="flow-num red">6</div><div class="flow-body"><h4>Adversarial eval coverage</h4><p>The 28-goal golden dataset includes at least 1–2 goals where a fetched page contains a deliberate injection attempt, scored on whether the agent ignores it and whether the flag correctly routes to HITL.</p></div></div>
   </div>
   <div class="callout red">
     <p><strong>Design principle:</strong> Trust boundaries follow data provenance, not domain reputation. A page from a trusted domain can still carry attacker-controlled content (user comments, ads, compromised third-party widgets) — so every fetched byte is untrusted by default, regardless of source, until it's been read and summarized by the LLM under the no-tool-call-from-content rule above.</p>
@@ -486,7 +486,7 @@
     <div class="component-card"><div class="tag">Run-level trace</div><h4>One LangSmith trace per goal_run</h4><p>Opened on <code>POST /goals</code>, tagged with <code>goal_run_id</code>, closed on <code>run.completed</code> with final metrics (step_count, replan_count, synthesis_count, arm) attached as trace metadata.</p></div>
     <div class="component-card"><div class="tag">Node spans</div><h4>Nested spans per graph node</h4><p>Planner, Executor, Replanner, Synthesizer, HITL Gate, and Eval each emit a span with their prompt, raw LLM response, and parsed/validated output — this is what makes a bad replan or a bad synthesis attempt inspectable after the fact, not just logged as a pass/fail.</p></div>
     <div class="component-card"><div class="tag">Tool-call spans</div><h4>Every tool invocation traced</h4><p>Search queries, sandbox executions, and browser actions all appear as child spans with latency and structured output — useful for spotting flaky tools (risk noted in the spec's risk analysis) directly in the trace rather than inferring it from step failures.</p></div>
-    <div class="component-card"><div class="tag">Eval dataset tooling</div><h4>Overlaps with the custom LLM-judge harness</h4><p>LangSmith's dataset/eval features can host the 20-goal golden dataset and run the three-arm comparison natively. Decision: use LangSmith for trace inspection and dataset storage; keep the custom LLM-as-judge scorer (Section 07 of the spec) rather than LangSmith's built-in evaluators, since the judge rubric (completeness/correctness against a human-annotated expected answer) is project-specific.</p></div>
+    <div class="component-card"><div class="tag">Eval dataset tooling</div><h4>Overlaps with the custom LLM-judge harness</h4><p>LangSmith's dataset/eval features can host the 28-goal golden dataset and run the three-arm comparison natively. Decision: use LangSmith for trace inspection and dataset storage; keep the custom LLM-as-judge scorer (Section 07 of the spec) rather than LangSmith's built-in evaluators, since the judge rubric (completeness/correctness against a human-annotated expected answer) is project-specific.</p></div>
   </div>
   <div class="callout">
     <p><strong>Why this matters for the resume story:</strong> a trace viewer showing exactly which LLM call caused a bad replan, or why a synthesized tool's output failed schema validation, is a much stronger interview artifact than a log line — it's the difference between "the agent sometimes fails" and "here's the exact prompt and response that caused this specific failure mode."</p>
@@ -579,11 +579,11 @@
 <div class="section" id="eval">
   <div class="section-label">12 · Evaluation</div>
   <h2>How the ablation study works</h2>
-  <p>Three-arm comparison on a 20-goal golden dataset. Isolates planning efficiency gain and synthesis coverage gain separately. Arm 1 (ReAct) is built explicitly, not assumed.</p>
+  <p>Three-arm comparison on a 28-goal golden dataset (5 forced-replan, 5 new-information, 5 straightforward, 5 synthesis-required, and 8 browser-required). Isolates planning efficiency gain and synthesis coverage gain separately. Arm 1 (ReAct) is built explicitly, not assumed.</p>
   <div class="diagram-box">
     <svg width="100%" viewBox="0 0 720 240" xmlns="http://www.w3.org/2000/svg">
       <defs><marker id="v1" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M2 1L8 5L2 9" fill="none" stroke="#8a8880" stroke-width="1.2"/></marker></defs>
-      <rect x="280" y="10" width="160" height="40" rx="8" fill="#f1ecfa" stroke="#5c3b8a"/><text x="360" y="35" text-anchor="middle" font-family="DM Sans" font-size="11">20-Goal Golden Dataset</text>
+      <rect x="280" y="10" width="160" height="40" rx="8" fill="#f1ecfa" stroke="#5c3b8a"/><text x="360" y="35" text-anchor="middle" font-family="DM Sans" font-size="11">28-Goal Golden Dataset</text>
       <rect x="30" y="80" width="200" height="60" rx="8" fill="#f9ece8" stroke="#c84b2f"/><text x="130" y="105" text-anchor="middle" font-family="DM Mono" font-size="9" fill="#c84b2f">Arm 1: ReAct</text><text x="130" y="125" text-anchor="middle" font-family="DM Sans" font-size="9">fixed tools only</text>
       <rect x="260" y="80" width="200" height="60" rx="8" fill="#e8f1f9" stroke="#2b5f8a"/><text x="360" y="105" text-anchor="middle" font-family="DM Mono" font-size="9" fill="#2b5f8a">Arm 2: Plan-and-Execute</text><text x="360" y="125" text-anchor="middle" font-family="DM Sans" font-size="9">+ replanning, no synthesis</text>
       <rect x="490" y="80" width="200" height="60" rx="8" fill="#e8f5ee" stroke="#2a6b45"/><text x="590" y="105" text-anchor="middle" font-family="DM Mono" font-size="9" fill="#2a6b45">Arm 3: Full System</text><text x="590" y="125" text-anchor="middle" font-family="DM Sans" font-size="9">+ synthesis + browser</text>
@@ -595,7 +595,7 @@
       <line x1="360" y1="140" x2="360" y2="168" stroke="#8a8880" marker-end="url(#v1)"/>
       <line x1="590" y1="140" x2="520" y2="168" stroke="#8a8880" marker-end="url(#v1)"/>
     </svg>
-    <div class="diagram-caption">Fig 11 — Three-arm ablation: same 20 goals, different orchestration, unified eval</div>
+    <div class="diagram-caption">Fig 11 — Three-arm ablation: same 28 goals, different orchestration, unified eval</div>
   </div>
   <h3>Golden dataset categories</h3>
   <div class="component-grid">
