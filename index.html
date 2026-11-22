@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Plan-and-Execute Agent — Think first, then act</title>
+<meta name="description" content="A Plan-and-Execute agent with dynamic tool synthesis, sandboxed execution, human-in-the-loop approval, and vision-based browser automation — benchmarked against a ReAct baseline.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,600&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #1a1917; --ink-2: #4a4843; --ink-3: #8a8880; --rule: #e2e0d8;
+    --surface: #f8f6f0; --surface-2: #f0ede4; --paper: #fbfaf6;
+    --accent: #2b5f8a; --accent-light: #e8f1f9;
+    --accent-2: #c84b2f; --accent-2-light: #f9ece8;
+    --green: #2a6b45; --green-light: #e8f5ee;
+    --amber: #9a5c0a; --amber-light: #fdf3e3;
+    --purple: #5c3b8a; --purple-light: #f1ecfa;
+    --mono: 'DM Mono', monospace; --serif: 'Fraunces', serif; --sans: 'DM Sans', sans-serif;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { background: var(--paper); color: var(--ink); font-family: var(--sans); font-size: 15px; line-height: 1.7; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  /* ---------- Hero ---------- */
+  .hero { background: var(--ink); color: #f8f6f0; padding: 88px 48px 72px; position: relative; overflow: hidden; }
+  .hero::before { content:''; position:absolute; top:-60px; right:-60px; width:380px; height:380px; border:1px solid rgba(248,246,240,0.06); border-radius:50%; }
+  .hero::after { content:''; position:absolute; bottom:-100px; right:120px; width:240px; height:240px; border:1px solid rgba(248,246,240,0.04); border-radius:50%; }
+  .hero-inner { max-width: 1080px; margin: 0 auto; position: relative; z-index: 1; }
+  .hero-tag { font-family: var(--mono); font-size:11px; letter-spacing:0.14em; text-transform:uppercase; color:#9fc3e0; background: rgba(43,95,138,0.25); border:1px solid rgba(43,95,138,0.45); padding:5px 14px; border-radius:2px; display:inline-block; margin-bottom:30px; }
+  .hero h1 { font-family: var(--serif); font-size: clamp(44px, 6vw, 76px); font-weight:300; line-height:1.04; letter-spacing:-0.02em; max-width:800px; margin-bottom:24px; }
+  .hero h1 em { font-style:italic; color:#c6dced; }
+  .hero-sub { font-size:17px; color: rgba(248,246,240,0.65); max-width:620px; line-height:1.65; margin-bottom:40px; font-weight:300; }
+  .hero-ctas { display:flex; flex-wrap:wrap; gap:14px; margin-bottom:44px; }
+  .btn { font-family: var(--mono); font-size:12px; letter-spacing:0.06em; text-transform:uppercase; padding:13px 26px; border-radius:4px; border:1px solid rgba(248,246,240,0.25); color:#f8f6f0; transition: all .18s ease; display:inline-block; }
+  .btn:hover { text-decoration:none; background: rgba(248,246,240,0.08); border-color: rgba(248,246,240,0.5); }
+  .btn.solid { background: #f8f6f0; color: var(--ink); border-color: #f8f6f0; font-weight:500; }
+  .btn.solid:hover { background: #fff; }
+  .hero-pills { display:flex; flex-wrap:wrap; gap:8px; }
+  .pill { font-family: var(--mono); font-size:11px; padding:5px 12px; border-radius:2px; border:1px solid rgba(248,246,240,0.15); color: rgba(248,246,240,0.65); }
+
+  /* ---------- Layout ---------- */
+  .container { max-width: 1080px; margin: 0 auto; padding: 0 48px; }
+  .section { margin-top: 96px; }
+  .section-label { font-family: var(--mono); font-size:11px; letter-spacing:0.14em; text-transform:uppercase; color: var(--ink-3); display:flex; align-items:center; gap:14px; margin-bottom:14px; }
+  .section-label::after { content:''; flex:1; height:1px; background: var(--rule); }
+  h2 { font-family: var(--serif); font-size: clamp(30px, 3.6vw, 42px); font-weight:300; letter-spacing:-0.02em; line-height:1.12; margin-bottom:18px; color: var(--ink); }
+  h2 em { font-style:italic; color: var(--accent); }
+  .lede { font-size:17px; color: var(--ink-2); max-width:680px; line-height:1.7; }
+  .lede strong { color: var(--ink); font-weight:500; }
+
+  /* ---------- Stats ---------- */
+  .stats { display:grid; grid-template-columns:repeat(4,1fr); gap:1px; background: var(--rule); border:1px solid var(--rule); border-radius:10px; overflow:hidden; margin-top:36px; }
+  .stat { background: var(--surface); padding:26px 24px; }
+  .stat .num { font-family: var(--serif); font-size:42px; font-weight:300; color: var(--accent); line-height:1; margin-bottom:6px; }
+  .stat .num em { font-style:italic; color: var(--accent-2); }
+  .stat .name { font-family: var(--mono); font-size:10px; letter-spacing:0.1em; text-transform:uppercase; color: var(--ink-3); }
+
+  /* ---------- Loop / how it works ---------- */
+  .loop { display:flex; flex-direction:column; margin-top:40px; position:relative; }
+  .loop::before { content:''; position:absolute; left:27px; top:36px; bottom:36px; width:1px; background: var(--rule); }
+  .loop-step { display:flex; gap:26px; align-items:flex-start; padding:20px 0; }
+  .loop-num { width:54px; height:54px; border-radius:50%; background: var(--ink); color: var(--surface); font-family: var(--mono); font-size:14px; font-weight:500; display:flex; align-items:center; justify-content:center; flex-shrink:0; position:relative; z-index:1; }
+  .loop-num.blue { background: var(--accent); }
+  .loop-num.green { background: var(--green); }
+  .loop-num.amber { background: var(--amber); }
+  .loop-num.purple { background: var(--purple); }
+  .loop-content { padding-top:8px; }
+  .loop-content h3 { font-family: var(--sans); font-size:16px; font-weight:600; color: var(--ink); margin-bottom:4px; letter-spacing:0; text-transform:none; }
+  .loop-content p { font-size:14px; color: var(--ink-2); margin:0; max-width:640px; }
+  .loop-content code { font-family: var(--mono); font-size:12px; background: var(--surface-2); padding:2px 6px; border-radius:3px; color: var(--accent); }
+
+  /* ---------- Cards ---------- */
+  .card-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-top:36px; }
+  .card { background: var(--surface); border:1px solid var(--rule); border-radius:10px; padding:24px; transition: transform .18s ease, box-shadow .18s ease; }
+  .card:hover { transform: translateY(-3px); box-shadow: 0 12px 32px rgba(26,25,23,0.08); }
+  .card .icon { font-family: var(--mono); font-size:11px; letter-spacing:0.1em; text-transform:uppercase; color: var(--accent); margin-bottom:12px; display:block; }
+  .card h3 { font-family: var(--serif); font-size:20px; font-weight:400; color: var(--ink); margin-bottom:8px; }
+  .card p { font-size:13.5px; color: var(--ink-2); margin:0; line-height:1.6; }
+  .tag-row { display:flex; flex-wrap:wrap; gap:6px; margin-top:14px; }
+  .tag { font-family: var(--mono); font-size:10px; padding:3px 9px; border-radius:2px; background: var(--accent-light); color: var(--accent); border:1px solid #c9dcef; }
+  .tag.green { background: var(--green-light); color: var(--green); border-color:#c4e0d0; }
+  .tag.amber { background: var(--amber-light); color: var(--amber); border-color:#ecd9b8; }
+  .tag.purple { background: var(--purple-light); color: var(--purple); border-color:#d9cdee; }
+
+  /* ---------- Arms ---------- */
+  .arms { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-top:36px; }
+  .arm { border:1px solid var(--rule); border-radius:10px; padding:26px; background:var(--surface); position:relative; }
+  .arm.featured { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+  .arm .arm-label { font-family: var(--mono); font-size:10px; letter-spacing:0.12em; text-transform:uppercase; color: var(--ink-3); margin-bottom:8px; }
+  .arm h3 { font-family: var(--serif); font-size:22px; font-weight:400; margin-bottom:8px; }
+  .arm p { font-size:13.5px; color: var(--ink-2); margin:0 0 14px; }
+  .arm .badge { position:absolute; top:20px; right:20px; font-family: var(--mono); font-size:9px; letter-spacing:0.1em; text-transform:uppercase; padding:4px 9px; border-radius:2px; background: var(--accent); color:#fff; }
+  .arm ul { list-style:none; margin:0; padding:0; }
+  .arm li { font-size:12.5px; color: var(--ink-2); padding:5px 0 5px 18px; position:relative; border-bottom:1px dashed var(--rule); }
+  .arm li:last-child { border-bottom:none; }
+  .arm li::before { content:'—'; position:absolute; left:0; color: var(--ink-3); }
+
+  /* ---------- GIF showcase ---------- */
+  .showcase { margin-top:36px; border:1px solid var(--rule); border-radius:12px; overflow:hidden; background: var(--ink); }
+  .showcase img { display:block; width:100%; height:auto; }
+  .showcase .cap { padding:16px 22px; display:flex; justify-content:space-between; align-items:center; gap:16px; flex-wrap:wrap; }
+  .showcase .cap p { font-family: var(--mono); font-size:11px; color: rgba(248,246,240,0.55); margin:0; }
+  .showcase .cap a { color:#9fc3e0; font-family: var(--mono); font-size:11px; }
+
+  /* ---------- Table ---------- */
+  .spec-table { width:100%; border-collapse:collapse; margin-top:32px; background: var(--surface); border:1px solid var(--rule); border-radius:10px; overflow:hidden; font-size:14px; }
+  .spec-table th { text-align:left; font-family: var(--mono); font-size:10px; letter-spacing:0.1em; text-transform:uppercase; color: var(--ink-3); padding:14px 18px; border-bottom:1px solid var(--rule); background: var(--surface-2); }
+  .spec-table td { padding:14px 18px; border-bottom:1px solid var(--rule); vertical-align:top; color: var(--ink-2); }
+  .spec-table tr:last-child td { border-bottom:none; }
+  .spec-table td:first-child { font-family: var(--mono); font-size:12px; color: var(--accent); font-weight:500; white-space:nowrap; }
+  .spec-table td:nth-child(2) { font-weight:500; color: var(--ink); }
+  .risk { font-family: var(--mono); font-size:10px; text-transform:uppercase; letter-spacing:0.08em; padding:3px 9px; border-radius:2px; display:inline-block; }
+  .risk.low { background: var(--green-light); color: var(--green); }
+  .risk.high { background: #fde8e8; color:#9a2323; }
+  .risk.gate { background: var(--amber-light); color: var(--amber); }
+
+  /* ---------- CTA band ---------- */
+  .cta-band { margin-top:96px; background: var(--ink); color:#f8f6f0; border-radius:14px; padding:56px 48px; text-align:center; position:relative; overflow:hidden; }
+  .cta-band::before { content:''; position:absolute; top:-50px; left:-50px; width:240px; height:240px; border:1px solid rgba(248,246,240,0.06); border-radius:50%; }
+  .cta-band h2 { color:#f8f6f0; }
+  .cta-band h2 em { color:#c6dced; }
+  .cta-band p { color: rgba(248,246,240,0.6); max-width:520px; margin:0 auto 32px; }
+  .cta-band .hero-ctas { justify-content:center; margin-bottom:0; }
+  .cta-band .btn { border-color: rgba(248,246,240,0.3); }
+
+  /* ---------- Footer ---------- */
+  footer { border-top:1px solid var(--rule); padding:44px 48px; margin-top:80px; }
+  .footer-inner { max-width:1080px; margin:0 auto; display:flex; justify-content:space-between; align-items:center; gap:20px; flex-wrap:wrap; }
+  footer p { font-family: var(--mono); font-size:11px; color: var(--ink-3); margin:0; }
+  footer .links { display:flex; gap:20px; flex-wrap:wrap; }
+  footer .links a { font-family: var(--mono); font-size:11px; color: var(--ink-2); }
+
+  @media (max-width: 860px) {
+    .hero { padding: 56px 24px 48px; }
+    .container { padding: 0 24px; }
+    .stats, .card-grid, .arms { grid-template-columns: 1fr 1fr; }
+    .spec-table { font-size:13px; }
+    .spec-table td:first-child { white-space:normal; }
+    .cta-band { padding: 44px 24px; }
+  }
+  @media (max-width: 560px) {
+    .stats, .card-grid, .arms { grid-template-columns: 1fr; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    .card:hover { transform: none; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ===================== HERO ===================== -->
+<header class="hero">
+  <div class="hero-inner">
+    <span class="hero-tag">Open Source · LangGraph · FastAPI · React</span>
+    <h1>An agent that <em>thinks first,</em><br>then acts.</h1>
+    <p class="hero-sub">A Plan-and-Execute agent that decomposes a goal into ordered steps, executes each with the right tool, and adaptively replans when reality disagrees with the plan — complete with sandboxed code execution, human-in-the-loop approval gates, and vision-based browser automation.</p>
+    <div class="hero-ctas">
+      <a class="btn solid" href="#how">See how it works</a>
+      <a class="btn" href="docs/interactive_flow_visualizer.html">Interactive visualizer</a>
+      <a class="btn" href="docs/plan-and-execute-agent.html">Project spec</a>
+    </div>
+    <div class="hero-pills">
+      <span class="pill">Dynamic Tool Synthesis</span>
+      <span class="pill">HITL Approval Gates</span>
+      <span class="pill">Sandboxed Execution</span>
+      <span class="pill">Browser Automation</span>
+      <span class="pill">Adaptive Replanning</span>
+      <span class="pill">3-Arm Ablation</span>
+      <span class="pill">136 Tests</span>
+    </div>
+  </div>
+</header>
+
+<main class="container">
+
+  <!-- ===================== STATS ===================== -->
+  <section class="section" style="margin-top:72px;">
+    <div class="stats">
+      <div class="stat"><div class="num">19<em>+</em></div><div class="name">LangGraph nodes</div></div>
+      <div class="stat"><div class="num">12</div><div class="name">Fixed + dynamic tools</div></div>
+      <div class="stat"><div class="num">28</div><div class="name">Golden eval goals</div></div>
+      <div class="stat"><div class="num">136</div><div class="name">Automated tests</div></div>
+    </div>
+  </section>
+
+  <!-- ===================== PROBLEM / ANGLE ===================== -->
+  <section class="section">
+    <div class="section-label">Why plan-and-execute</div>
+    <h2>ReAct guesses. <em>This plans.</em></h2>
+    <p class="lede">A plain ReAct loop interleaves reasoning and acting one step at a time — every action is a coin flip made without a map. This agent separates the two: a <strong>planner</strong> decomposes the goal up front, an <strong>executor</strong> runs each step deliberately, a <strong>novelty checker</strong> watches for surprises, and a <strong>replanner</strong> rewrites whatever remains when the world changes.</p>
+  </section>
+
+  <!-- ===================== HOW IT WORKS ===================== -->
+  <section class="section" id="how">
+    <div class="section-label">The loop</div>
+    <h2>Think → Act → <em>Check → Rethink</em></h2>
+    <div class="loop">
+      <div class="loop-step">
+        <div class="loop-num">1</div>
+        <div class="loop-content">
+          <h3>plan_node — Decompose</h3>
+          <p>Breaks the goal into an ordered sequence of typed <code>Step</code> objects with dependencies, date anchors for recency, and an explicit tool hint per step.</p>
+        </div>
+      </div>
+      <div class="loop-step">
+        <div class="loop-num blue">2</div>
+        <div class="loop-content">
+          <h3>executor_node — Route</h3>
+          <p>Selects the next <code>PENDING</code> subtask, assembles cumulative context from prior steps, classifies risk, and routes: low-risk tools run directly, high-risk tools hit the approval gate.</p>
+        </div>
+      </div>
+      <div class="loop-step">
+        <div class="loop-num amber">3</div>
+        <div class="loop-content">
+          <h3>approval_node — The gate</h3>
+          <p>Shell commands, file writes, code execution, server starts, and browser automation all pause for human confirmation. Rejection routes straight to the replanner — no silent failures.</p>
+        </div>
+      </div>
+      <div class="loop-step">
+        <div class="loop-num green">4</div>
+        <div class="loop-content">
+          <h3>check_new_info_node — Evaluate</h3>
+          <p>After every tool call, judges the outcome: did it fail? Did it surface genuinely new information? Either signal triggers a bounded replan (max 8) that preserves completed work.</p>
+        </div>
+      </div>
+      <div class="loop-step">
+        <div class="loop-num purple">5</div>
+        <div class="loop-content">
+          <h3>synthesize_node — Deliver</h3>
+          <p>Consolidates every step's observations into one comprehensive final answer — the part the user actually sees.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== CAPABILITIES ===================== -->
+  <section class="section">
+    <div class="section-label">Capabilities</div>
+    <h2>Built like infrastructure, <em>not a demo.</em></h2>
+    <p class="lede">Every tool is classified by risk, every execution is sandboxed, and every run is persisted for replay.</p>
+    <div class="card-grid">
+      <div class="card">
+        <span class="icon">Dynamic · HIGH risk</span>
+        <h3>Tool synthesis</h3>
+        <p>When no fixed tool fits, a two-step pipeline declares a schema, generates Python, sandbox-validates it, and caches it in the registry for reuse across steps.</p>
+        <div class="tag-row"><span class="tag purple">synthesize_tool</span><span class="tag">registry cache</span></div>
+      </div>
+      <div class="card">
+        <span class="icon">Safety · GATE</span>
+        <h3>Human-in-the-loop</h3>
+        <p>Approval gates interrupt the graph for shell, file, code, server, and browser operations. <code style="font-family:var(--mono);font-size:12px">ask_human_node</code> handles clarifying questions and persists answers to a user profile.</p>
+        <div class="tag-row"><span class="tag amber">interrupts</span><span class="tag green">profile store</span></div>
+      </div>
+      <div class="card">
+        <span class="icon">Runtime · Sandboxed</span>
+        <h3>Subprocess sandbox</h3>
+        <p>Timeouts, RLIMIT_AS memory caps, a sitecustomize socket guard, and a domain allowlist — <code style="font-family:var(--mono);font-size:12px">rm</code> is blocked outright in favor of <code style="font-family:var(--mono);font-size:12px">delete_file</code>.</p>
+        <div class="tag-row"><span class="tag green">15s timeout</span><span class="tag green">256MB cap</span></div>
+      </div>
+      <div class="card">
+        <span class="icon">Automation · Vision</span>
+        <h3>Browser Use</h3>
+        <p>Chromium automation driven by a vision-enabled model through OpenRouter — fills forms, navigates rendered pages, and auto-detects side-effecting actions for approval.</p>
+        <div class="tag-row"><span class="tag">browser_use</span><span class="tag">Gemma vision</span></div>
+      </div>
+      <div class="card">
+        <span class="icon">Search · LOW risk</span>
+        <h3>Tavily web search</h3>
+        <p>Real-time search with domain allowlisting, relevance filtering, recency params, and date anchors so "latest" means latest.</p>
+        <div class="tag-row"><span class="tag green">recency</span><span class="tag green">relevance check</span></div>
+      </div>
+      <div class="card">
+        <span class="icon">Interface · Dual mode</span>
+        <h3>Chat + Debugger UI</h3>
+        <p>A Claude-like chat interface with WebSocket streaming and inline approvals, plus a three-panel debugger for step-by-step run inspection and arm comparison.</p>
+        <div class="tag-row"><span class="tag">React</span><span class="tag">WebSocket</span><span class="tag">SQLite</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== ABLATION ===================== -->
+  <section class="section">
+    <div class="section-label">The experiment</div>
+    <h2>Three arms. <em>One honest comparison.</em></h2>
+    <p class="lede">The same 28-goal golden dataset runs through three configurations, scored by an LLM-as-judge with per-goal operational metrics — so "does planning help?" gets a measured answer, not a vibe.</p>
+    <div class="arms">
+      <div class="arm">
+        <div class="arm-label">Arm 1 · Baseline</div>
+        <h3>ReAct</h3>
+        <p>The plain reasoning-and-acting loop. No plan, no replanner, no synthesis.</p>
+        <ul>
+          <li>Interleaved think/act steps</li>
+          <li>No upfront decomposition</li>
+          <li>Lower ceiling on multi-step goals</li>
+        </ul>
+      </div>
+      <div class="arm">
+        <div class="arm-label">Arm 2 · Middle</div>
+        <h3>Plan + Execute</h3>
+        <p>Full planner/executor/replanner graph, fixed tool registry only.</p>
+        <ul>
+          <li>Structured step schema</li>
+          <li>Novelty detection + bounded replan</li>
+          <li>Hits a wall when no tool fits</li>
+        </ul>
+      </div>
+      <div class="arm featured">
+        <span class="badge">Full system</span>
+        <div class="arm-label">Arm 3 · Complete</div>
+        <h3>Plan + Execute + Synthesis</h3>
+        <p>Everything above plus dynamic tool synthesis and browser automation.</p>
+        <ul>
+          <li>Generates tools it doesn't have</li>
+          <li>Rendered-page tasks via vision</li>
+          <li>Approval-gated end to end</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== IN ACTION ===================== -->
+  <section class="section">
+    <div class="section-label">In action</div>
+    <h2>Watch it <em>think.</em></h2>
+    <p class="lede">A real run: the agent plans, searches, reasons, replans when a step surprises it, and synthesizes the final answer — every step inspectable in the debugger.</p>
+    <div class="showcase">
+      <img src="agent_history.gif" alt="Agent execution trace showing plan, tool calls, and replanning" loading="lazy">
+      <div class="cap">
+        <p>agent_history.gif — live trace of a multi-step run</p>
+        <a href="docs/interactive_flow_visualizer.html">Explore the node graph →</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== STACK / DOCS ===================== -->
+  <section class="section">
+    <div class="section-label">Under the hood</div>
+    <h2>Small surface, <em>serious plumbing.</em></h2>
+    <table class="spec-table">
+      <thead>
+        <tr><th>Layer</th><th>Choice</th><th>Why</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Graph</td><td>LangGraph</td><td>Explicit nodes, conditional edges, durable SQLite checkpointer</td></tr>
+        <tr><td>API</td><td>FastAPI + WebSocket</td><td>REST + real-time event streaming for the UI</td></tr>
+        <tr><td>Frontend</td><td>React + Vite + Tailwind</td><td>Dual-mode chat/debugger, run comparison</td></tr>
+        <tr><td>LLM</td><td>Provider-agnostic</td><td>OpenRouter (default), Groq, Anthropic, or Ollama</td></tr>
+        <tr><td>Sandbox</td><td>Subprocess + rlimits</td><td>Timeout, memory cap, network guard — no containers needed</td></tr>
+        <tr><td>Eval</td><td>Golden dataset + LLM judge</td><td>28 goals × 3 arms, per-goal metrics + judge reasoning</td></tr>
+        <tr><td>Tests</td><td>pytest · 136 tests</td><td>Routing, nodes, sandbox, synthesis, novelty, e2e</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ===================== DOCS ===================== -->
+  <section class="section">
+    <div class="section-label">Go deeper</div>
+    <h2>Docs & <em>diagrams.</em></h2>
+    <div class="card-grid" style="grid-template-columns:repeat(2,1fr);">
+      <div class="card">
+        <span class="icon">Interactive</span>
+        <h3>Flow visualizer</h3>
+        <p>Simulate scenarios, step through state, and browse the full node registry with reducers.</p>
+        <div class="tag-row"><a class="tag" href="docs/interactive_flow_visualizer.html" style="text-decoration:none;">open →</a></div>
+      </div>
+      <div class="card">
+        <span class="icon">Spec</span>
+        <h3>Project document</h3>
+        <p>Problem definition, scope, stack, timeline, risk analysis, and the full state machine.</p>
+        <div class="tag-row"><a class="tag" href="docs/plan-and-execute-agent.html" style="text-decoration:none;">open →</a></div>
+      </div>
+      <div class="card">
+        <span class="icon">Wiring</span>
+        <h3>System wiring</h3>
+        <p>Step-by-step flows and wire diagrams for every subsystem.</p>
+        <div class="tag-row"><a class="tag" href="docs/system-wiring.html" style="text-decoration:none;">open →</a></div>
+      </div>
+      <div class="card">
+        <span class="icon">Reference</span>
+        <h3>Tool definitions</h3>
+        <p>Complete schemas, parameters, and usage guidelines for every tool.</p>
+        <div class="tag-row"><a class="tag" href="docs/TOOL_DEFINITIONS.md" style="text-decoration:none;">open →</a></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== RUN IT ===================== -->
+  <section class="section">
+    <div class="section-label">Run it</div>
+    <div class="cta-band">
+      <h2>Thirty seconds to <em>first run.</em></h2>
+      <p>Python 3.10+, an API key, and one script. The agent scaffolds its own workspace, asks before it acts, and shows its work.</p>
+      <div class="hero-ctas">
+        <a class="btn solid" href="README.md">README & setup →</a>
+        <a class="btn" href="docs/roadmap.html">Roadmap</a>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <div class="footer-inner">
+    <p>Plan-and-Execute Agent — built with LangGraph, FastAPI & React</p>
+    <div class="links">
+      <a href="README.md">README</a>
+      <a href="docs/interactive_flow_visualizer.html">Visualizer</a>
+      <a href="docs/system-wiring.html">Wiring</a>
+      <a href="eval_results/">Eval reports</a>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>
