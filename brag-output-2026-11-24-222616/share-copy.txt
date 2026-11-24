@@ -1,0 +1,3 @@
+ReAct guesses. This plans.
+
+An open-source plan-and-execute agent that decomposes goals, asks before it acts, replans when surprised, and writes its own tools — LangGraph, FastAPI, React, 136 tests.

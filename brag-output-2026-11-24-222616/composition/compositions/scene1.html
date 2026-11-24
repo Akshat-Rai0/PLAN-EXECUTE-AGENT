@@ -1,0 +1,128 @@
+<template>
+  <style>
+    @font-face {
+      font-family: "Fraunces";
+      font-style: normal;
+      font-weight: 100 900;
+      font-display: block;
+      src: url("assets/fonts/fraunces-var.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "Fraunces";
+      font-style: italic;
+      font-weight: 100 900;
+      font-display: block;
+      src: url("assets/fonts/fraunces-italic-var.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "DM Sans";
+      font-style: normal;
+      font-weight: 100 1000;
+      font-display: block;
+      src: url("assets/fonts/dm-sans-var.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "DM Mono";
+      font-style: normal;
+      font-weight: 400;
+      font-display: block;
+      src: url("assets/fonts/dm-mono-400.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "DM Mono";
+      font-style: normal;
+      font-weight: 500;
+      font-display: block;
+      src: url("assets/fonts/dm-mono-500.woff2") format("woff2");
+    }
+    #root {
+      position: absolute;
+      inset: 0;
+      font-family: "DM Sans", sans-serif;
+      color: #1a1917;
+    }
+    .stage {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    #cap {
+      font-family: "DM Mono", monospace;
+      font-size: 20px;
+      letter-spacing: 0.32em;
+      text-transform: uppercase;
+      color: #6e6c64;
+      margin-bottom: 34px;
+    }
+    #line {
+      font-family: "Fraunces", serif;
+      font-weight: 300;
+      font-size: 96px;
+      letter-spacing: -0.01em;
+      line-height: 1.1;
+      color: #1a1917;
+      white-space: nowrap;
+    }
+    #line-inner {
+      display: block;
+    }
+    #strike {
+      position: absolute;
+      left: -10px;
+      right: -10px;
+      top: 56%;
+      height: 5px;
+      background: #c84b2f;
+      transform-origin: left center;
+      transform: scaleX(0);
+      border-radius: 2px;
+    }
+    #word-guesses {
+      position: relative;
+      display: inline-block;
+      padding: 0 0.06em;
+    }
+  </style>
+  <div id="root" data-composition-id="scene1" data-width="1920" data-height="1080">
+    <div class="stage">
+      <div id="cap" class="clip" data-start="0.3" data-duration="3.6" data-track-index="0">
+        Baseline · no plan · no map
+      </div>
+      <div id="line" class="clip" data-start="0.7" data-duration="3.25" data-track-index="0">
+        <span id="line-inner"
+          >ReAct <span id="word-guesses">guesses.<span id="strike"></span></span
+        ></span>
+      </div>
+    </div>
+  </div>
+  <script>
+    const tl = gsap.timeline({ paused: true });
+
+    tl.fromTo(
+      "#cap",
+      { opacity: 0 },
+      { opacity: 1, duration: 0.7, ease: "power2.out" },
+      0.3,
+    );
+    tl.fromTo(
+      "#line-inner",
+      { opacity: 0, y: 18 },
+      { opacity: 1, y: 0, duration: 1.0, ease: "power3.out" },
+      0.75,
+    );
+    // dry beat: a quiet rust strike draws through "guesses."
+    tl.fromTo(
+      "#strike",
+      { scaleX: 0 },
+      { scaleX: 1, duration: 0.45, ease: "power2.inOut" },
+      2.5,
+    );
+    // slow fade into the next scene
+    tl.to(["#cap", "#line-inner"], { opacity: 0, duration: 0.55, ease: "power1.inOut" }, 3.35);
+
+    window.__timelines["scene1"] = tl;
+  </script>
+</template>

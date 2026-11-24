@@ -1,0 +1,366 @@
+<template>
+  <style>
+    @font-face {
+      font-family: "Fraunces";
+      font-style: normal;
+      font-weight: 100 900;
+      font-display: block;
+      src: url("assets/fonts/fraunces-var.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "Fraunces";
+      font-style: italic;
+      font-weight: 100 900;
+      font-display: block;
+      src: url("assets/fonts/fraunces-italic-var.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "DM Sans";
+      font-style: normal;
+      font-weight: 100 1000;
+      font-display: block;
+      src: url("assets/fonts/dm-sans-var.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "DM Mono";
+      font-style: normal;
+      font-weight: 400;
+      font-display: block;
+      src: url("assets/fonts/dm-mono-400.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "DM Mono";
+      font-style: normal;
+      font-weight: 500;
+      font-display: block;
+      src: url("assets/fonts/dm-mono-500.woff2") format("woff2");
+    }
+    #root {
+      position: absolute;
+      inset: 0;
+      font-family: "DM Sans", sans-serif;
+      color: #1a1917;
+    }
+    .stage {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #panel {
+      width: 1240px;
+      height: 690px;
+      background: #ffffff;
+      border: 1px solid #e2e0d8;
+      border-radius: 16px;
+      box-shadow: 0 30px 80px rgba(26, 25, 23, 0.1);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    #panel-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 20px 34px;
+      border-bottom: 1px solid #e2e0d8;
+      background: #f8f6f0;
+    }
+    #panel-head .lbl {
+      font-family: "DM Mono", monospace;
+      font-size: 14px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: #6e6c64;
+    }
+    #panel-head .lbl b {
+      color: #2b5f8a;
+      font-weight: 500;
+    }
+    #goal {
+      margin: 22px 34px 0;
+      background: #e8f1f9;
+      border: 1px solid #c9dcef;
+      border-radius: 10px;
+      padding: 16px 22px;
+    }
+    #goal .g-label {
+      font-family: "DM Mono", monospace;
+      font-size: 12px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: #2b5f8a;
+      display: block;
+      margin-bottom: 6px;
+    }
+    #goal .g-text {
+      font-size: 21px;
+      font-weight: 500;
+      color: #1a1917;
+      line-height: 1.4;
+    }
+    #goal .g-sub {
+      font-family: "DM Mono", monospace;
+      font-size: 13px;
+      color: #4a4843;
+      margin-top: 6px;
+    }
+    #steps {
+      flex: 1;
+      padding: 14px 34px 0;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .step {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      height: 50px;
+      border-bottom: 1px dashed #e2e0d8;
+    }
+    .step:last-child {
+      border-bottom: none;
+    }
+    .dot {
+      width: 13px;
+      height: 13px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .dot.pending {
+      background: #e8d9b8;
+      border: 2px solid #d9b96a;
+    }
+    .dot.running {
+      background: #2b5f8a;
+    }
+    .dot.done {
+      background: #2a6b45;
+    }
+    .sname {
+      font-family: "DM Mono", monospace;
+      font-size: 20px;
+      font-weight: 500;
+      color: #1a1917;
+      width: 265px;
+      flex-shrink: 0;
+    }
+    .sdesc {
+      font-size: 16px;
+      color: #4a4843;
+      flex: 1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .sstatus {
+      font-family: "DM Mono", monospace;
+      font-size: 14px;
+      flex-shrink: 0;
+      width: 210px;
+      text-align: right;
+    }
+    .sstatus .st-done {
+      color: #2a6b45;
+    }
+    .sstatus .st-wait {
+      color: #9a5c0a;
+    }
+    .sstatus .st-run {
+      color: #2b5f8a;
+    }
+    .chip {
+      display: inline-block;
+      font-family: "DM Mono", monospace;
+      font-size: 13px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      padding: 5px 12px;
+      border-radius: 4px;
+      border: 1px solid;
+    }
+    .chip.wait {
+      background: #fdf3e3;
+      border-color: #ecd9b8;
+      color: #9a5c0a;
+    }
+    .chip.ok {
+      background: #e8f5ee;
+      border-color: #c4e0d0;
+      color: #2a6b45;
+    }
+    #answer-block {
+      margin: 14px 34px 24px;
+      background: #f8f6f0;
+      border: 1px solid #e2e0d8;
+      border-radius: 12px;
+      padding: 18px 24px;
+    }
+    #answer-block .a-label {
+      font-family: "DM Mono", monospace;
+      font-size: 12px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: #2a6b45;
+      display: block;
+      margin-bottom: 10px;
+    }
+    .a-line {
+      font-size: 19px;
+      color: #1a1917;
+      line-height: 1.55;
+    }
+    .a-line .who {
+      font-weight: 600;
+    }
+    .a-line .mono-note {
+      font-family: "DM Mono", monospace;
+      font-size: 14px;
+      color: #6e6c64;
+    }
+  </style>
+  <div id="root" data-composition-id="scene3" data-width="1920" data-height="1080">
+    <div class="stage">
+      <div id="panel" class="clip" data-start="0.1" data-duration="6.85" data-track-index="0">
+        <div id="panel-inner">
+          <div id="panel-head">
+            <span class="lbl">agent run · <b>plan_execute_full</b></span>
+            <span class="lbl">step trace · langgraph</span>
+          </div>
+
+          <div id="goal">
+            <span class="g-label">Goal</span>
+            <div class="g-text">
+              google.com/travel/flights — cheapest + fastest one-way
+            </div>
+            <div class="g-sub">patna (ixr) → delhi (del) · next saturday</div>
+          </div>
+
+          <div id="steps">
+            <div class="step" id="st-plan">
+              <span class="dot done"></span>
+              <span class="sname">plan_node</span>
+              <span class="sdesc">decompose goal into typed steps</span>
+              <span class="sstatus"><span class="st-done">done</span></span>
+            </div>
+            <div class="step" id="st-code">
+              <span class="dot pending" id="dot-code"></span>
+              <span class="sname">code_executor_node</span>
+              <span class="sdesc">next saturday → 2026-08-08</span>
+              <span class="sstatus">
+                <span class="chip wait" id="chip-wait">approval required</span>
+                <span class="chip ok" id="chip-ok" style="display: none">approved</span>
+              </span>
+            </div>
+            <div class="step" id="st-browser">
+              <span class="dot running" id="dot-browser"></span>
+              <span class="sname">browser_use_node</span>
+              <span class="sdesc">vision automation · gemma-4 via openrouter</span>
+              <span class="sstatus"
+                ><span class="st-run" id="st-browser-run">running</span
+                ><span class="st-done" id="st-browser-done" style="display: none">done</span></span
+              >
+            </div>
+            <div class="step" id="st-write">
+              <span class="dot pending" id="dot-write"></span>
+              <span class="sname">write_file_node</span>
+              <span class="sdesc">save flight records to workspace</span>
+              <span class="sstatus"><span class="st-done" id="st-write-status" style="display:none">done</span></span>
+            </div>
+            <div class="step" id="st-check">
+              <span class="dot done"></span>
+              <span class="sname">check_new_info_node</span>
+              <span class="sdesc">novelty check on step outcome</span>
+              <span class="sstatus"><span class="st-wait">replan ×1</span></span>
+            </div>
+            <div class="step" id="st-synth">
+              <span class="dot pending" id="dot-synth"></span>
+              <span class="sname">synthesize_node</span>
+              <span class="sdesc">consolidate step observations</span>
+              <span class="sstatus"><span class="st-done" id="st-synth-status" style="display:none">done</span></span>
+            </div>
+          </div>
+
+          <div id="answer-block">
+            <span class="a-label">Final answer · synthesized</span>
+            <div class="a-line"><span class="who">cheapest</span> — Air India Express · ₹6,761 · 1h 55m</div>
+            <div class="a-line"><span class="who">fastest</span> — IndiGo · ₹6,860 · 1h 35m&nbsp;&nbsp;<span class="mono-note">captured_flights.json → workspace</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script>
+    const tl = gsap.timeline({ paused: true });
+
+    // panel + goal arrive quietly
+    tl.fromTo(
+      "#panel-inner",
+      { opacity: 0, y: 22 },
+      { opacity: 1, y: 0, duration: 0.55, ease: "power3.out" },
+      0.15,
+    );
+
+    const stepIn = (sel, t) => {
+      tl.fromTo(
+        sel,
+        { opacity: 0, y: 10 },
+        { opacity: 1, y: 0, duration: 0.32, ease: "power2.out" },
+        t,
+      );
+    };
+
+    // the plan unfolds one step at a time
+    stepIn("#st-plan", 0.85);
+    stepIn("#st-code", 1.3);
+
+    // high-risk step pauses at the human gate — the hold is the joke
+    tl.fromTo(
+      "#chip-wait",
+      { opacity: 0, scale: 0.92 },
+      { opacity: 1, scale: 1, duration: 0.3, ease: "power2.out" },
+      1.65,
+    );
+    // approval resolves (sfx-gate lands here, abs ~13.6s)
+    tl.set("#chip-wait", { display: "none" }, 4.1);
+    tl.set("#chip-ok", { display: "inline-block" }, 4.1);
+    tl.fromTo(
+      "#chip-ok",
+      { opacity: 0, scale: 0.92 },
+      { opacity: 1, scale: 1, duration: 0.3, ease: "power2.out" },
+      4.12,
+    );
+    tl.to("#dot-code", { backgroundColor: "#2a6b45", borderColor: "#2a6b45", duration: 0.3 }, 4.1);
+
+    // execution resumes
+    stepIn("#st-browser", 4.45);
+    tl.to("#dot-browser", { backgroundColor: "#2a6b45", duration: 0.3 }, 5.05);
+    tl.set("#st-browser-run", { display: "none" }, 5.1);
+    tl.set("#st-browser-done", { display: "inline" }, 5.1);
+
+    stepIn("#st-write", 4.85);
+    tl.to("#dot-write", { backgroundColor: "#2a6b45", borderColor: "#2a6b45", duration: 0.3 }, 5.35);
+    tl.set("#st-write-status", { display: "inline" }, 5.35);
+
+    stepIn("#st-check", 5.15);
+
+    stepIn("#st-synth", 5.5);
+    tl.to("#dot-synth", { backgroundColor: "#2a6b45", borderColor: "#2a6b45", duration: 0.3 }, 5.85);
+    tl.set("#st-synth-status", { display: "inline" }, 5.85);
+
+    // the payoff: real synthesized answer from the actual run
+    tl.fromTo(
+      "#answer-block",
+      { opacity: 0, y: 12 },
+      { opacity: 1, y: 0, duration: 0.5, ease: "power2.out" },
+      5.8,
+    );
+
+    // exit into the receipts scene
+    tl.to("#panel-inner", { opacity: 0, duration: 0.45, ease: "power1.in" }, 6.5);
+
+    window.__timelines["scene3"] = tl;
+  </script>
+</template>

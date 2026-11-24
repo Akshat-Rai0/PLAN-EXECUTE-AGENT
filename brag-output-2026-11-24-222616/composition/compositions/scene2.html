@@ -1,0 +1,195 @@
+<template>
+  <style>
+    @font-face {
+      font-family: "Fraunces";
+      font-style: normal;
+      font-weight: 100 900;
+      font-display: block;
+      src: url("assets/fonts/fraunces-var.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "Fraunces";
+      font-style: italic;
+      font-weight: 100 900;
+      font-display: block;
+      src: url("assets/fonts/fraunces-italic-var.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "DM Sans";
+      font-style: normal;
+      font-weight: 100 1000;
+      font-display: block;
+      src: url("assets/fonts/dm-sans-var.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "DM Mono";
+      font-style: normal;
+      font-weight: 400;
+      font-display: block;
+      src: url("assets/fonts/dm-mono-400.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "DM Mono";
+      font-style: normal;
+      font-weight: 500;
+      font-display: block;
+      src: url("assets/fonts/dm-mono-500.woff2") format("woff2");
+    }
+    #root {
+      position: absolute;
+      inset: 0;
+      font-family: "DM Sans", sans-serif;
+      color: #1a1917;
+    }
+    .stage {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    #answer {
+      font-family: "Fraunces", serif;
+      font-weight: 300;
+      font-size: 92px;
+      letter-spacing: -0.01em;
+      line-height: 1.1;
+      color: #1a1917;
+      margin-bottom: 56px;
+      white-space: nowrap;
+    }
+    #answer em {
+      font-style: italic;
+      color: #2b5f8a;
+    }
+    #card {
+      width: 780px;
+      background: #1a1917;
+      border-radius: 14px;
+      padding: 34px 40px 30px;
+      box-shadow: 0 24px 60px rgba(26, 25, 23, 0.14);
+      position: relative;
+      overflow: hidden;
+    }
+    #card::before {
+      content: "";
+      position: absolute;
+      top: -70px;
+      right: -70px;
+      width: 220px;
+      height: 220px;
+      border: 1px solid rgba(248, 246, 240, 0.07);
+      border-radius: 50%;
+    }
+    #card-tag {
+      display: inline-block;
+      font-family: "DM Mono", monospace;
+      font-size: 15px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: #9fc3e0;
+      background: rgba(43, 95, 138, 0.28);
+      border: 1px solid rgba(43, 95, 138, 0.5);
+      padding: 6px 14px;
+      border-radius: 3px;
+      margin-bottom: 18px;
+    }
+    #card-title {
+      font-family: "Fraunces", serif;
+      font-weight: 300;
+      font-size: 34px;
+      line-height: 1.2;
+      color: #f8f6f0;
+      margin-bottom: 8px;
+    }
+    #card-title em {
+      font-style: italic;
+      color: #c6dced;
+    }
+    #card-sub {
+      font-family: "DM Sans", sans-serif;
+      font-weight: 300;
+      font-size: 17px;
+      color: rgba(248, 246, 240, 0.62);
+      line-height: 1.55;
+      max-width: 620px;
+      margin-bottom: 22px;
+    }
+    #pills {
+      display: flex;
+      gap: 10px;
+    }
+    .pill {
+      font-family: "DM Mono", monospace;
+      font-size: 14px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 6px 13px;
+      border-radius: 3px;
+      border: 1px solid rgba(248, 246, 240, 0.16);
+      color: rgba(248, 246, 240, 0.68);
+    }
+  </style>
+  <div id="root" data-composition-id="scene2" data-width="1920" data-height="1080">
+    <div class="stage">
+      <div id="answer" class="clip" data-start="0.3" data-duration="5.1" data-track-index="0">
+        <span id="answer-inner">This <em>plans.</em></span>
+      </div>
+      <div id="card" class="clip" data-start="1.0" data-duration="4.4" data-track-index="0">
+        <div id="card-inner">
+          <span id="card-tag">Plan-and-Execute Agent</span>
+          <div id="card-title">An agent that <em>thinks first,</em> then acts.</div>
+          <div id="card-sub">
+            Decomposes the goal into ordered steps, executes each deliberately,
+            and replans when reality disagrees with the plan.
+          </div>
+          <div id="pills">
+            <span class="pill" id="pill-1">HITL gates</span>
+            <span class="pill" id="pill-2">Sandboxed</span>
+            <span class="pill" id="pill-3">Dynamic tools</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script>
+    const tl = gsap.timeline({ paused: true });
+
+    tl.fromTo(
+      "#answer-inner",
+      { opacity: 0, y: 20 },
+      { opacity: 1, y: 0, duration: 0.9, ease: "power3.out" },
+      0.35,
+    );
+    tl.fromTo(
+      "#card-inner",
+      { opacity: 0, y: 26 },
+      { opacity: 1, y: 0, duration: 0.7, ease: "power3.out" },
+      1.05,
+    );
+    // pills arrive one by one, then everything holds
+    tl.fromTo(
+      "#pill-1",
+      { opacity: 0, y: 8 },
+      { opacity: 1, y: 0, duration: 0.4, ease: "power2.out" },
+      1.7,
+    );
+    tl.fromTo(
+      "#pill-2",
+      { opacity: 0, y: 8 },
+      { opacity: 1, y: 0, duration: 0.4, ease: "power2.out" },
+      1.95,
+    );
+    tl.fromTo(
+      "#pill-3",
+      { opacity: 0, y: 8 },
+      { opacity: 1, y: 0, duration: 0.4, ease: "power2.out" },
+      2.2,
+    );
+    // slow fade into the working-agent scene
+    tl.to(["#answer-inner", "#card-inner"], { opacity: 0, duration: 0.55, ease: "power1.inOut" }, 4.85);
+
+    window.__timelines["scene2"] = tl;
+  </script>
+</template>

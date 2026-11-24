@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.15.0/dist/gsap.min.js"></script>
+    <style>
+      :root {
+        --paper: #fbfaf6;
+        --ink: #1a1917;
+        --ink-2: #4a4843;
+        --ink-3: #6e6c64;
+        --rule: #e2e0d8;
+        --accent: #2b5f8a;
+        --accent-light: #e8f1f9;
+        --green: #2a6b45;
+        --green-light: #e8f5ee;
+        --amber: #9a5c0a;
+        --amber-light: #fdf3e3;
+        --serif: "Fraunces", serif;
+        --sans: "DM Sans", sans-serif;
+        --mono: "DM Mono", monospace;
+      }
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background: var(--paper);
+      }
+      #root {
+        width: 100%;
+        height: 100%;
+        position: relative;
+      }
+      #bg {
+        position: absolute;
+        inset: 0;
+        background: var(--paper);
+      }
+      /* faint editorial rings, echoing the site's hero circles */
+      #bg::before,
+      #bg::after {
+        content: "";
+        position: absolute;
+        border: 1px solid rgba(26, 25, 23, 0.05);
+        border-radius: 50%;
+      }
+      #bg::before {
+        width: 900px;
+        height: 900px;
+        right: -320px;
+        top: -380px;
+      }
+      #bg::after {
+        width: 520px;
+        height: 520px;
+        right: 120px;
+        bottom: -260px;
+      }
+      .scene-host {
+        position: absolute;
+        inset: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div
+      id="root"
+      data-composition-id="main"
+      data-start="0"
+      data-duration="21"
+      data-width="1920"
+      data-height="1080"
+    >
+      <div id="bg"></div>
+
+      <div
+        id="scene1"
+        class="scene-host clip"
+        data-composition-id="scene1"
+        data-composition-src="compositions/scene1.html"
+        data-start="0"
+        data-duration="4"
+        data-track-index="1"
+        data-track-kind="graphics"
+        data-width="1920"
+        data-height="1080"
+      ></div>
+      <div
+        id="scene2"
+        class="scene-host clip"
+        data-composition-id="scene2"
+        data-composition-src="compositions/scene2.html"
+        data-start="4"
+        data-duration="5.5"
+        data-track-index="1"
+        data-track-kind="graphics"
+        data-width="1920"
+        data-height="1080"
+      ></div>
+      <div
+        id="scene3"
+        class="scene-host clip"
+        data-composition-id="scene3"
+        data-composition-src="compositions/scene3.html"
+        data-start="9.5"
+        data-duration="7"
+        data-track-index="1"
+        data-track-kind="graphics"
+        data-width="1920"
+        data-height="1080"
+      ></div>
+      <div
+        id="scene4"
+        class="scene-host clip"
+        data-composition-id="scene4"
+        data-composition-src="compositions/scene4.html"
+        data-start="16.5"
+        data-duration="4.5"
+        data-track-index="1"
+        data-track-kind="graphics"
+        data-width="1920"
+        data-height="1080"
+      ></div>
+
+      <!-- audio: music bed, deadpan level -->
+      <audio
+        id="music"
+        data-start="0.5"
+        data-duration="20.5"
+        data-track-index="10"
+        data-volume="0.15"
+        data-fade-in="1.2"
+        data-fade-out="1.8"
+        src="assets/music/happy-beats-business-moves-vol-12-by-ende-dot-app.mp3"
+      ></audio>
+      <!-- sfx: soft card drop as the hero card lands (scene2, ~1.0s local = 5.0 abs) -->
+      <audio
+        id="sfx-drop"
+        data-start="5.0"
+        data-duration="0.15"
+        data-track-index="11"
+        data-volume="0.4"
+        src="assets/sfx/interface/drop_001.ogg"
+      ></audio>
+      <!-- sfx: muted serious click as the approval gate resolves (scene3, ~4.1s local = 13.6 abs) -->
+      <audio
+        id="sfx-gate"
+        data-start="13.6"
+        data-duration="0.07"
+        data-track-index="12"
+        data-volume="0.55"
+        src="assets/sfx/ui/mouseclick1.ogg"
+      ></audio>
+      <!-- sfx: soft bell under the name card (scene4, ~2.8s local = 19.3 abs) -->
+      <audio
+        id="sfx-bell"
+        data-start="19.3"
+        data-duration="1.5"
+        data-track-index="13"
+        data-volume="0.35"
+        src="assets/sfx/impact/impactBell_heavy_000.ogg"
+      ></audio>
+    </div>
+    <script>
+      window.__timelines = window.__timelines || {};
+      const tl = gsap.timeline({ paused: true });
+      window.__timelines["main"] = tl;
+      tl.seek(0);
+    </script>
+  </body>
+</html>

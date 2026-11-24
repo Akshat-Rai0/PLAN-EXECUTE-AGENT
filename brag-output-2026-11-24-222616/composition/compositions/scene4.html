@@ -1,0 +1,171 @@
+<template>
+  <style>
+    @font-face {
+      font-family: "Fraunces";
+      font-style: normal;
+      font-weight: 100 900;
+      font-display: block;
+      src: url("assets/fonts/fraunces-var.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "Fraunces";
+      font-style: italic;
+      font-weight: 100 900;
+      font-display: block;
+      src: url("assets/fonts/fraunces-italic-var.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "DM Sans";
+      font-style: normal;
+      font-weight: 100 1000;
+      font-display: block;
+      src: url("assets/fonts/dm-sans-var.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "DM Mono";
+      font-style: normal;
+      font-weight: 400;
+      font-display: block;
+      src: url("assets/fonts/dm-mono-400.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "DM Mono";
+      font-style: normal;
+      font-weight: 500;
+      font-display: block;
+      src: url("assets/fonts/dm-mono-500.woff2") format("woff2");
+    }
+    #root {
+      position: absolute;
+      inset: 0;
+      font-family: "DM Sans", sans-serif;
+      color: #1a1917;
+    }
+    .stage {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    #stats {
+      display: flex;
+      gap: 72px;
+      margin-bottom: 78px;
+    }
+    .stat {
+      text-align: center;
+      min-width: 200px;
+    }
+    .stat .num {
+      font-family: "Fraunces", serif;
+      font-weight: 300;
+      font-size: 58px;
+      color: #2b5f8a;
+      line-height: 1;
+      margin-bottom: 10px;
+    }
+    .stat .num em {
+      font-style: italic;
+      color: #c84b2f;
+    }
+    .stat .name {
+      font-family: "DM Mono", monospace;
+      font-size: 14px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: #6e6c64;
+    }
+    #namecard {
+      text-align: center;
+    }
+    #name {
+      font-family: "Fraunces", serif;
+      font-weight: 300;
+      font-size: 76px;
+      letter-spacing: -0.015em;
+      color: #1a1917;
+      line-height: 1.05;
+    }
+    #tagline {
+      font-family: "Fraunces", serif;
+      font-style: italic;
+      font-weight: 400;
+      font-size: 34px;
+      color: #4a4843;
+      margin-top: 14px;
+    }
+    #foot {
+      font-family: "DM Mono", monospace;
+      font-size: 15px;
+      letter-spacing: 0.24em;
+      text-transform: uppercase;
+      color: #6e6c64;
+      margin-top: 44px;
+    }
+  </style>
+  <div id="root" data-composition-id="scene4" data-width="1920" data-height="1080">
+    <div class="stage">
+      <div id="stats" class="clip" data-start="0.2" data-duration="4.2" data-track-index="0">
+        <div class="stat" id="stat-1">
+          <div class="num" id="num-1">19<em>+</em></div>
+          <div class="name">LangGraph nodes</div>
+        </div>
+        <div class="stat" id="stat-2">
+          <div class="num" id="num-2">12</div>
+          <div class="name">Fixed + dynamic tools</div>
+        </div>
+        <div class="stat" id="stat-3">
+          <div class="num" id="num-3">28</div>
+          <div class="name">Golden eval goals</div>
+        </div>
+        <div class="stat" id="stat-4">
+          <div class="num" id="num-4">136</div>
+          <div class="name">Automated tests</div>
+        </div>
+      </div>
+
+      <div id="namecard" class="clip" data-start="2.0" data-duration="2.4" data-track-index="1">
+        <div id="name-inner">
+          <div id="name">Plan-and-Execute Agent</div>
+          <div id="tagline">Think first, then act.</div>
+          <div id="foot">Open source · LangGraph · FastAPI · React</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script>
+    const tl = gsap.timeline({ paused: true });
+
+    // stats arrive one by one, then hold — site numbers, site voice
+    const statIn = (numSel, nameSel, t) => {
+      tl.fromTo(
+        numSel,
+        { opacity: 0, y: 16 },
+        { opacity: 1, y: 0, duration: 0.55, ease: "power3.out" },
+        t,
+      );
+      tl.fromTo(
+        nameSel,
+        { opacity: 0 },
+        { opacity: 1, duration: 0.5, ease: "power2.out" },
+        t + 0.18,
+      );
+    };
+    statIn("#num-1", "#stat-1 .name", 0.35);
+    statIn("#num-2", "#stat-2 .name", 0.85);
+    statIn("#num-3", "#stat-3 .name", 1.35);
+    statIn("#num-4", "#stat-4 .name", 1.85);
+
+    // the name lands slow and stays
+    tl.fromTo(
+      "#name-inner",
+      { opacity: 0, y: 20 },
+      { opacity: 1, y: 0, duration: 0.9, ease: "power3.out" },
+      2.35,
+    );
+
+    window.__timelines["scene4"] = tl;
+  </script>
+</template>
